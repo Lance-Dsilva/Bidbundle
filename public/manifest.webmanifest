@@ -1,0 +1,32 @@
+{
+  "name": "BidBundle — Neighborhood Bidding",
+  "short_name": "BidBundle",
+  "description": "Your neighbourhood. Your power. Your price. Group home-service requests with neighbors and let providers bid for the bundle.",
+  "id": "/app",
+  "start_url": "/app/homeowner/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF7F1",
+  "theme_color": "#221C16",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

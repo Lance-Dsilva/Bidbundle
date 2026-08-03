@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Offline — BidBundle</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #FBF7F1;
+      color: #221C16;
+      font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+      text-align: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .mark {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #fbbf24, #c2552b);
+      display: grid;
+      place-items: center;
+      color: #fffaf4;
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0 auto 20px;
+    }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { color: #6B6152; font-size: 15px; margin: 0 0 24px; }
+    button {
+      border: none;
+      border-radius: 999px;
+      height: 44px;
+      padding: 0 28px;
+      background: #C2552B;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <div class="mark">B</div>
+    <h1>You&rsquo;re offline</h1>
+    <p>BidBundle needs a connection to load fresh bids.<br />Check your network and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</body>
+</html>
