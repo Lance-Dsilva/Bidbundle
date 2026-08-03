@@ -1,8 +1,8 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from jose import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import text
