@@ -75,8 +75,9 @@ export function generateStaticParams() {
   return Object.keys(pages).map((info) => ({ info }));
 }
 
-export default function InformationPage({ params }: { params: { info: string } }) {
-  const page = pages[params.info];
+export default async function InformationPage({ params }: { params: Promise<{ info: string }> }) {
+  const { info } = await params;
+  const page = pages[info];
   if (!page) notFound();
 
   return (
