@@ -46,11 +46,11 @@ interface IconProps {
 }
 
 /**
- * Renders a BidBundle icon (website-redesign/bidbundle-icons) as a currentColor
+ * Renders a Bundleen icon from the existing icon asset collection as a currentColor
  * mask, so it can be recolored via CSS like the reference implementation.
  */
 export function Icon({ name, size = 24, className, style }: IconProps) {
-  const url = `/bidbundle/icons/${name}.svg`;
+  const url = `/bundleen/icons/${name}.svg`;
   return (
     <span
       aria-hidden="true"

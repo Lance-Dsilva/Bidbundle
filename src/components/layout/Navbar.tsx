@@ -33,7 +33,7 @@ export function Navbar() {
             <span className="font-display text-sm font-bold italic text-white">B</span>
           </div>
           <span className="font-display text-[17px] font-semibold italic text-white">
-            BidBundle
+            Bundleen
           </span>
         </Link>
 

@@ -1,12 +1,12 @@
 import { apiFetch } from "./api";
 
-const TOKEN_KEY = "neighbid.token";
+const TOKEN_KEY = "bundleen.token";
 
 const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
 const DEV_BYPASS_TOKEN = "dev-bypass-token";
 const DEV_BYPASS_USER: AuthUser = {
   id: 1,
-  email: "alice@neighbid.com",
+  email: "alice@bundleen.com",
   full_name: "Alice Dev",
   phone: null,
   role: "homeowner",
@@ -54,7 +54,7 @@ export function setToken(token: string): void {
 export function clearAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem("neighbid.role");
+  localStorage.removeItem("bundleen.role");
 }
 
 /* ── Auth calls (local SQLite-backed API auth) ── */

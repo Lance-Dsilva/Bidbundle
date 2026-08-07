@@ -143,7 +143,7 @@ export default function ProviderReviewsPage() {
       date: "Apr 12",
       stars: 4,
       tag: "Inspection · solo",
-      text: "Showed up on time and left no mess. Would use through BidBundle again.",
+      text: "Showed up on time and left no mess. Would use through Bundleen again.",
     },
     {
       initials: "PA",
@@ -173,7 +173,7 @@ export default function ProviderReviewsPage() {
             Reviews
           </h1>
           <p style={{ margin: 0, color: "var(--ink-500)", fontSize: 14 }}>
-            {loading ? "Loading reviews…" : `${apiReviews.length} verified review${apiReviews.length !== 1 ? "s" : ""} from BidBundle neighbors`}
+            {loading ? "Loading reviews…" : `${apiReviews.length} verified review${apiReviews.length !== 1 ? "s" : ""} from Bundleen neighbors`}
           </p>
         </div>
         <button type="button" style={ghostButtonStyle}>

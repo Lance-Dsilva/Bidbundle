@@ -17,13 +17,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BidBundle",
+  title: "Bundleen",
   description: "Your neighbourhood. Your power. Your price.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "BidBundle",
+    title: "Bundleen",
   },
   icons: {
     apple: "/icons/apple-touch-icon.png",
@@ -55,7 +55,7 @@ export default function RootLayout({
       <body>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("neighbid.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("bundleen.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}`,
           }}
         />
         <ScrollReveal />

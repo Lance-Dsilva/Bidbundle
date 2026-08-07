@@ -377,7 +377,7 @@ export default function ProviderDashboardPage() {
                     <div style={{ fontSize: 13, color: "var(--ink-500)", marginTop: 4 }}>
                       {topJob
                         ? `${topJob.neighborhood}${formatDistance(topJob.distance_mi) ? ` · ${formatDistance(topJob.distance_mi)}` : ""} · ${topJob.bid_count} provider bid${topJob.bid_count !== 1 ? "s" : ""} · ${topJob.status === "bidding" ? "Bidding" : topJob.status === "live" ? "Live now" : "Grouping"}`
-                        : `Complete your provider profile and BidBundle will keep pulling nearby requests into this dashboard.`}
+                        : `Complete your provider profile and Bundleen will keep pulling nearby requests into this dashboard.`}
                     </div>
                     {topJobExistingBid ? (
                       <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: "var(--sage-700)" }}>

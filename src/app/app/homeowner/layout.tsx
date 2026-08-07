@@ -71,9 +71,9 @@ export default function HomeownerLayout({ children }: Readonly<{ children: React
   return (
     <div className="dash-shell">
       <aside className="dash-sidebar" aria-label="Homeowner navigation">
-        <Link className="dash-sidebar-brand" href="/app/homeowner/dashboard" aria-label="BidBundle home">
+        <Link className="dash-sidebar-brand" href="/app/homeowner/dashboard" aria-label="Bundleen home">
           <img src="/creative/icons/logo-house.svg" alt="" />
-          <span>BidBundle</span>
+          <span>Bundleen</span>
         </Link>
 
         <nav className="dash-sidebar-nav">
@@ -118,7 +118,7 @@ export default function HomeownerLayout({ children }: Readonly<{ children: React
 
       <div className="dash-mobile-topbar">
         <Link className="dash-mobile-topbar-brand" href="/app/homeowner/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" /><span>BidBundle</span>
+          <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
           <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
@@ -193,7 +193,7 @@ export default function HomeownerLayout({ children }: Readonly<{ children: React
               <div className="dash-quick-links">
                 <Link href="/app/homeowner/request"><Icon name="plus" size={16} /> New request</Link>
                 <Link href="/app/homeowner/bids"><Icon name="bids" size={16} /> Review bids</Link>
-                <Link href="/app/homeowner/chat"><Icon name="sparkle" size={16} /> Ask BidBundle AI</Link>
+                <Link href="/app/homeowner/chat"><Icon name="sparkle" size={16} /> Ask Bundleen AI</Link>
               </div>
             </section>
           </aside>

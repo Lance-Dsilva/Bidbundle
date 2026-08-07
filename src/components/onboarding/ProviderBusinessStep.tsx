@@ -89,7 +89,7 @@ export function ProviderBusinessStep({
           Tell us about your business
         </h1>
         <p className="mt-2 text-[14px] leading-6 text-[var(--ink-500)]">
-          Add your business name, the services you offer, and the major area you want BidBundle to prioritise.
+          Add your business name, the services you offer, and the major area you want Bundleen to prioritise.
         </p>
       </header>
 

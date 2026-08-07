@@ -42,9 +42,9 @@ export default function ProviderLayout({ children }: Readonly<{ children: ReactN
   return (
     <div className="dash-shell provider-shell">
       <aside className="dash-sidebar" aria-label="Provider navigation">
-        <Link className="dash-sidebar-brand" href="/app/provider/dashboard" aria-label="BidBundle provider home">
+        <Link className="dash-sidebar-brand" href="/app/provider/dashboard" aria-label="Bundleen provider home">
           <img src="/creative/icons/logo-house.svg" alt="" />
-          <span>BidBundle</span>
+          <span>Bundleen</span>
         </Link>
 
         <nav className="dash-sidebar-nav">
@@ -86,7 +86,7 @@ export default function ProviderLayout({ children }: Readonly<{ children: ReactN
 
       <div className="dash-mobile-topbar">
         <Link className="dash-mobile-topbar-brand" href="/app/provider/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" /><span>BidBundle</span>
+          <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
           <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>

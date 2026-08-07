@@ -71,7 +71,7 @@ export function RoleStep({ role, onBack, onContinue, onRoleChange, stepCount = 3
         <h1 className="mt-2 font-display text-[2.4rem] font-bold italic tracking-tight text-[var(--ink-900)]">
           Choose your role
         </h1>
-        <p className="mt-2 text-[14px] leading-6 text-[var(--ink-500)]">How will you use BidBundle?</p>
+        <p className="mt-2 text-[14px] leading-6 text-[var(--ink-500)]">How will you use Bundleen?</p>
       </header>
 
       <div className="space-y-2.5">

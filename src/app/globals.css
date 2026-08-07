@@ -6,7 +6,7 @@
   --font-ui: var(--font-body), "Inter", system-ui, sans-serif;
   --font-display: var(--font-ui);
 
-  /* ── BidBundle "Creative Redesign" palette (website-redesign/bidbundle-creative-redesign) ── */
+  /* ── Bundleen creative palette ── */
   --navy-900: #102A43;
   --navy-700: #17324D;
   --navy-500: #365A78;
@@ -453,8 +453,7 @@ input[type="range"]::-webkit-slider-runnable-track {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   BidBundle "Creative Redesign" shell primitives — ported from
-   website-redesign/bidbundle-creative-redesign/styles.css
+   Bundleen shell primitives
    Real responsive layout: wide desktop topbar + content, collapsing to
    a docked mobile bottom-nav under 760px. No more phone-frame shell.
    ══════════════════════════════════════════════════════════════════ */

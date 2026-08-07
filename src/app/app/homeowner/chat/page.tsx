@@ -102,14 +102,14 @@ type ActiveThread = AiThread | GroupThread | DmThread | NeighbourhoodThread;
 const aiThread: AiThread = {
   type: "ai",
   id: "ai",
-  name: "BidBundle AI",
+  name: "Bundleen AI",
   preview: "Ask about bids, providers, savings, or your neighborhood",
   unread: 0,
   avatarBg: "linear-gradient(135deg, var(--orange-600), #ff8f36)",
   avatarShape: "rounded",
   headerSubtitle: "Bids · providers · savings · group decisions",
   onlineLabel: "Online",
-  composerPlaceholder: "Ask BidBundle AI anything…",
+  composerPlaceholder: "Ask Bundleen AI anything…",
   suggestions: [
     "Which bid is best value?",
     "Compare ProFix vs AquaFlow",
@@ -314,7 +314,7 @@ export default function HomeownerChat() {
       if (reply) {
         setMessages((prev) => [
           ...prev,
-          { id: `ai-reply-${Date.now()}`, sender: "BidBundle AI", time: "Just now", body: reply },
+          { id: `ai-reply-${Date.now()}`, sender: "Bundleen AI", time: "Just now", body: reply },
         ]);
       }
       return;

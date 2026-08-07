@@ -21,7 +21,7 @@ export const mockProviderReviews: ProviderReview[] = [
     reviewerName: "James K.",
     reviewerInitial: "J",
     rating: 4,
-    text: "Showed up on time and left no mess. Would use through BidBundle again.",
+    text: "Showed up on time and left no mess. Would use through Bundleen again.",
     date: "Apr 12",
   },
   {

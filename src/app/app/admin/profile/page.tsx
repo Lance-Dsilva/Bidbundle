@@ -9,7 +9,7 @@ const settingsItems = [
   { label: "Notifications", subtitle: "Push & Email on" },
   { label: "Address & area", subtitle: "Oakwood Heights" },
   { label: "Help & support", subtitle: "FAQ, Contact" },
-  { label: "About BidBundle", subtitle: "v1.1.0" },
+  { label: "About Bundleen", subtitle: "v1.1.0" },
 ];
 
 const profileStats = [

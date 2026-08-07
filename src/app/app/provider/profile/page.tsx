@@ -281,7 +281,7 @@ export default function ProviderProfilePage() {
                         ))}
                         <strong style={{ color: "var(--ink-900)", marginLeft: 4 }}>{avgRating ?? "—"}</strong>
                       </span>
-                      <span style={{ color: "var(--ink-500)" }}>· {reviews.length} reviews on BidBundle</span>
+                      <span style={{ color: "var(--ink-500)" }}>· {reviews.length} reviews on Bundleen</span>
                     </div>
                   </div>
                 </div>

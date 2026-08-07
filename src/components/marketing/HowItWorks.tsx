@@ -4,7 +4,7 @@ const steps = [
   {
     n: "01",
     title: "Describe what you need",
-    body: "Tell BidBundle the service you need in plain language. AI detects the category and surfaces nearby neighbors with the same request — instantly.",
+    body: "Tell Bundleen the service you need in plain language. AI detects the category and surfaces nearby neighbors with the same request — instantly.",
     color: "#2563eb",
     tag: "AI-powered",
     icon: (

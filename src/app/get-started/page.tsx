@@ -46,7 +46,7 @@ const testimonials = [
     initials: "MC",
   },
   {
-    quote: "As a plumber, BidBundle sends me bulk jobs I would never have found on my own. Revenue is up 40%.",
+    quote: "As a plumber, Bundleen sends me bulk jobs I would never have found on my own. Revenue is up 40%.",
     name: "James Kowalski",
     location: "Service Provider",
     initials: "JK",

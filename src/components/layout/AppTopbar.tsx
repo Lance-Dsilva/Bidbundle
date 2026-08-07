@@ -28,9 +28,9 @@ export function AppTopbar() {
   return (
     <header className="bb-topbar">
       <div className="bb-container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-        <Link href={`/app/${role}/dashboard`} className="bb-brand" aria-label="BidBundle home">
+        <Link href={`/app/${role}/dashboard`} className="bb-brand" aria-label="Bundleen home">
           <img src="/creative/icons/logo-house.svg" alt="" width={38} height={38} />
-          <span>BidBundle</span>
+          <span>Bundleen</span>
         </Link>
 
         <nav className="bb-nav-links" aria-label="Application navigation">

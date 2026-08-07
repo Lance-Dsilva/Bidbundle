@@ -99,7 +99,7 @@ export default function ProviderMessagesPage() {
       {
         kind: "ai",
         id: "ai",
-        name: "BidBundle AI",
+        name: "Bundleen AI",
         preview: aiPreview,
         time: aiHistory[aiHistory.length - 1]?.created_at ? new Date(aiHistory[aiHistory.length - 1].created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
         unread: 0,
@@ -265,7 +265,7 @@ export default function ProviderMessagesPage() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 500, color: "var(--ink-900)" }}>
-                  {activeThread === "ai" ? "BidBundle AI" : activeConv?.other_user_name ?? "No active conversation"}
+                  {activeThread === "ai" ? "Bundleen AI" : activeConv?.other_user_name ?? "No active conversation"}
                 </span>
                 {activeThread === "ai" ? (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 18, padding: "0 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: "var(--terracotta-50)", color: "var(--terracotta-600)" }}>
@@ -367,7 +367,7 @@ export default function ProviderMessagesPage() {
                     <span>•</span>
                     <span>•</span>
                   </span>
-                  <span style={{ fontSize: 12, color: "var(--ink-500)" }}>BidBundle AI is typing</span>
+                  <span style={{ fontSize: 12, color: "var(--ink-500)" }}>Bundleen AI is typing</span>
                 </div>
               </div>
             </div>
@@ -392,7 +392,7 @@ export default function ProviderMessagesPage() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
-              placeholder={activeThread === "ai" ? "Ask BidBundle AI anything…" : activeConv ? `Reply to ${activeConv.other_user_name}…` : "Select a conversation…"}
+              placeholder={activeThread === "ai" ? "Ask Bundleen AI anything…" : activeConv ? `Reply to ${activeConv.other_user_name}…` : "Select a conversation…"}
               style={{ flex: 1, border: 0, outline: 0, background: "transparent", fontSize: 14, fontFamily: "var(--font-body)", color: "var(--ink-900)" }}
             />
             <button

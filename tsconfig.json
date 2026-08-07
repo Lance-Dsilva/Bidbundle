@@ -23,5 +23,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "neighbid-mobile", "archive"]
+  "exclude": ["node_modules", "archive"]
 }

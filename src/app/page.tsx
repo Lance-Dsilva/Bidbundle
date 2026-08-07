@@ -10,9 +10,9 @@ export default function HomePage() {
     <div className="landing-shell">
       <header className="ld-header">
         <div className="ld-shell ld-header-inner">
-            <Link className="ld-brand" href="/" aria-label="BidBundle home">
+            <Link className="ld-brand" href="/" aria-label="Bundleen home">
               <img src="/modern/icons/logo.svg" alt="" width={42} height={42} />
-              <span>BidBundle</span>
+              <span>Bundleen</span>
             </Link>
 
           <nav className="ld-desktop-nav" aria-label="Primary navigation">
@@ -207,7 +207,7 @@ export default function HomePage() {
             <div className="ld-section-heading ld-reveal-up">
               <div>
                 <span className="ld-section-kicker">Simple by design</span>
-                <h2 id="how-title">How BidBundle works</h2>
+                <h2 id="how-title">How Bundleen works</h2>
                 <p>One request becomes a better neighborhood deal in four clear steps.</p>
               </div>
             </div>
@@ -249,7 +249,7 @@ export default function HomePage() {
               </div>
               <div className="ld-contact-cta-actions">
                 <Link className="ld-btn ld-btn-primary" href="/get-started"><img src="/modern/icons/plus.svg" alt="" width={19} height={19} /> Post a Request</Link>
-                <a className="ld-btn ld-btn-secondary" href="mailto:hello@bidbundle.com"><img src="/modern/icons/mail.svg" alt="" width={19} height={19} /> Contact Us</a>
+                <a className="ld-btn ld-btn-secondary" href="mailto:hello@bundleen.com"><img src="/modern/icons/mail.svg" alt="" width={19} height={19} /> Contact Us</a>
               </div>
             </div>
           </div>
@@ -259,9 +259,9 @@ export default function HomePage() {
       <footer className="ld-footer" aria-labelledby="footer-heading">
         <div className="ld-shell ld-footer-grid">
           <div className="ld-footer-brand-column">
-            <Link className="ld-footer-brand" href="/" aria-label="BidBundle home">
+            <Link className="ld-footer-brand" href="/" aria-label="Bundleen home">
               <img src="/modern/icons/logo.svg" alt="" width={48} height={48} />
-              <span>BidBundle</span>
+              <span>Bundleen</span>
             </Link>
             <p id="footer-heading">Better home services and better prices, built around the power of your neighborhood.</p>
           </div>
@@ -284,8 +284,8 @@ export default function HomePage() {
 
           <div className="ld-footer-column ld-footer-contact">
             <h3>Contact</h3>
-            <a href="mailto:hello@bidbundle.com"><img src="/modern/icons/mail.svg" alt="" /> hello@bidbundle.com</a>
-            <a href="mailto:support@bidbundle.com"><img src="/modern/icons/mail.svg" alt="" /> support@bidbundle.com</a>
+            <a href="mailto:hello@bundleen.com"><img src="/modern/icons/mail.svg" alt="" /> hello@bundleen.com</a>
+            <a href="mailto:support@bundleen.com"><img src="/modern/icons/mail.svg" alt="" /> support@bundleen.com</a>
             <a href="tel:+15125550148"><img src="/modern/icons/phone.svg" alt="" /> +1 (512) 555-0148</a>
             <span><img src="/modern/icons/map-pin.svg" alt="" /> Austin, Texas</span>
             <small>Mon–Fri · 9:00 AM–6:00 PM CT</small>
@@ -293,7 +293,7 @@ export default function HomePage() {
         </div>
 
         <div className="ld-shell ld-footer-bottom">
-          <span>© 2026 BidBundle Corp. All rights reserved.</span>
+          <span>© 2026 Bundleen Corp. All rights reserved.</span>
           <div className="ld-footer-legal">
             <Link href="/privacy">Privacy Policy</Link>
             <Link href="/terms">Terms of Service</Link>

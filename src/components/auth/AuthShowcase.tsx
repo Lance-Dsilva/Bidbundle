@@ -41,7 +41,7 @@ export function AuthShowcase({ testimonial = defaultTestimonial }: { testimonial
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg">
             <span className="font-display text-[15px] font-bold italic text-white">B</span>
           </div>
-          <span className="font-display text-[17px] font-semibold italic text-white">BidBundle</span>
+          <span className="font-display text-[17px] font-semibold italic text-white">Bundleen</span>
         </div>
 
         <div className="max-w-md pt-8 pb-4 lg:pt-14 lg:pb-8">

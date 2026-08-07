@@ -166,7 +166,7 @@ export default function ProviderEarningsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `bidbundle-provider-earnings-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `bundleen-provider-earnings-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();

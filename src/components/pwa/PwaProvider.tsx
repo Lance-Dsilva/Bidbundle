@@ -7,7 +7,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DISMISS_KEY = "bidbundle_install_dismissed";
+const DISMISS_KEY = "bundleen_install_dismissed";
 
 export function PwaProvider() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -48,7 +48,7 @@ export function PwaProvider() {
   return (
     <div
       role="dialog"
-      aria-label="Install BidBundle"
+      aria-label="Install Bundleen"
       className="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] left-4 right-4 z-[60] flex items-center gap-3 md:bottom-6 md:left-auto md:right-6 md:w-[420px]"
       style={{
         padding: "12px 14px",
@@ -76,7 +76,7 @@ export function PwaProvider() {
         B
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>Install BidBundle</div>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>Install Bundleen</div>
         <div style={{ fontSize: 12, color: "#B8BBC1" }}>Add to your home screen for the full app experience</div>
       </div>
       <button

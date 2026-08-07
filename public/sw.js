@@ -1,5 +1,5 @@
-/* BidBundle service worker — app-shell cache with network-first pages */
-const CACHE = "bidbundle-v1";
+/* Bundleen service worker — app-shell cache with network-first pages */
+const CACHE = "bundleen-v1";
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [OFFLINE_URL, "/icons/icon-192.png", "/manifest.webmanifest"];
 

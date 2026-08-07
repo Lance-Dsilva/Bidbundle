@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const THEME_KEY = "neighbid.theme";
+const THEME_KEY = "bundleen.theme";
 
 export function applyTheme(theme: "light" | "dark") {
   document.documentElement.setAttribute("data-theme", theme);

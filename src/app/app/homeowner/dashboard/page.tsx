@@ -119,9 +119,9 @@ export default function HomeownerDashboard() {
   return (
     <div className="dash-shell">
       <aside className="dash-sidebar" aria-label="Primary navigation">
-        <Link className="dash-sidebar-brand" href="/app/homeowner/dashboard" aria-label="BidBundle home">
+        <Link className="dash-sidebar-brand" href="/app/homeowner/dashboard" aria-label="Bundleen home">
           <img src="/creative/icons/logo-house.svg" alt="" />
-          <span>BidBundle</span>
+          <span>Bundleen</span>
         </Link>
 
         <nav className="dash-sidebar-nav">
@@ -178,7 +178,7 @@ export default function HomeownerDashboard() {
 
       <div className="dash-mobile-topbar">
         <Link className="dash-mobile-topbar-brand" href="/app/homeowner/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" /><span>BidBundle</span>
+          <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
           <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
@@ -529,7 +529,7 @@ export default function HomeownerDashboard() {
               <Icon name="sparkle" size={26} />
             </div>
             <div>
-              <h3 style={{ margin: "2px 0 5px", fontSize: 20, color: "var(--ink-900)" }}>BidBundle AI</h3>
+              <h3 style={{ margin: "2px 0 5px", fontSize: 20, color: "var(--ink-900)" }}>Bundleen AI</h3>
               <p style={{ color: "var(--muted)", lineHeight: 1.5, margin: "0 0 14px" }}>
                 {ownRecommendedRequest
                   ? `${ownRecommendedRequest.title} has ${ownRecommendedRequest.bid_count} provider bid${ownRecommendedRequest.bid_count !== 1 ? "s" : ""}${ownRecommendedRequest.best_bid_cents ? `, with the best at $${Math.round(ownRecommendedRequest.best_bid_cents / 100).toLocaleString()}` : ""}${recommendationSavings > 0 ? ` and about $${Math.round(recommendationSavings / 100).toLocaleString()} under your target.` : "."}`
@@ -634,7 +634,7 @@ export default function HomeownerDashboard() {
           <div className="dash-quick-links">
             <Link href="/app/homeowner/request"><Icon name="plus" size={16} /> New request</Link>
             <Link href="/app/homeowner/bids"><Icon name="bids" size={16} /> Review bids</Link>
-            <Link href="/app/homeowner/chat"><Icon name="sparkle" size={16} /> Ask BidBundle AI</Link>
+            <Link href="/app/homeowner/chat"><Icon name="sparkle" size={16} /> Ask Bundleen AI</Link>
           </div>
         </section>
       </aside>

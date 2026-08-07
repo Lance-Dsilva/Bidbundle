@@ -3,10 +3,10 @@ import { getToken } from "@/lib/auth";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export interface QuoteSummaryVsNeighBid {
-  neighbid_best_bid: number;
-  saving_if_use_neighbid: number;
-  neighbid_has_warranty: boolean;
+export interface QuoteSummaryVsBundleen {
+  bundleen_best_bid: number;
+  saving_if_use_bundleen: number;
+  bundleen_has_warranty: boolean;
 }
 
 export interface QuoteSummaryResult {
@@ -14,7 +14,7 @@ export interface QuoteSummaryResult {
   quoted_amount: number;
   scope_summary: string;
   flags: string[];
-  vs_neighbid: QuoteSummaryVsNeighBid | null;
+  vs_bundleen: QuoteSummaryVsBundleen | null;
   score: number;
   recommendation: string;
   stub: boolean;

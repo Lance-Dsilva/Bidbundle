@@ -1,6 +1,6 @@
 {
-  "name": "BidBundle — Neighborhood Bidding",
-  "short_name": "BidBundle",
+  "name": "Bundleen — Neighborhood Bidding",
+  "short_name": "Bundleen",
   "description": "Your neighbourhood. Your power. Your price. Group home-service requests with neighbors and let providers bid for the bundle.",
   "id": "/app",
   "start_url": "/app/homeowner/dashboard",

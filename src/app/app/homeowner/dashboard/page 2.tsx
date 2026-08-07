@@ -376,7 +376,7 @@ export default function HomeownerDashboard() {
               <Icon name="sparkle" size={26} />
             </div>
             <div>
-              <h3 style={{ margin: "2px 0 5px", fontSize: 20, color: "var(--ink-900)" }}>BidBundle AI</h3>
+              <h3 style={{ margin: "2px 0 5px", fontSize: 20, color: "var(--ink-900)" }}>Bundleen AI</h3>
               <p style={{ color: "var(--muted)", lineHeight: 1.5, margin: "0 0 14px" }}>
                 {ownRecommendedRequest
                   ? `${ownRecommendedRequest.title} has ${ownRecommendedRequest.bid_count} provider bid${ownRecommendedRequest.bid_count !== 1 ? "s" : ""}${ownRecommendedRequest.best_bid_cents ? `, with the best at $${Math.round(ownRecommendedRequest.best_bid_cents / 100).toLocaleString()}` : ""}${recommendationSavings > 0 ? ` and about $${Math.round(recommendationSavings / 100).toLocaleString()} under your target.` : "."}`

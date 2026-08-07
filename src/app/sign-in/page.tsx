@@ -52,7 +52,7 @@ export default function SignInPage() {
     <div className="flex min-h-screen">
       <AuthShowcase
         testimonial={{
-          quote: "As a plumber, BidBundle sends me bundled jobs from the same neighborhood. Less driving, better margins.",
+          quote: "As a plumber, Bundleen sends me bundled jobs from the same neighborhood. Less driving, better margins.",
           name: "James Kowalski",
           location: "Service Provider",
           initials: "JK",

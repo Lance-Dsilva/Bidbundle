@@ -34,7 +34,7 @@ interface CreativeIconProps {
 }
 
 /**
- * Renders a BidBundle "Creative Redesign" icon (website-redesign/bidbundle-creative-redesign).
+ * Renders a Bundleen icon from the creative icon collection.
  * Unlike the older Icon component, these SVGs carry their own fixed navy/teal/amber
  * fills — render as a plain image, don't recolor via currentColor mask.
  */

@@ -51,7 +51,7 @@ export function Footer() {
                 <span className="font-display text-sm font-bold italic text-white">B</span>
               </div>
               <span className="font-display text-[17px] font-semibold italic text-white">
-                BidBundle
+                Bundleen
               </span>
             </div>
             <p className="mt-4 max-w-[200px] text-[13px] leading-relaxed text-white/38">
@@ -96,7 +96,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-white/6 pt-8 sm:flex-row">
           <p className="text-[12px] text-white/25">
-            © 2026 BidBundle, Inc. All rights reserved.
+            © 2026 Bundleen, Inc. All rights reserved.
           </p>
           <div className="flex items-center gap-5 text-[12px] text-white/30">
             <Link href="/get-started" className="transition-colors hover:text-white/60">

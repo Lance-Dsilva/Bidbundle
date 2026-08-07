@@ -387,14 +387,14 @@ export default function HomeownerBids() {
                   </div>
                 )}
 
-                {quoteResult.vs_neighbid && (
+                {quoteResult.vs_bundleen && (
                   <div style={{ background: "var(--sage-50)", border: "1px solid var(--border-warm)", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--sage-700)" }}>
-                      BidBundle best bid: ${Math.round(quoteResult.vs_neighbid.neighbid_best_bid / 100).toLocaleString()}
-                      {quoteResult.vs_neighbid.saving_if_use_neighbid > 0
-                        ? ` · Saves you $${Math.round(quoteResult.vs_neighbid.saving_if_use_neighbid / 100).toLocaleString()}`
-                        : quoteResult.vs_neighbid.saving_if_use_neighbid < 0
-                          ? ` · This quote is $${Math.round(Math.abs(quoteResult.vs_neighbid.saving_if_use_neighbid) / 100).toLocaleString()} cheaper`
+                      Bundleen best bid: ${Math.round(quoteResult.vs_bundleen.bundleen_best_bid / 100).toLocaleString()}
+                      {quoteResult.vs_bundleen.saving_if_use_bundleen > 0
+                        ? ` · Saves you $${Math.round(quoteResult.vs_bundleen.saving_if_use_bundleen / 100).toLocaleString()}`
+                        : quoteResult.vs_bundleen.saving_if_use_bundleen < 0
+                          ? ` · This quote is $${Math.round(Math.abs(quoteResult.vs_bundleen.saving_if_use_bundleen) / 100).toLocaleString()} cheaper`
                           : " · Same price"}
                     </div>
                   </div>

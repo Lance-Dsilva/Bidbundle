@@ -1,6 +1,6 @@
 export type UserRole = "homeowner" | "provider" | "admin";
 
-const STORAGE_KEY = "neighbid.role";
+const STORAGE_KEY = "bundleen.role";
 
 export function saveRole(role: UserRole): void {
   if (typeof window === "undefined") {

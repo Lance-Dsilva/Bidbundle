@@ -7,7 +7,7 @@ const settingsItems = [
   { label: "Notifications", subtitle: "Push & Email on" },
   { label: "Address & service area", subtitle: "123 Maple St" },
   { label: "Help & support", subtitle: "FAQ, Contact" },
-  { label: "About BidBundle", subtitle: "v1.1.0" },
+  { label: "About Bundleen", subtitle: "v1.1.0" },
 ];
 
 export function SettingsMenu() {

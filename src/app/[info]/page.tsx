@@ -14,9 +14,9 @@ const pages: Record<string, InfoPage> = {
     eyebrow: "Help center",
     intro: "Find the quickest path to posting a request, comparing bids, or managing your account.",
     sections: [
-      { heading: "Getting started", body: "Create an account, choose your role, confirm your service area, and BidBundle will take you to the right dashboard." },
+      { heading: "Getting started", body: "Create an account, choose your role, confirm your service area, and Bundleen will take you to the right dashboard." },
       { heading: "Requests and bids", body: "Homeowners can post a service request and review competing offers. Providers can browse nearby opportunities and submit bids." },
-      { heading: "Contact support", body: "For account or service questions, email support@bidbundle.com or call +1 (512) 555-0148 during business hours." },
+      { heading: "Contact support", body: "For account or service questions, email support@bundleen.com or call +1 (512) 555-0148 during business hours." },
     ],
   },
   safety: {
@@ -26,7 +26,7 @@ const pages: Record<string, InfoPage> = {
     sections: [
       { heading: "Provider information", body: "Provider profiles can show licensing, insurance, service history, ratings, and coverage areas before a homeowner accepts a bid." },
       { heading: "Transparent decisions", body: "Compare the scope, price, provider details, and neighborhood participation before choosing an offer." },
-      { heading: "Report a concern", body: "Contact support@bidbundle.com if a listing, message, or service experience appears unsafe or misleading." },
+      { heading: "Report a concern", body: "Contact support@bundleen.com if a listing, message, or service experience appears unsafe or misleading." },
     ],
   },
   faq: {
@@ -42,19 +42,19 @@ const pages: Record<string, InfoPage> = {
   privacy: {
     title: "Privacy policy",
     eyebrow: "Your information",
-    intro: "This preview explains the principles BidBundle uses when handling account and service information.",
+    intro: "This preview explains the principles Bundleen uses when handling account and service information.",
     sections: [
       { heading: "Information you provide", body: "Account, location, request, bid, and message information is used to operate the service and connect relevant participants." },
       { heading: "How information is used", body: "Information supports authentication, service matching, communication, safety, analytics, and product improvement." },
-      { heading: "Your choices", body: "You may request access, correction, or deletion of your account information by contacting support@bidbundle.com." },
+      { heading: "Your choices", body: "You may request access, correction, or deletion of your account information by contacting support@bundleen.com." },
     ],
   },
   terms: {
     title: "Terms of service",
-    eyebrow: "Using BidBundle",
+    eyebrow: "Using Bundleen",
     intro: "These preview terms summarize the expected use of the platform.",
     sections: [
-      { heading: "Marketplace role", body: "BidBundle helps homeowners, communities, and independent providers discover and coordinate service opportunities." },
+      { heading: "Marketplace role", body: "Bundleen helps homeowners, communities, and independent providers discover and coordinate service opportunities." },
       { heading: "User responsibilities", body: "Users are responsible for accurate information, lawful conduct, account security, and reviewing an offer before accepting it." },
       { heading: "Service agreements", body: "The provider and customer remain responsible for the final scope, scheduling, payment, and performance of service work." },
     ],
@@ -62,10 +62,10 @@ const pages: Record<string, InfoPage> = {
   accessibility: {
     title: "Accessibility",
     eyebrow: "Designed for everyone",
-    intro: "BidBundle aims to provide a clear and usable experience across devices and assistive technologies.",
+    intro: "Bundleen aims to provide a clear and usable experience across devices and assistive technologies.",
     sections: [
       { heading: "Our approach", body: "We use semantic structure, keyboard-accessible controls, readable contrast, descriptive labels, and responsive layouts." },
-      { heading: "Need assistance?", body: "If something prevents you from using the service, email support@bidbundle.com and describe the page and issue." },
+      { heading: "Need assistance?", body: "If something prevents you from using the service, email support@bundleen.com and describe the page and issue." },
       { heading: "Continuous improvement", body: "Accessibility is reviewed as the product evolves, including during interface and content updates." },
     ],
   },
@@ -84,7 +84,7 @@ export default async function InformationPage({ params }: { params: Promise<{ in
     <main className="min-h-screen bg-[#f8f5ef] px-5 py-10 text-[#17243a] sm:px-8 sm:py-16">
       <div className="mx-auto max-w-3xl">
         <Link className="inline-flex items-center gap-2 text-sm font-semibold text-[#236e6b] hover:underline" href="/">
-          ← Back to BidBundle
+          ← Back to Bundleen
         </Link>
         <article className="mt-8 rounded-[28px] border border-[#ded8ce] bg-white p-7 shadow-[0_20px_60px_rgba(23,36,58,0.08)] sm:p-12">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#d06f3f]">{page.eyebrow}</p>
@@ -102,7 +102,7 @@ export default async function InformationPage({ params }: { params: Promise<{ in
             <Link className="rounded-full bg-[#173b58] px-5 py-3 text-sm font-semibold text-white" href="/get-started">
               Get started
             </Link>
-            <a className="rounded-full border border-[#b9c1c9] px-5 py-3 text-sm font-semibold" href="mailto:support@bidbundle.com">
+            <a className="rounded-full border border-[#b9c1c9] px-5 py-3 text-sm font-semibold" href="mailto:support@bundleen.com">
               Contact support
             </a>
           </div>
