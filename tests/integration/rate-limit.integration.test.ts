@@ -17,14 +17,15 @@ import {
  */
 
 const configured = Boolean(
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
+  (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) ||
+    (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
 );
 
 const suite = configured ? describe : describe.skip;
 
 if (!configured) {
   console.warn(
-    "[integration] Skipping Upstash tests: UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are not set.",
+    "[integration] Skipping Upstash tests: neither a complete UPSTASH_REDIS_REST_* nor KV_REST_API_* credential pair is set.",
   );
 }
 

@@ -107,6 +107,8 @@ beforeEach(() => {
   now = 1_700_000_000_000;
   vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://fake.upstash.io");
   vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "fake-token");
+  vi.stubEnv("KV_REST_API_URL", undefined);
+  vi.stubEnv("KV_REST_API_TOKEN", undefined);
   vi.stubEnv("RATE_LIMIT_IDENTIFIER_SECRET", "test-secret");
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("VERCEL_ENV", undefined);
@@ -187,6 +189,17 @@ describe("shouldEnforceIpLimit", () => {
 });
 
 describe("consumeRateLimit", () => {
+  it("accepts Vercel KV credential names emitted by the Upstash integration", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("KV_REST_API_URL", "https://fake-vercel-kv.upstash.io");
+    vi.stubEnv("KV_REST_API_TOKEN", "fake-kv-token");
+    resetRateLimiterCache();
+
+    expect(isRedisConfigured()).toBe(true);
+    await expect(consumeRateLimit("register", "id")).resolves.toMatchObject({ success: true });
+  });
+
   it("allows requests below the threshold", async () => {
     const id = buildIdentifier(["register", "203.0.113.5"]);
     for (let attempt = 1; attempt < RATE_LIMITS.register.attempts; attempt += 1) {
@@ -246,6 +259,8 @@ describe("consumeRateLimit", () => {
   it("throws RateLimiterUnavailableError when credentials are missing", async () => {
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("KV_REST_API_URL", "");
+    vi.stubEnv("KV_REST_API_TOKEN", "");
     resetRateLimiterCache();
     expect(isRedisConfigured()).toBe(false);
     await expect(consumeRateLimit("register", "id")).rejects.toBeInstanceOf(
@@ -298,6 +313,8 @@ describe("local profile setup", () => {
     vi.stubEnv("VERCEL_ENV", undefined);
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("KV_REST_API_URL", "");
+    vi.stubEnv("KV_REST_API_TOKEN", "");
     resetRateLimiterCache();
 
     expect(requiresRateLimiter()).toBe(false);

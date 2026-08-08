@@ -55,22 +55,50 @@ export function buildIdentifier(parts: readonly string[]): string {
   return createHash("sha256").update(`${salt}:${parts.join("|")}`).digest("hex").slice(0, 32);
 }
 
+type RedisCredentials = {
+  url: string;
+  token: string;
+};
+
+/**
+ * Supports both names emitted by a direct Upstash integration and the legacy
+ * Vercel KV names that Vercel's Upstash Marketplace integration may inject.
+ * A URL and token must come from the same pair so credentials from separate
+ * resources cannot accidentally be combined.
+ */
+function getRedisCredentials(): RedisCredentials | null {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return {
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    };
+  }
+
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return {
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    };
+  }
+
+  return null;
+}
+
 export function isRedisConfigured(): boolean {
-  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  return getRedisCredentials() !== null;
 }
 
 let redisClient: Redis | null = null;
 const limiterCache = new Map<LimiterName, Ratelimit>();
 
 function getRedis(): Redis {
-  if (!isRedisConfigured()) {
+  const credentials = getRedisCredentials();
+
+  if (!credentials) {
     throw new RateLimiterUnavailableError("Upstash Redis credentials are not configured.");
   }
 
-  redisClient ??= new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL as string,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN as string,
-  });
+  redisClient ??= new Redis(credentials);
 
   return redisClient;
 }
