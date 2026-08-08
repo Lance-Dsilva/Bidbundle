@@ -1,29 +1,19 @@
-import { apiFetch } from "./api";
+"use client";
 
-const TOKEN_KEY = "bundleen.token";
+import type { AppRole } from "@/lib/validation/auth";
 
-const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
-const DEV_BYPASS_TOKEN = "dev-bypass-token";
-const DEV_BYPASS_USER: AuthUser = {
-  id: 1,
-  email: "alice@bundleen.com",
-  full_name: "Alice Dev",
-  phone: null,
-  role: "homeowner",
-  neighborhood: "Maple Grove",
-  address: "123 Maple Grove Ave",
-  latitude: null,
-  longitude: null,
-  neighbourhood_id: 1,
-  is_verified: true,
-};
+/**
+ * Compatibility helpers for screens that predate Clerk. No token is stored or
+ * returned here: Clerk's HttpOnly session cookie is attached to same-origin
+ * requests by the browser and verified by the Clerk middleware.
+ */
 
 export interface AuthUser {
-  id: number;
+  id: string;
   email: string;
   full_name: string;
   phone?: string | null;
-  role: "homeowner" | "provider" | "admin";
+  role: AppRole;
   neighborhood: string | null;
   address?: string | null;
   latitude?: number | null;
@@ -32,60 +22,26 @@ export interface AuthUser {
   is_verified: boolean;
 }
 
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
+/**
+ * @deprecated Not a credential. Legacy callers only use this as a truthy
+ * marker before making a same-origin request. Remove it as those hooks move to
+ * direct Clerk-aware API calls.
+ */
+export function getToken(): string {
+  return "clerk-session-cookie";
 }
 
-/* ── Token storage ── */
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  const stored = localStorage.getItem(TOKEN_KEY);
-  if (stored) return stored;
-  return DEV_BYPASS ? DEV_BYPASS_TOKEN : null;
-}
-
-export function setToken(token: string): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
+/** @deprecated Clerk owns session storage; there is no local token to clear. */
 export function clearAuth(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem("bundleen.role");
+  // Intentionally empty.
 }
 
-/* ── Auth calls (local SQLite-backed API auth) ── */
-export async function register(payload: {
-  email: string;
-  password: string;
-  full_name: string;
-  phone?: string;
-  role: string;
-  latitude?: number;
-  longitude?: number;
-}): Promise<AuthTokens> {
-  return apiFetch<AuthTokens>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify(payload),
+/** Reads the current Bundleen profile resolved from the verified Clerk user. */
+export async function fetchMe(_legacyToken?: string): Promise<AuthUser> {
+  const response = await fetch("/api/auth/me", {
+    cache: "no-store",
+    credentials: "same-origin",
   });
-}
-
-export async function login(email: string, password: string): Promise<AuthTokens> {
-  return apiFetch<AuthTokens>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-}
-
-export async function fetchMe(token: string): Promise<AuthUser> {
-  if (DEV_BYPASS && token === DEV_BYPASS_TOKEN) return DEV_BYPASS_USER;
-  return apiFetch<AuthUser>("/users/me", { token });
-}
-
-export function logout(): void {
-  clearAuth();
-  if (typeof window !== "undefined") window.location.href = "/";
+  if (!response.ok) throw new Error("Not authenticated");
+  return response.json() as Promise<AuthUser>;
 }

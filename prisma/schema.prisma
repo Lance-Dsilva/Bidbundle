@@ -1,0 +1,29 @@
+// Bundleen application profiles. Clerk is the identity and session system;
+// this database stores only Bundleen-owned profile and authorization data.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  homeowner
+  provider
+  admin
+}
+
+model User {
+  id           String   @id @default(cuid())
+  clerkUserId  String   @unique
+  email        String   @unique
+  fullName     String
+  phone        String?
+  role         UserRole @default(homeowner)
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

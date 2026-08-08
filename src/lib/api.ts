@@ -1,4 +1,12 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/**
+ * Same-origin API client.
+ *
+ * Requests go to this application's own `/api/...` Route Handlers. There is no
+ * configurable base URL and no `Authorization` header: the Clerk session
+ * cookie is HttpOnly and is attached by the browser automatically, which is
+ * why the old `NEXT_PUBLIC_API_URL` + localStorage bearer token pair is gone.
+ */
+const BASE_PATH = "/api";
 
 function formatApiDetail(detail: unknown): string | null {
   if (typeof detail === "string") return detail;
@@ -38,22 +46,30 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(
-  path: string,
-  options: RequestInit & { token?: string } = {}
-): Promise<T> {
-  const { token, headers: extraHeaders, ...rest } = options;
+export type ApiFetchOptions = RequestInit & {
+  /**
+   * @deprecated Accepted and ignored. Legacy call sites still pass a token;
+   * it is never read and never sent. Authentication is the HttpOnly session
+   * cookie. Drop this argument as each screen is migrated.
+   */
+  token?: string;
+};
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const { token: _ignoredToken, headers: extraHeaders, ...rest } = options;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(extraHeaders as Record<string, string> ?? {}),
+    ...((extraHeaders as Record<string, string>) ?? {}),
   };
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`${BASE_URL}${path}`, { ...rest, headers });
+  const res = await fetch(`${BASE_PATH}${path}`, {
+    ...rest,
+    headers,
+    // Same-origin is the fetch default, but stating it makes the intent
+    // explicit: the session cookie travels with the request, nothing else.
+    credentials: "same-origin",
+  });
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;

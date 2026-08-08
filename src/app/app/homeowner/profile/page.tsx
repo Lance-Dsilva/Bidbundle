@@ -1,6 +1,6 @@
 "use client";
 
-import { logout } from "@/lib/auth";
+import { SignOutButton } from "@clerk/nextjs";
 import { Icon } from "@/components/ui/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useHomeownerProfile } from "@/hooks/useHomeownerProfile";
@@ -254,9 +254,11 @@ export default function HomeownerProfile() {
               <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-900)" }}>Sign out</div>
               <div style={{ fontSize: 11, color: "var(--ink-500)" }}>End session on this device</div>
             </div>
-            <button onClick={() => logout()} style={{ display: "inline-flex", alignItems: "center", height: 30, padding: "0 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", color: "var(--danger-600)", border: "1px solid rgba(182,68,48,0.3)", fontFamily: "var(--font-body)" }}>
-              Sign out
-            </button>
+            <SignOutButton redirectUrl="/">
+              <button style={{ display: "inline-flex", alignItems: "center", height: 30, padding: "0 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "transparent", color: "var(--danger-600)", border: "1px solid rgba(182,68,48,0.3)", fontFamily: "var(--font-body)" }}>
+                Sign out
+              </button>
+            </SignOutButton>
           </div>
         </div>
       </div>

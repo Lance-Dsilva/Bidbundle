@@ -57,3 +57,9 @@ dist/
 build/
 coverage/
 .nyc_output/
+
+# Prisma generated client
+src/generated/
+
+# Local test environment
+.env.test.local

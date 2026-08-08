@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { getToken } from "@/lib/auth";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/**
+ * Same-origin, like the rest of the client. The endpoint itself belongs to
+ * section 7 (AI Features) and does not exist yet.
+ */
+const BASE_PATH = "/api";
 
 export interface QuoteSummaryVsBundleen {
   bundleen_best_bid: number;
@@ -31,15 +34,17 @@ export function useQuoteSummary() {
     setLoading(true);
     setError(null);
     try {
-      const token = getToken();
       const form = new FormData();
       form.append("file", file);
       if (requestId !== undefined) form.append("request_id", String(requestId));
 
-      const res = await fetch(`${BASE_URL}/ai/quote-summary`, {
+      // No Authorization header: the HttpOnly session cookie is sent
+      // automatically. `Content-Type` is left unset so the browser adds the
+      // multipart boundary itself.
+      const res = await fetch(`${BASE_PATH}/ai/quote-summary`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
+        credentials: "same-origin",
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

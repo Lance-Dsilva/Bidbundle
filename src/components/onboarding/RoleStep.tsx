@@ -2,17 +2,18 @@
 
 import { Button } from "@/components/ui/Button";
 import { StepProgress } from "@/components/onboarding/StepProgress";
-import type { UserRole } from "@/utils/onboardingState";
+import { PUBLIC_ROLES, type PublicRole } from "@/lib/validation/auth";
 
 type RoleStepProps = {
-  role: UserRole;
+  role: PublicRole;
   onBack: () => void;
   onContinue: () => void;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange: (role: PublicRole) => void;
+  stepNumber?: number;
   stepCount?: number;
 };
 
-const roleContent: Record<UserRole, {
+const roleContent: Record<PublicRole, {
   bg: string; abbr: string; title: string; subtitle: string; body: string; benefits: string[];
 }> = {
   homeowner: {
@@ -31,17 +32,19 @@ const roleContent: Record<UserRole, {
     body: "Get bulk job alerts, bid competitively, grow your business.",
     benefits: ["Alerts on new group jobs", "Bid competitively to win more work", "Build reputation with real reviews"],
   },
-  admin: {
-    bg: "var(--ink-700)",
-    abbr: "A",
-    title: "HOA Admin",
-    subtitle: "I manage a community",
-    body: "Oversee participation, approve eligibility, track savings.",
-    benefits: ["Oversee community participation", "Approve homeowner eligibility", "Track savings and analytics"],
-  },
 };
 
-const roleOrder: UserRole[] = ["homeowner", "provider", "admin"];
+/**
+ * The HOA Admin tile was removed from public sign-up.
+ *
+ * Admin accounts can approve members and read community-wide analytics, so
+ * letting anyone self-assign the role at registration would have handed out
+ * those powers to whoever picked the third card. The server enforces this
+ * independently — `profileSetupSchema` only accepts `PUBLIC_ROLES` — so deleting
+ * the tile is the UI half of a rule that holds even if this file is bypassed.
+ * Admins are provisioned by an approved seed or migration instead.
+ */
+const roleOrder: readonly PublicRole[] = PUBLIC_ROLES;
 
 function Check() {
   return (
@@ -51,7 +54,14 @@ function Check() {
   );
 }
 
-export function RoleStep({ role, onBack, onContinue, onRoleChange, stepCount = 3 }: RoleStepProps) {
+export function RoleStep({
+  role,
+  onBack,
+  onContinue,
+  onRoleChange,
+  stepNumber = 2,
+  stepCount = 3,
+}: RoleStepProps) {
   const selectedContent = roleContent[role];
 
   return (
@@ -67,7 +77,7 @@ export function RoleStep({ role, onBack, onContinue, onRoleChange, stepCount = 3
             <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
           </svg>
         </button>
-        <StepProgress current={2} total={stepCount} />
+        <StepProgress current={stepNumber} total={stepCount} />
         <h1 className="mt-2 font-display text-[2.4rem] font-bold italic tracking-tight text-[var(--ink-900)]">
           Choose your role
         </h1>

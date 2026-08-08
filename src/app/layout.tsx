@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -53,16 +54,18 @@ export default function RootLayout({
       className={inter.variable}
     >
       <body>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("bundleen.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}`,
-          }}
-        />
-        <ScrollReveal />
-        <PwaProvider />
-        <ToastProvider>
-          <AppShell>{children}</AppShell>
-        </ToastProvider>
+        <ClerkProvider>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `try{var t=localStorage.getItem("bundleen.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}`,
+            }}
+          />
+          <ScrollReveal />
+          <PwaProvider />
+          <ToastProvider>
+            <AppShell>{children}</AppShell>
+          </ToastProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

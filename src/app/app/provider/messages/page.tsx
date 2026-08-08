@@ -123,7 +123,10 @@ export default function ProviderMessagesPage() {
     }));
 
   const activeDmMessages = messages.map((message) => ({
-    from: message.sender_id === me?.id ? "me" : "them",
+    // Legacy screen: `sender_id` is a numeric id from the not-yet-built
+    // messaging backend, while the session id is a cuid. Compared as strings
+    // until section 6 defines the real message model.
+    from: String(message.sender_id) === me?.id ? "me" : "them",
     text: message.text,
     time: new Date(message.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   }));
@@ -142,7 +145,7 @@ export default function ProviderMessagesPage() {
         const createdAt = new Date().toISOString();
         const optimisticMessage: AIMemory = {
           id: `pending-${Date.now()}`,
-          user_id: me?.id ?? 0,
+          user_id: 0, // Placeholder for an optimistic row; see section 6.
           context_key: "general",
           role: "user",
           content: text,

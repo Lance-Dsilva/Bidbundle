@@ -13,6 +13,15 @@ type InputProps = {
 export function Input({ id, label, prefixIcon, hint, error, type = "text", variant = "default", ...props }: InputProps) {
   const inputId = id ?? label.toLowerCase().replace(/\s+/g, "-");
   const warm = variant === "warm";
+
+  // The hint and error are associated with the input via `aria-describedby`,
+  // so a screen reader reads them as part of the field instead of leaving them
+  // as loose text a non-sighted user would never connect to it.
+  const hintId = `${inputId}-hint`;
+  const errorId = `${inputId}-error`;
+  const describedBy = [error ? errorId : null, hint && !error ? hintId : null]
+    .filter(Boolean)
+    .join(" ");
   return (
     <div className="flex flex-col gap-1.5">
       <label
@@ -37,6 +46,8 @@ export function Input({ id, label, prefixIcon, hint, error, type = "text", varia
           {...props}
           id={inputId}
           type={type}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy || undefined}
           className={`h-full w-full border-0 bg-transparent p-0 outline-none ${
             warm
               ? "text-[14px] text-[var(--ink-900)] placeholder:text-[var(--ink-300)]"
@@ -44,8 +55,16 @@ export function Input({ id, label, prefixIcon, hint, error, type = "text", varia
           }`}
         />
       </span>
-      {hint && !error ? <p className={warm ? "text-[11px] text-[var(--ink-400)]" : "text-[11px] text-[#64748b]"}>{hint}</p> : null}
-      {error ? <p className="text-[11px] text-red-500">{error}</p> : null}
+      {hint && !error ? (
+        <p id={hintId} className={warm ? "text-[11px] text-[var(--ink-400)]" : "text-[11px] text-[#64748b]"}>
+          {hint}
+        </p>
+      ) : null}
+      {error ? (
+        <p id={errorId} role="alert" className="text-[11px] text-red-500">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

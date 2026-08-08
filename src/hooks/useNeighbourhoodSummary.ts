@@ -68,7 +68,7 @@ export function useNeighbourhoodSummary() {
   }, [refresh]);
 
   const otherMembers = members
-    .filter((member) => member.user_id !== user?.id)
+    .filter((member) => String(member.user_id) !== user?.id)
     .sort((a, b) => new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime());
 
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;

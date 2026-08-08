@@ -1,5 +1,6 @@
 "use client";
 
+import { Show, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -56,21 +57,32 @@ export function Navbar() {
 
         {/* Right CTAs */}
         <div className="flex items-center gap-2">
-          <Link
-            href="/sign-in"
-            className="hidden h-9 items-center px-4 text-[13px] font-medium text-white/60 transition-colors hover:text-white sm:inline-flex"
-          >
-            Sign in
-          </Link>
-          <Link href="/get-started">
-            <Button
-              as="span"
-              variant="amber"
-              className="h-9 px-5 text-[13px] shadow-lg shadow-amber-900/20"
+          <Show when="signed-out">
+            <Link
+              href="/sign-in"
+              className="hidden h-9 items-center px-4 text-[13px] font-medium text-white/60 transition-colors hover:text-white sm:inline-flex"
             >
-              Get started free
-            </Button>
-          </Link>
+              Sign in
+            </Link>
+            <Link href="/get-started">
+              <Button
+                as="span"
+                variant="amber"
+                className="h-9 px-5 text-[13px] shadow-lg shadow-amber-900/20"
+              >
+                Get started free
+              </Button>
+            </Link>
+          </Show>
+          <Show when="signed-in">
+            <Link
+              href="/auth/continue"
+              className="hidden h-9 items-center px-4 text-[13px] font-medium text-white/70 transition-colors hover:text-white sm:inline-flex"
+            >
+              Dashboard
+            </Link>
+            <UserButton />
+          </Show>
         </div>
       </nav>
     </header>

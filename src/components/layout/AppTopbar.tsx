@@ -1,24 +1,13 @@
 "use client";
 
+import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { isTabActive, tabsByRole, useAppRole } from "@/components/layout/AppBottomNav";
 import { CreativeIcon } from "@/components/ui/CreativeIcon";
-import { useAuth } from "@/hooks/useAuth";
-
-function initials(name?: string | null): string {
-  if (!name) return "NB";
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 export function AppTopbar() {
-  const { user } = useAuth();
   const pathname = usePathname();
   const role = useAppRole();
   const tabs = tabsByRole[role];
@@ -45,9 +34,11 @@ export function AppTopbar() {
           <button className="bb-icon-btn" aria-label="Notifications" type="button">
             <CreativeIcon name="bell" size={20} />
           </button>
-          <div className="bb-avatar" aria-label="Profile">
-            {initials(user?.full_name)}
-          </div>
+          <UserButton
+            appearance={{
+              elements: { avatarBox: "h-9 w-9" },
+            }}
+          />
         </div>
       </div>
     </header>

@@ -1,5 +1,6 @@
 "use client";
 
+import { SignOutButton } from "@clerk/nextjs";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -7,7 +8,6 @@ import { useProviderReviews } from "@/hooks/useProviderReviews";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderEarnings } from "@/hooks/useProviderEarnings";
 import { useProviderBids } from "@/hooks/useProviderBids";
-import { logout } from "@/lib/auth";
 
 const cardStyle: CSSProperties = {
   background: "var(--bg-card)",
@@ -336,9 +336,11 @@ export default function ProviderProfilePage() {
                 <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-900)" }}>Sign out</div>
                 <div style={{ fontSize: 11, color: "var(--ink-500)" }}>End session on this device</div>
               </div>
-              <button type="button" onClick={logout} style={{ ...ghostButtonStyle, color: "var(--danger-600)", borderColor: "rgba(182,68,48,0.3)", height: 34 }}>
-                Sign out
-              </button>
+              <SignOutButton redirectUrl="/">
+                <button type="button" style={{ ...ghostButtonStyle, color: "var(--danger-600)", borderColor: "rgba(182,68,48,0.3)", height: 34 }}>
+                  Sign out
+                </button>
+              </SignOutButton>
             </div>
           </div>
 

@@ -22,6 +22,8 @@ type ProviderBusinessStepProps = {
   onChange: <K extends keyof ProviderBusinessData>(field: K, value: ProviderBusinessData[K]) => void;
   onContinue: () => void;
   submitting?: boolean;
+  stepNumber?: number;
+  stepCount?: number;
 };
 
 const serviceOptions = [
@@ -63,6 +65,8 @@ export function ProviderBusinessStep({
   onChange,
   onContinue,
   submitting = false,
+  stepNumber = 4,
+  stepCount = 4,
 }: ProviderBusinessStepProps) {
   const areaSuggestions = buildAreaSuggestions(address);
   const isComplete =
@@ -84,7 +88,7 @@ export function ProviderBusinessStep({
             <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
           </svg>
         </button>
-        <StepProgress current={4} total={4} />
+        <StepProgress current={stepNumber} total={stepCount} />
         <h1 className="mt-2 font-display text-[2.4rem] font-bold italic tracking-tight text-[var(--ink-900)]">
           Tell us about your business
         </h1>
