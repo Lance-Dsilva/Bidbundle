@@ -23,16 +23,12 @@ export default function HomePage() {
           </nav>
 
           <div className="ld-header-actions">
-            <Link className="ld-location-chip" href="/get-started" aria-label="Set your service location">
-              <img src="/modern/icons/location.svg" alt="" width={18} height={18} />
-              <span>Austin, TX</span>
-              <span className="ld-chevron">⌄</span>
+            <Link className="ld-auth-link ld-auth-link-sign-in" href="/sign-in">
+              Sign in
             </Link>
-            <Link className="ld-icon-button" href="/sign-in" aria-label="Sign in to view notifications">
-              <img src="/modern/icons/bell.svg" alt="" width={21} height={21} />
-              <span className="ld-notification-count">3</span>
+            <Link className="ld-auth-link ld-auth-link-sign-up" href="/get-started">
+              Sign up
             </Link>
-            <Link className="ld-avatar-button" href="/sign-in" aria-label="Sign in to open your profile">AD</Link>
             <button className="ld-menu-button" type="button" aria-label="Open menu" aria-expanded="false" data-menu-button="">
               <span /><span /><span />
             </button>
