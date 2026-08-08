@@ -17,7 +17,7 @@ export default function HomePage() {
 
           <nav className="ld-desktop-nav" aria-label="Primary navigation">
             <a className="is-active" href="#home">Home</a>
-            <Link href="/get-started">Post a Request</Link>
+            <Link href="/post-request">Post a Request</Link>
             <a href="#services">Services</a>
             <a href="#how-it-works">How It Works</a>
           </nav>
@@ -41,7 +41,7 @@ export default function HomePage() {
 
         <nav className="ld-mobile-menu" aria-label="Mobile navigation" data-mobile-menu="" hidden>
           <a href="#home">Home</a>
-          <Link href="/get-started">Post a Request</Link>
+          <Link href="/post-request">Post a Request</Link>
           <a href="#services">Services</a>
           <a href="#how-it-works">How It Works</a>
         </nav>
@@ -69,7 +69,7 @@ export default function HomePage() {
               </p>
 
               <div className="ld-hero-actions">
-                <Link className="ld-btn ld-btn-primary" href="/get-started">
+                <Link className="ld-btn ld-btn-primary" href="/post-request">
                   <img src="/modern/icons/plus.svg" alt="" width={19} height={19} />
                   Post a Request
                 </Link>
@@ -248,7 +248,7 @@ export default function HomePage() {
                 <p>Post your request, invite nearby homeowners, and compare competitive bids from trusted local providers.</p>
               </div>
               <div className="ld-contact-cta-actions">
-                <Link className="ld-btn ld-btn-primary" href="/get-started"><img src="/modern/icons/plus.svg" alt="" width={19} height={19} /> Post a Request</Link>
+                <Link className="ld-btn ld-btn-primary" href="/post-request"><img src="/modern/icons/plus.svg" alt="" width={19} height={19} /> Post a Request</Link>
                 <a className="ld-btn ld-btn-secondary" href="mailto:hello@bundleen.com"><img src="/modern/icons/mail.svg" alt="" width={19} height={19} /> Contact Us</a>
               </div>
             </div>
