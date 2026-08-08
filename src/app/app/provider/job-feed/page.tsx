@@ -206,7 +206,7 @@ export default function ProviderJobFeedPage() {
   const { bids: providerBids, refresh: refreshProviderBids } = useProviderBids();
   const { draftBid, loading: draftLoading, error: draftError } = useBidDrafter();
   const { getForecast, loading: forecastLoading } = useDemandForecast();
-  const { profile, user } = useProviderProfile();
+  const { profile } = useProviderProfile();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [activeTrade, setActiveTrade] = useState("All trades");
@@ -238,7 +238,9 @@ export default function ProviderJobFeedPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const actualRadiusMi = profile?.service_radius_mi ?? autoBidSettings.radiusMi;
+  // The community radius is fixed platform-wide; the stored auto-bid value is
+  // only a fallback for the moment before the profile loads.
+  const actualRadiusMi = profile?.communityRadiusMi ?? autoBidSettings.radiusMi;
   const bidByRequestId = useMemo(
     () => new Map(providerBids.map((bid) => [bid.request_id, bid])),
     [providerBids]
@@ -281,13 +283,13 @@ export default function ProviderJobFeedPage() {
   }, [autoBidSettings]);
 
   useEffect(() => {
-    if (!profile?.service_radius_mi) return;
+    if (!profile?.communityRadiusMi) return;
     setAutoBidSettings((current) => (
-      current.radiusMi === profile.service_radius_mi
+      current.radiusMi === profile.communityRadiusMi
         ? current
-        : { ...current, radiusMi: profile.service_radius_mi }
+        : { ...current, radiusMi: profile.communityRadiusMi }
     ));
-  }, [profile?.service_radius_mi]);
+  }, [profile?.communityRadiusMi]);
 
   const displayedJobs = useMemo(() => {
     const normalizedSearch = searchText.trim().toLowerCase();
@@ -750,15 +752,15 @@ export default function ProviderJobFeedPage() {
           <div style={{ ...card, padding: 22 }}>
             <div style={{ ...eyebrow }}>Service map</div>
             <ServiceMap
-              lat={user?.latitude}
-              lng={user?.longitude}
+              lat={profile?.latitude}
+              lng={profile?.longitude}
               radiusMi={actualRadiusMi}
-              locality={user?.neighborhood ?? profile?.neighborhood ?? ""}
+              locality={profile?.neighborhood ?? ""}
               jobCount={displayedJobs.length}
             />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-500)", marginTop: 10 }}>
               <span style={{ color: "var(--ink-500)" }}>Community radius: <strong style={{ color: "var(--ink-900)" }}>{actualRadiusMi} mi</strong></span>
-              <span style={{ color: "var(--ink-500)" }}>{user?.latitude && user?.longitude ? "Map centered on your saved provider address" : "Add a provider address to enable the live map"}</span>
+              <span style={{ color: "var(--ink-500)" }}>{profile?.latitude && profile?.longitude ? "Map centered on your saved provider address" : "Add a provider address to enable the live map"}</span>
             </div>
           </div>
 

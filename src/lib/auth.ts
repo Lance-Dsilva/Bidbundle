@@ -12,13 +12,13 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  phone?: string | null;
+  phone: string | null;
   role: AppRole;
   neighborhood: string | null;
-  address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  neighbourhood_id?: number | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  avatar_url: string | null;
   is_verified: boolean;
 }
 

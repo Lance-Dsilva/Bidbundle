@@ -90,7 +90,7 @@ const {
   toRetryAfterSeconds,
 } = await import("@/lib/server/rate-limit");
 
-const { guardRegistration, guardFailureResponse, requiresRateLimiter } = await import(
+const { guardAvatarUpload, guardRegistration, guardFailureResponse, requiresRateLimiter } = await import(
   "@/lib/server/auth-guard"
 );
 
@@ -304,6 +304,25 @@ describe("guardRegistration", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     redisDown = true;
     expect(await guardRegistration(requestFrom("203.0.113.5"))).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("guardAvatarUpload", () => {
+  it("limits uploads per signed-in user", async () => {
+    for (let attempt = 0; attempt < RATE_LIMITS.avatarUpload.attempts; attempt += 1) {
+      expect(await guardAvatarUpload("user_1")).toBeNull();
+    }
+    expect(await guardAvatarUpload("user_1")).toEqual({
+      kind: "rate-limited",
+      retryAfterSeconds: expect.any(Number),
+    });
+    expect(await guardAvatarUpload("user_2")).toBeNull();
+  });
+
+  it("fails closed when Redis is unavailable in a deployment", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    redisDown = true;
+    expect(await guardAvatarUpload("user_1")).toEqual({ kind: "unavailable" });
   });
 });
 

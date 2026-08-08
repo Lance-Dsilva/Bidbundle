@@ -136,7 +136,25 @@ export async function authorizeRequest(
     };
   }
 
-  const user = await findBundleenUser(userId);
+  // The profile lookup is a database call, so it can fail for reasons that
+  // have nothing to do with the caller. Handled here rather than left to throw,
+  // so an outage answers with a generic 500 instead of an unhandled rejection.
+  let user: SessionUser | null;
+  try {
+    user = await findBundleenUser(userId);
+  } catch (error) {
+    console.error("[auth] session profile lookup failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Something went wrong on our end. Please try again." },
+        { status: 500 },
+      ),
+    };
+  }
+
   if (!user) {
     return {
       ok: false,

@@ -1,20 +1,31 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  DASHBOARD_BY_ROLE,
-  isAppRole,
-  normalizeEmail,
-  profileSetupSchema,
-} from "@/lib/validation/auth";
+import { DASHBOARD_BY_ROLE, isAppRole, normalizeEmail } from "@/lib/validation/auth";
+import { onboardingProfileSchema } from "@/lib/validation/profile";
 
-describe("profileSetupSchema", () => {
-  it.each(["homeowner", "provider"] as const)("accepts the public role %s", (role) => {
-    expect(profileSetupSchema.safeParse({ role }).success).toBe(true);
+describe("onboardingProfileSchema", () => {
+  it("accepts a homeowner with a confirmed address", () => {
+    expect(
+      onboardingProfileSchema.safeParse({ role: "homeowner", address: "742 Evergreen Terrace" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("accepts a provider with the required business fields", () => {
+    expect(
+      onboardingProfileSchema.safeParse({
+        role: "provider",
+        address: "1 Main Street",
+        neighborhood: "Austin",
+        providerBusiness: { companyName: "ProFix", trades: ["Plumbing"] },
+      }).success,
+    ).toBe(true);
   });
 
   it("normalizes optional profile fields", () => {
-    const result = profileSetupSchema.safeParse({
+    const result = onboardingProfileSchema.safeParse({
       role: "homeowner",
+      address: "742 Evergreen Terrace",
       fullName: "  Ada Lovelace  ",
       phone: "",
     });
@@ -26,24 +37,27 @@ describe("profileSetupSchema", () => {
   });
 
   it.each(["admin", "wizard", ""])("rejects non-public role %s", (role) => {
-    expect(profileSetupSchema.safeParse({ role }).success).toBe(false);
+    expect(onboardingProfileSchema.safeParse({ role }).success).toBe(false);
   });
 
   it("rejects malformed phone numbers", () => {
-    expect(profileSetupSchema.safeParse({ role: "provider", phone: "call-me" }).success).toBe(
+    expect(onboardingProfileSchema.safeParse({ role: "provider", phone: "call-me" }).success).toBe(
       false,
     );
   });
 
   it("does not add browser-supplied identity fields to parsed data", () => {
-    const result = profileSetupSchema.safeParse({
+    const result = onboardingProfileSchema.safeParse({
       role: "homeowner",
+      address: "742 Evergreen Terrace",
       email: "forged@example.com",
       clerkUserId: "forged",
       password: "secret",
     });
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data).toEqual({ role: "homeowner" });
+    if (result.success) {
+      expect(result.data).toEqual({ role: "homeowner", address: "742 Evergreen Terrace" });
+    }
   });
 });
 

@@ -19,6 +19,8 @@ import { isUnknownIp } from "@/lib/server/request-ip";
 export const RATE_LIMITS = {
   /** Per-IP Bundleen profile creation. */
   register: { attempts: 5, window: "15 m" },
+  /** Per-user profile photo uploads. */
+  avatarUpload: { attempts: 10, window: "1 h" },
 } as const;
 
 type LimiterName = keyof typeof RATE_LIMITS;

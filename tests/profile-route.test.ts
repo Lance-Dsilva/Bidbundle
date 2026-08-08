@@ -21,6 +21,15 @@ const state = vi.hoisted(() => ({
     create: Record<string, unknown>;
     update: Record<string, unknown>;
   } | null,
+  /** Role already on the row, when the test needs a returning user. */
+  existingRole: null as "homeowner" | "provider" | null,
+  roleProfileUpserts: [] as Array<{ model: string; args: Record<string, unknown> }>,
+  existingProviderClaims: null as null | {
+    licenseNumber: string | null;
+    licenseState: string | null;
+    insuranceProvider: string | null;
+    insurancePolicyNumber: string | null;
+  },
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -39,30 +48,62 @@ class FakePrismaError extends Error {
   }
 }
 
-vi.mock("@/lib/server/db", () => ({
-  db: {
-    user: {
-      upsert: async (args: {
-        where: Record<string, unknown>;
-        create: Record<string, unknown>;
-        update: Record<string, unknown>;
-      }) => {
-        state.lastUpsertArgs = args;
-        if (state.upsertBehaviour === "duplicate") throw new FakePrismaError("P2002");
-        if (state.upsertBehaviour === "error") throw new Error("database password=secret");
-        return { role: args.create.role ?? "homeowner" };
-      },
+const client = {
+  user: {
+    upsert: async (args: {
+      where: Record<string, unknown>;
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) => {
+      state.lastUpsertArgs = args;
+      if (state.upsertBehaviour === "duplicate") throw new FakePrismaError("P2002");
+      if (state.upsertBehaviour === "error") throw new Error("database password=secret");
+      return { id: "user_db_1", role: state.existingRole ?? args.create.role ?? "homeowner" };
     },
   },
-}));
+  homeownerProfile: {
+    upsert: async (args: { create: Record<string, unknown> }) => {
+      state.roleProfileUpserts.push({ model: "homeownerProfile", args });
+      return { id: "homeowner_profile_1" };
+    },
+  },
+  providerProfile: {
+    findUnique: async () => state.existingProviderClaims,
+    upsert: async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
+      state.roleProfileUpserts.push({ model: "providerProfile", args });
+      return { id: "provider_profile_1" };
+    },
+  },
+  $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(client),
+};
+
+vi.mock("@/lib/server/db", () => ({ db: client }));
 
 const { POST } = await import("@/app/api/auth/profile/route");
 
 function profileRequest(body: unknown, headers: Record<string, string> = {}): Request {
+  let requestBody = body;
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const supplied = body as Record<string, unknown>;
+    if (supplied.role === "homeowner") {
+      requestBody = { address: "742 Evergreen Terrace", ...supplied };
+    } else if (supplied.role === "provider") {
+      const business =
+        supplied.providerBusiness && typeof supplied.providerBusiness === "object"
+          ? (supplied.providerBusiness as Record<string, unknown>)
+          : {};
+      requestBody = {
+        address: "1 Main Street",
+        neighborhood: "Austin",
+        ...supplied,
+        providerBusiness: { companyName: "ProFix", trades: ["Plumbing"], ...business },
+      };
+    }
+  }
   return new Request("https://bundleen.example/api/auth/profile", {
     method: "POST",
     headers: { "content-type": "application/json", "x-real-ip": "203.0.113.5", ...headers },
-    body: typeof body === "string" ? body : JSON.stringify(body),
+    body: typeof requestBody === "string" ? requestBody : JSON.stringify(requestBody),
   });
 }
 
@@ -81,8 +122,11 @@ beforeEach(() => {
     primaryPhoneNumber: { phoneNumber: "+1 215 555 0192" },
   };
   state.guardFailure = null;
+  state.existingRole = null;
+  state.roleProfileUpserts = [];
   state.upsertBehaviour = "success";
   state.lastUpsertArgs = null;
+  state.existingProviderClaims = null;
   vi.stubEnv("NODE_ENV", "test");
 });
 
@@ -135,6 +179,92 @@ describe("Clerk profile synchronization", () => {
   it("does not change an existing user's role during refresh", async () => {
     await POST(profileRequest({ role: "provider" }));
     expect(state.lastUpsertArgs?.update).not.toHaveProperty("role");
+  });
+
+  it("persists the onboarding address and coordinates", async () => {
+    await POST(
+      profileRequest({
+        role: "homeowner",
+        address: "742 Evergreen Terrace",
+        neighborhood: "Springfield",
+        latitude: 34.05,
+        longitude: -118.24,
+      }),
+    );
+    expect(state.lastUpsertArgs?.create).toMatchObject({
+      address: "742 Evergreen Terrace",
+      neighborhood: "Springfield",
+      latitude: 34.05,
+      longitude: -118.24,
+    });
+  });
+
+  it("rejects a lone coordinate rather than storing half a position", async () => {
+    const response = await POST(profileRequest({ role: "homeowner", latitude: 34.05 }));
+    expect(response.status).toBe(400);
+    expect(state.lastUpsertArgs).toBeNull();
+  });
+
+  it("creates the homeowner role profile alongside the user", async () => {
+    await POST(profileRequest({ role: "homeowner" }));
+    expect(state.roleProfileUpserts.map((call) => call.model)).toEqual(["homeownerProfile"]);
+  });
+
+  it("records provider claims without any verification flag", async () => {
+    await POST(
+      profileRequest({
+        role: "provider",
+        providerBusiness: {
+          companyName: "ProFix",
+          trades: ["Plumbing"],
+          licenseNumber: "LIC-1",
+        },
+      }),
+    );
+    const call = state.roleProfileUpserts.find((entry) => entry.model === "providerProfile");
+    expect(call?.args.create).toMatchObject({ companyName: "ProFix", licenseNumber: "LIC-1" });
+    expect(JSON.stringify(call?.args)).not.toMatch(/VerifiedAt|payout/i);
+  });
+
+  it("invalidates prior verification when onboarding changes a provider claim", async () => {
+    state.existingProviderClaims = {
+      licenseNumber: "OLD-LICENSE",
+      licenseState: null,
+      insuranceProvider: null,
+      insurancePolicyNumber: null,
+    };
+    await POST(
+      profileRequest({
+        role: "provider",
+        providerBusiness: {
+          companyName: "ProFix",
+          trades: ["Plumbing"],
+          licenseNumber: "NEW-LICENSE",
+        },
+      }),
+    );
+    const call = state.roleProfileUpserts.find((entry) => entry.model === "providerProfile");
+    expect(call?.args.update).toMatchObject({
+      licenseNumber: "NEW-LICENSE",
+      licenseVerifiedAt: null,
+    });
+  });
+
+  it("rejects a self-granted verification flag outright", async () => {
+    const response = await POST(
+      profileRequest({
+        role: "provider",
+        providerBusiness: { companyName: "ProFix", isLicensed: true },
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(state.lastUpsertArgs).toBeNull();
+  });
+
+  it("gives a returning provider their existing role profile, not the requested one", async () => {
+    state.existingRole = "provider";
+    await POST(profileRequest({ role: "homeowner" }));
+    expect(state.roleProfileUpserts.map((call) => call.model)).toEqual(["providerProfile"]);
   });
 });
 

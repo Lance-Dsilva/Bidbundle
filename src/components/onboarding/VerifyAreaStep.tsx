@@ -11,7 +11,9 @@ type VerifyAreaStepProps = {
   onAddressChange: (value: string) => void;
   onBack: () => void;
   onConfirm: () => void;
-  onCoordsDetected?: (lat: number, lng: number) => void;
+  onCoordsDetected?: (lat: number | null, lng: number | null) => void;
+  /** The locality reverse-geocoding resolved, saved as the user's neighborhood. */
+  onNeighborhoodDetected?: (neighborhood: string) => void;
   role: UserRole;
   submitting?: boolean;
   stepNumber?: number;
@@ -93,13 +95,16 @@ export function VerifyAreaStep({
   onBack,
   onConfirm,
   onCoordsDetected,
+  onNeighborhoodDetected,
   role,
   submitting = false,
   stepNumber = 3,
   stepCount = 3,
   confirmLabel = "Confirm my area",
 }: VerifyAreaStepProps) {
-  const [locationStatus, setLocationStatus] = useState<"idle" | "detecting" | "detected" | "denied">("idle");
+  const [locationStatus, setLocationStatus] = useState<
+    "idle" | "detecting" | "detected" | "denied" | "manual"
+  >("idle");
   const [detectedCoords, setDetectedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [localityName, setLocalityName] = useState("");
 
@@ -139,7 +144,10 @@ export function VerifyAreaStep({
             const postcode = a.postcode ?? "";
             const formatted = [street, locality, region, postcode].filter(Boolean).join(", ");
             if (formatted) onAddressChange(formatted);
-            if (locality) setLocalityName(locality);
+            if (locality) {
+              setLocalityName(locality);
+              onNeighborhoodDetected?.(locality);
+            }
           }
         } catch {
           // geocoding failed — keep existing address
@@ -150,6 +158,20 @@ export function VerifyAreaStep({
       { timeout: 8000, maximumAge: 60000 }
     );
   }, []);
+
+  const handleManualAddressChange = (value: string) => {
+    onAddressChange(value);
+    // The detected point describes the old reverse-geocoded address. Once the
+    // user types a different address, keeping that point would silently match
+    // them to the wrong neighborhood.
+    if (detectedCoords) {
+      setDetectedCoords(null);
+      setLocalityName("");
+      setLocationStatus("manual");
+      onCoordsDetected?.(null, null);
+      onNeighborhoodDetected?.("");
+    }
+  };
 
   return (
     <section className="py-6">
@@ -183,7 +205,7 @@ export function VerifyAreaStep({
           prefixIcon={<HomeIcon />}
           variant="warm"
           value={address}
-          onChange={(event) => onAddressChange(event.target.value)}
+          onChange={(event) => handleManualAddressChange(event.target.value)}
         />
         <div className="flex items-center gap-2 rounded-2xl border px-4 py-2.5"
           style={{ borderColor: locationStatus === "detected" ? "var(--sage-100)" : "var(--border-warm)", background: locationStatus === "detected" ? "var(--sage-50)" : "var(--cream-50)" }}>
@@ -195,6 +217,7 @@ export function VerifyAreaStep({
             {locationStatus === "detected" ? role === "provider"
               ? "Base location detected — nearby jobs will be prioritised automatically"
               : "Location detected — neighbourhood matched automatically" :
+             locationStatus === "manual" ? "Using your typed address — the previous map position was removed" :
              locationStatus === "denied" ? role === "provider"
               ? "Location access denied — we'll use your typed business base instead"
               : "Location access denied — neighbourhood will be set from address" :
@@ -230,9 +253,11 @@ export function VerifyAreaStep({
                     <path strokeLinecap="round" strokeLinejoin="round" d="m2.5 6 2.5 2.5 5-5" />
                   </svg>
                 </span>
-                <p className="text-sm font-semibold text-[var(--sage-700)]">You qualify — verified 14 months</p>
+                <p className="text-sm font-semibold text-[var(--sage-700)]">Your community area is set</p>
               </div>
-              <p className="mt-1 pl-7 text-xs text-[var(--sage-600)]">USPS address verified · HOA member</p>
+              <p className="mt-1 pl-7 text-xs text-[var(--sage-600)]">
+                We&apos;ll group you with neighbors inside your 4 mi radius.
+              </p>
             </div>
 
             <div className="rounded-[24px] border bg-[var(--terracotta-50)] p-4" style={{ borderColor: "var(--terracotta-100)" }}>
@@ -248,7 +273,7 @@ export function VerifyAreaStep({
           <StepProgress current={stepNumber} total={stepCount} />
           <span className="text-[12px] text-[var(--ink-400)]">{stepNumber} of {stepCount}</span>
         </div>
-        <Button className="h-12 w-full rounded-full text-[14px] font-semibold" onClick={onConfirm} variant="warm" disabled={submitting}>
+        <Button className="h-12 w-full rounded-full text-[14px] font-semibold" onClick={onConfirm} variant="warm" disabled={submitting || !address.trim()}>
           {submitting ? "Creating account…" : confirmLabel}
         </Button>
       </div>

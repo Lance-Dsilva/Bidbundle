@@ -9,7 +9,6 @@ import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessSt
 import { RoleStep } from "@/components/onboarding/RoleStep";
 import { VerifyAreaStep } from "@/components/onboarding/VerifyAreaStep";
 import type { PublicRole } from "@/lib/validation/auth";
-import { saveOnboardingDraft } from "@/utils/onboardingDraft";
 import { saveRole } from "@/utils/onboardingState";
 
 type OnboardingStep = 1 | 2 | 3;
@@ -19,10 +18,8 @@ type ProviderBusinessData = {
   bio: string;
   services: string[];
   serviceArea: string;
-  serviceRadius: number;
-  isLicensed: boolean;
   licenseNumber: string;
-  isInsured: boolean;
+  insuranceProvider: string;
 };
 
 type ProfileResponse = {
@@ -38,7 +35,10 @@ export default function CompleteProfilePage() {
   const { isLoaded, user } = useUser();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [role, setRole] = useState<PublicRole>("homeowner");
-  const [address, setAddress] = useState("123 Maple St, Oakwood Heights");
+  // Empty until geolocation or the user fills it in. A pre-filled sample
+  // address is a claim about where someone lives that nobody made.
+  const [address, setAddress] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -47,10 +47,8 @@ export default function CompleteProfilePage() {
     bio: "",
     services: [],
     serviceArea: "",
-    serviceRadius: 10,
-    isLicensed: false,
     licenseNumber: "",
-    isInsured: false,
+    insuranceProvider: "",
   });
 
   const stepCount = role === "provider" ? 3 : 2;
@@ -77,6 +75,23 @@ export default function CompleteProfilePage() {
           fullName: user.fullName ?? undefined,
           phone: user.primaryPhoneNumber?.phoneNumber ?? undefined,
           role,
+          address,
+          neighborhood: neighborhood || providerBusiness.serviceArea || null,
+          latitude: coords?.lat ?? null,
+          longitude: coords?.lng ?? null,
+          // Claims only. The licensed/insured checkboxes this form used to
+          // collect are gone: a provider does not get to mark themselves
+          // verified, so there is nothing to send.
+          providerBusiness:
+            role === "provider"
+              ? {
+                  companyName: providerBusiness.companyName,
+                  bio: providerBusiness.bio,
+                  trades: providerBusiness.services,
+                  licenseNumber: providerBusiness.licenseNumber,
+                  insuranceProvider: providerBusiness.insuranceProvider,
+                }
+              : undefined,
         }),
       });
       const result = (await response.json().catch(() => null)) as ProfileResponse | null;
@@ -87,12 +102,9 @@ export default function CompleteProfilePage() {
         return;
       }
 
+      // Everything the form collected is now in Neon; the sessionStorage draft
+      // that used to hold it has no reason to exist.
       saveRole(result.role);
-      saveOnboardingDraft({
-        address,
-        coords,
-        providerBusiness: result.role === "provider" ? providerBusiness : undefined,
-      });
       router.replace(result.redirectTo);
       router.refresh();
     } catch {
@@ -150,7 +162,10 @@ export default function CompleteProfilePage() {
                 if (role === "provider") setStep(3);
                 else void finishProfile();
               }}
-              onCoordsDetected={(lat, lng) => setCoords({ lat, lng })}
+              onCoordsDetected={(lat, lng) =>
+                setCoords(lat === null || lng === null ? null : { lat, lng })
+              }
+              onNeighborhoodDetected={setNeighborhood}
               submitting={submitting && role === "homeowner"}
               stepNumber={2}
               stepCount={stepCount}

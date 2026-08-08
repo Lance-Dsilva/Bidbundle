@@ -16,14 +16,125 @@ enum UserRole {
   admin
 }
 
+enum Weekday {
+  mon
+  tue
+  wed
+  thu
+  fri
+  sat
+  sun
+}
+
+/// Display-only payout state. Bundleen stores no bank credentials; when a
+/// payment provider is added it will own the account and write this status
+/// back through a server-side webhook.
+enum PayoutStatus {
+  not_connected
+  pending
+  active
+  restricted
+}
+
 model User {
-  id           String   @id @default(cuid())
-  clerkUserId  String   @unique
-  email        String   @unique
-  fullName     String
-  phone        String?
-  role         UserRole @default(homeowner)
-  isVerified   Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  clerkUserId String   @unique
+  email       String   @unique
+  fullName    String
+  phone       String?
+  role        UserRole @default(homeowner)
+
+  /// Server-controlled. Set from Clerk's email verification, never from a
+  /// profile update body.
+  isVerified Boolean @default(false)
+
+  // ── Location ──────────────────────────────────────────────────────────
+  // Supplied by the browser during onboarding and editable afterwards. These
+  // are a matching hint, not proof of residence.
+  address      String?
+  neighborhood String?
+  latitude     Float?
+  longitude    Float?
+
+  // ── Avatar ────────────────────────────────────────────────────────────
+  // Only Blob metadata lives here. `avatarPath` is the pathname the delete and
+  // replace flows need; the token that authorises those calls stays on the
+  // server.
+  avatarUrl       String?
+  avatarPath      String?
+  avatarUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile?
+  providerProfile  ProviderProfile?
+}
+
+/// Homeowner-only profile data. Exactly one row per homeowner `User`.
+model HomeownerProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  notifyBids    Boolean @default(true)
+  notifyGroups  Boolean @default(true)
+  notifySavings Boolean @default(false)
+  notifyEmail   Boolean @default(true)
+  notifyPush    Boolean @default(true)
+
+  /// Fixed community radius. Stored so queries have a value to join against,
+  /// but it is deliberately absent from every update schema — grouping by a
+  /// uniform proximity is the product, so this is not a user setting.
+  serviceRadiusMi Int @default(4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Provider-only profile data. Exactly one row per provider `User`.
+model ProviderProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName String?
+  bio         String?
+  trades      String[] @default([])
+
+  /// See `HomeownerProfile.serviceRadiusMi` — same fixed radius, same reason.
+  serviceRadiusMi Int @default(4)
+
+  workingDays       Weekday[] @default([])
+  /// `HH:MM`, 24-hour, in the provider's local time.
+  workingHoursStart String?
+  workingHoursEnd   String?
+
+  // ── Credential claims (user-supplied) ─────────────────────────────────
+  // What the provider says about their license and insurance. Displaying any
+  // of this as "verified" requires the timestamps below, which they cannot
+  // write.
+  licenseNumber         String?
+  licenseState          String?
+  insuranceProvider     String?
+  insurancePolicyNumber String?
+
+  // ── Verification (server/admin controlled) ────────────────────────────
+  licenseVerifiedAt   DateTime?
+  insuranceVerifiedAt DateTime?
+
+  // ── Payout display metadata (server controlled) ───────────────────────
+  // No account or routing number is ever accepted or stored. `payoutLast4` is
+  // whatever a future payment provider reports back for display.
+  payoutStatus    PayoutStatus @default(not_connected)
+  payoutLast4     String?
+  payoutProvider  String?
+  payoutUpdatedAt DateTime?
+
+  notifyNewJobs  Boolean @default(true)
+  notifyMessages Boolean @default(true)
+  notifyPayouts  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

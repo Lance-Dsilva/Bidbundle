@@ -4,15 +4,20 @@ import { StepProgress } from "@/components/onboarding/StepProgress";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+/**
+ * What the applicant tells us about their business.
+ *
+ * No `isLicensed` / `isInsured` flags and no service radius: verification is
+ * decided by staff from the details below, and the community radius is fixed
+ * for everyone.
+ */
 type ProviderBusinessData = {
   companyName: string;
   bio: string;
   services: string[];
   serviceArea: string;
-  serviceRadius: number;
-  isLicensed: boolean;
   licenseNumber: string;
-  isInsured: boolean;
+  insuranceProvider: string;
 };
 
 type ProviderBusinessStepProps = {
@@ -65,15 +70,14 @@ export function ProviderBusinessStep({
   onChange,
   onContinue,
   submitting = false,
-  stepNumber = 4,
-  stepCount = 4,
+  stepNumber = 3,
+  stepCount = 3,
 }: ProviderBusinessStepProps) {
   const areaSuggestions = buildAreaSuggestions(address);
   const isComplete =
     data.companyName.trim().length > 0 &&
     data.serviceArea.trim().length > 0 &&
-    data.services.length > 0 &&
-    (!data.isLicensed || data.licenseNumber.trim().length > 0);
+    data.services.length > 0;
 
   return (
     <section className="py-6">
@@ -164,22 +168,6 @@ export function ProviderBusinessStep({
 
         <div className="space-y-1.5">
           <label className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--ink-500)]">
-            Service radius
-          </label>
-          <select
-            value={String(data.serviceRadius)}
-            onChange={(event) => onChange("serviceRadius", Number(event.target.value))}
-            className="h-12 w-full rounded-2xl border bg-white px-3 text-[14px] text-[var(--ink-900)] outline-none"
-            style={{ borderColor: "var(--border-warm)" }}
-          >
-            {[5, 10, 15, 25, 40].map((radius) => (
-              <option key={radius} value={radius}>{radius} miles</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--ink-500)]">
             What facilities or services do you offer?
           </label>
           <textarea
@@ -191,44 +179,34 @@ export function ProviderBusinessStep({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="rounded-[20px] border bg-[var(--cream-50)] px-4 py-3" style={{ borderColor: "var(--border-warm)" }}>
-            <div className="flex items-center gap-3">
-              <input
-                checked={data.isLicensed}
-                onChange={(event) => onChange("isLicensed", event.target.checked)}
-                type="checkbox"
-              />
-              <div>
-                <div className="text-[13px] font-semibold text-[var(--ink-900)]">Licensed business</div>
-                <div className="text-[11px] text-[var(--ink-500)]">Show homeowners that your trade is credentialed.</div>
-              </div>
-            </div>
-          </label>
-          <label className="rounded-[20px] border bg-[var(--cream-50)] px-4 py-3" style={{ borderColor: "var(--border-warm)" }}>
-            <div className="flex items-center gap-3">
-              <input
-                checked={data.isInsured}
-                onChange={(event) => onChange("isInsured", event.target.checked)}
-                type="checkbox"
-              />
-              <div>
-                <div className="text-[13px] font-semibold text-[var(--ink-900)]">Insured business</div>
-                <div className="text-[11px] text-[var(--ink-500)]">Surface jobs that prefer insured providers first.</div>
-              </div>
-            </div>
-          </label>
+        <div
+          className="rounded-[20px] border bg-[var(--cream-50)] px-4 py-3.5"
+          style={{ borderColor: "var(--border-warm)" }}
+        >
+          <div className="text-[13px] font-semibold text-[var(--ink-900)]">
+            Credentials (optional)
+          </div>
+          <p className="mt-0.5 text-[11px] text-[var(--ink-500)]">
+            Our team checks these before a verified badge appears on your profile. You can add them
+            later.
+          </p>
+          <div className="mt-3 space-y-3">
+            <Input
+              label="License number"
+              placeholder="LIC-20491"
+              variant="warm"
+              value={data.licenseNumber}
+              onChange={(event) => onChange("licenseNumber", event.target.value)}
+            />
+            <Input
+              label="Insurance provider"
+              placeholder="Statewide Mutual"
+              variant="warm"
+              value={data.insuranceProvider}
+              onChange={(event) => onChange("insuranceProvider", event.target.value)}
+            />
+          </div>
         </div>
-
-        {data.isLicensed ? (
-          <Input
-            label="License number"
-            placeholder="LIC-20491"
-            variant="warm"
-            value={data.licenseNumber}
-            onChange={(event) => onChange("licenseNumber", event.target.value)}
-          />
-        ) : null}
       </div>
 
       <div className="mt-6">

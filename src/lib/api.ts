@@ -40,10 +40,34 @@ function formatApiDetail(detail: unknown): string | null {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    /** Per-field messages from a `400`, for inline form errors. */
+    public fields?: Record<string, string>,
+  ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/**
+ * Reads whichever error shape the responding handler used.
+ *
+ * The profile routes answer `{ error, fields }`; the older handlers answer
+ * `{ detail }`. Both are read here so no call site has to care.
+ */
+function readErrorBody(body: unknown): { message: string | null; fields?: Record<string, string> } {
+  if (!body || typeof body !== "object") return { message: null };
+
+  const record = body as { error?: unknown; detail?: unknown; fields?: unknown };
+  const fields =
+    record.fields && typeof record.fields === "object"
+      ? (record.fields as Record<string, string>)
+      : undefined;
+
+  if (typeof record.error === "string") return { message: record.error, fields };
+  return { message: formatApiDetail(record.detail), fields };
 }
 
 export type ApiFetchOptions = RequestInit & {
@@ -73,11 +97,13 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let fields: Record<string, string> | undefined;
     try {
-      const err = await res.json();
-      message = formatApiDetail((err as { detail?: unknown }).detail) ?? message;
+      const parsed = readErrorBody(await res.json());
+      message = parsed.message ?? message;
+      fields = parsed.fields;
     } catch {}
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, fields);
   }
 
   if (res.status === 204) return undefined as T;

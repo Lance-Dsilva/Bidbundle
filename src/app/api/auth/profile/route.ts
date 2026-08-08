@@ -3,12 +3,9 @@ import { NextResponse } from "next/server";
 
 import { guardFailureResponse, guardRegistration } from "@/lib/server/auth-guard";
 import { db } from "@/lib/server/db";
-import {
-  DASHBOARD_BY_ROLE,
-  MAX_AUTH_BODY_BYTES,
-  normalizeEmail,
-  profileSetupSchema,
-} from "@/lib/validation/auth";
+import { providerProfileUpdateData } from "@/lib/server/profile";
+import { DASHBOARD_BY_ROLE, MAX_AUTH_BODY_BYTES, normalizeEmail } from "@/lib/validation/auth";
+import { onboardingProfileSchema } from "@/lib/validation/profile";
 
 export const runtime = "nodejs";
 
@@ -58,7 +55,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const parsed = profileSetupSchema.safeParse(payload);
+  const parsed = onboardingProfileSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -99,24 +96,84 @@ export async function POST(request: Request): Promise<NextResponse> {
   const phone = parsed.data.phone ?? identity.primaryPhoneNumber?.phoneNumber ?? null;
   const isVerified = primaryEmail.verification?.status === "verified";
 
+  // The address and coordinates the browser collected. Approximate and
+  // user-grantable — a matching hint, never proof of residence.
+  //
+  const { address, neighborhood, latitude, longitude } = parsed.data;
+  const hasCoordinates = typeof latitude === "number" && typeof longitude === "number";
+  const location = {
+    // Address is required by the schema's cross-field validation. If the
+    // browser has no position for it, explicitly clear any old coordinates so
+    // a typed address can never retain a stale GPS point.
+    address: address ?? null,
+    ...(neighborhood !== undefined ? { neighborhood } : {}),
+    ...(hasCoordinates
+      ? { latitude, longitude }
+      : { latitude: null, longitude: null }),
+  };
+
   try {
-    const user = await db.user.upsert({
-      where: { clerkUserId: userId },
-      create: {
-        clerkUserId: userId,
-        email,
-        fullName,
-        phone,
-        role: parsed.data.role,
-        isVerified,
-      },
-      update: {
-        email,
-        fullName,
-        phone,
-        isVerified,
-      },
-      select: { role: true },
+    const user = await db.$transaction(async (tx) => {
+      const saved = await tx.user.upsert({
+        where: { clerkUserId: userId },
+        create: {
+          clerkUserId: userId,
+          email,
+          fullName,
+          phone,
+          role: parsed.data.role,
+          isVerified,
+          ...location,
+        },
+        update: {
+          email,
+          fullName,
+          phone,
+          isVerified,
+          ...location,
+        },
+        // Role comes from the row, not the request: a returning user keeps the
+        // role they already have rather than switching by resubmitting.
+        select: { id: true, role: true },
+      });
+
+      // The role profile is created alongside the user so nothing downstream
+      // has to cope with a homeowner who has no homeowner record.
+      if (saved.role === "homeowner") {
+        await tx.homeownerProfile.upsert({
+          where: { userId: saved.id },
+          create: { userId: saved.id },
+          update: {},
+          select: { id: true },
+        });
+      } else if (saved.role === "provider") {
+        // Only what the applicant claims. No verification flag is written here
+        // — `licenseVerifiedAt` and `insuranceVerifiedAt` stay admin-only.
+        //
+        // Keys the form omitted are dropped rather than sent as `null`, so
+        // re-running onboarding cannot blank details saved on the profile
+        // screen since.
+        const claims = parsed.data.providerBusiness ?? {};
+        const currentClaims = await tx.providerProfile.findUnique({
+          where: { userId: saved.id },
+          select: {
+            licenseNumber: true,
+            licenseState: true,
+            insuranceProvider: true,
+            insurancePolicyNumber: true,
+          },
+        });
+        const providerUpdate = providerProfileUpdateData(currentClaims, claims);
+
+        await tx.providerProfile.upsert({
+          where: { userId: saved.id },
+          create: { userId: saved.id, ...providerUpdate },
+          update: providerUpdate,
+          select: { id: true },
+        });
+      }
+
+      return saved;
     });
 
     return NextResponse.json({

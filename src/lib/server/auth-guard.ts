@@ -74,6 +74,29 @@ export async function guardRegistration(request: Request): Promise<GuardFailure 
   }
 }
 
+/** Applies a per-account limiter to profile photo uploads. */
+export async function guardAvatarUpload(userId: string): Promise<GuardFailure | null> {
+  if (!isRedisConfigured()) {
+    if (requiresRateLimiter()) return { kind: "unavailable" };
+    warnLimiterMissingOnce();
+    return null;
+  }
+
+  try {
+    const decision = await consumeRateLimit(
+      "avatarUpload",
+      buildIdentifier(["avatar-upload", userId]),
+    );
+    if (!decision.success) {
+      return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+    }
+    return null;
+  } catch (error) {
+    if (error instanceof RateLimiterUnavailableError) return { kind: "unavailable" };
+    throw error;
+  }
+}
+
 /** Builds the JSON `429`/`503` response for an API route handler. */
 export function guardFailureResponse(failure: GuardFailure): NextResponse {
   if (failure.kind === "rate-limited") {

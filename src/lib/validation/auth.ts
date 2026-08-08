@@ -1,6 +1,10 @@
-import { z } from "zod";
-
-/** Shared role and Bundleen profile validation. */
+/**
+ * Role and identity primitives.
+ *
+ * Deliberately dependency-free so `@/lib/validation/profile` — which owns every
+ * profile-shaped schema, including onboarding — can build on it without an
+ * import cycle.
+ */
 
 /** Public sign-up may only create these roles. `admin` is deliberately absent. */
 export const PUBLIC_ROLES = ["homeowner", "provider"] as const;
@@ -16,26 +20,6 @@ export const MAX_PHONE_LENGTH = 32;
 
 /** Maximum accepted JSON body for the auth routes, in bytes. */
 export const MAX_AUTH_BODY_BYTES = 4 * 1024;
-
-/**
- * Bundleen profile data collected after Clerk has created and verified the
- * identity. Passwords and login identifiers never pass through this schema.
- */
-export const profileSetupSchema = z.object({
-  fullName: z.string().trim().max(MAX_NAME_LENGTH, "Full name is too long.").optional(),
-  phone: z
-    .string()
-    .trim()
-    .max(MAX_PHONE_LENGTH, "Phone number is too long.")
-    .regex(/^[+()\d][\d\s().-]*$/, "Enter a valid phone number.")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
-  role: z.enum(PUBLIC_ROLES, {
-    message: "Choose either the homeowner or service provider role.",
-  }),
-});
-
-export type ProfileSetupInput = z.infer<typeof profileSetupSchema>;
 
 /**
  * Canonical email form used for storage, lookup, and rate-limit identifiers.
