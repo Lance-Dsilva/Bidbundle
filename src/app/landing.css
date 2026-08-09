@@ -431,9 +431,9 @@
 
 .ld-hero-visual { min-height: 510px; border-radius: 27px; background: linear-gradient(150deg,#fff 0%,#f8fbfa 63%,#f5faf8 100%); border-color: #e3e9e8; box-shadow: 0 20px 50px rgba(22,45,64,.055); }
 .ld-hero-visual::before { background: radial-gradient(circle at 39% 52%,rgba(90,190,160,.16),transparent 39%),radial-gradient(circle at 88% 16%,rgba(246,190,76,.08),transparent 28%); }
-.ld-house-halo { position: absolute; left: 4%; bottom: 28px; width: 73%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(150deg,#e6f4ef,#cce8dd); opacity: .96; }
-.ld-house-photo { position: absolute; left: 4.5%; bottom: 31px; width: 74%; height: 73%; overflow: hidden; border-radius: 47% 52% 44% 48% / 43% 43% 54% 54%; box-shadow: 0 22px 38px rgba(28,59,67,.12); }
-.ld-house-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 53% 56%; transform: scale(1.04); }
+.ld-house-halo { position: absolute; left: 3%; bottom: 20px; width: 76%; aspect-ratio: 1; border-radius: 50%; background: linear-gradient(150deg,#e6f4ef,#cce8dd); opacity: .96; }
+.ld-house-photo { position: absolute; left: 4%; bottom: 27px; width: 74%; height: auto; aspect-ratio: 1; overflow: hidden; border-radius: 50%; box-shadow: 0 22px 38px rgba(28,59,67,.12); }
+.ld-house-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 53% 56%; transform: scale(1.03); }
 .ld-connection-lines { z-index: 2; }
 .ld-connection-lines path { stroke: #38ae96; stroke-width: 1.5; stroke-dasharray: 6 7; }
 .ld-visual-card { z-index: 5; background: rgba(255,255,255,.97); border-color: #dbe3e5; box-shadow: 0 18px 36px rgba(24,48,68,.12); }
@@ -542,8 +542,8 @@
   .ld-trust-chip + .ld-trust-chip { padding-left: 0; }
   .ld-trust-chip + .ld-trust-chip::before { display: none; }
   .ld-hero-visual { min-height: 445px; border-radius: 24px; }
-  .ld-house-halo { left: -3%; bottom: 42px; width: 99%; }
-  .ld-house-photo { left: -2%; bottom: 44px; width: 97%; height: 66%; }
+  .ld-house-halo { left: 1%; bottom: 21px; width: 92%; }
+  .ld-house-photo { left: 2%; bottom: 26px; width: 90%; height: auto; aspect-ratio: 1; }
   .ld-bundle-status { top: 16px; right: 14px; width: min(246px,calc(100% - 28px)); padding: 12px 14px; }
   .ld-live-bids { right: 14px; left: 14px; bottom: 14px; width: auto; padding: 14px 16px; }
   .ld-bid-row { padding: 7px 0; }
