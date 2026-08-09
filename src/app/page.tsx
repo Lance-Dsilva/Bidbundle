@@ -1,5 +1,5 @@
+import Image from "next/image";
 import Link from "next/link";
-import type { CSSProperties } from "react";
 
 import { LandingInteractions } from "@/components/marketing/LandingInteractions";
 
@@ -66,8 +66,8 @@ export default function HomePage() {
 
               <div className="ld-hero-actions">
                 <Link className="ld-btn ld-btn-primary" href="/post-request">
-                  <img src="/modern/icons/plus.svg" alt="" width={19} height={19} />
                   Post a Request
+                  <span aria-hidden="true">→</span>
                 </Link>
                 <button className="ld-btn ld-btn-secondary" type="button" data-scroll-to="#how-it-works">
                   <img src="/modern/icons/play.svg" alt="" width={19} height={19} />
@@ -94,26 +94,27 @@ export default function HomePage() {
                 <div className="ld-avatar-stack" aria-hidden="true">
                   <span>SM</span><span>AJ</span><span>PK</span><span>NB</span><span>+1</span>
                 </div>
-                <div className="ld-bundle-progress"><span style={{ "--progress": "100%" } as CSSProperties} /></div>
               </div>
 
-              <img className="ld-neighborhood-art" src="/modern/illustrations/neighborhood.svg" alt="Connected homes forming a service bundle" />
+              <div className="ld-house-halo" aria-hidden="true" />
+              <div className="ld-house-photo">
+                <Image
+                  src="/modern/images/bundleen-home-hero.webp"
+                  alt="A welcoming modern home with a landscaped front yard"
+                  width={1400}
+                  height={1050}
+                  priority
+                  sizes="(max-width: 1100px) 92vw, 52vw"
+                />
+              </div>
 
               <div className="ld-neighbor-dot ld-neighbor-one" aria-hidden="true">SM</div>
-              <div className="ld-neighbor-dot ld-neighbor-two" aria-hidden="true">AJ</div>
               <div className="ld-neighbor-dot ld-neighbor-three" aria-hidden="true">NB</div>
 
               <svg className="ld-connection-lines" viewBox="0 0 620 460" aria-hidden="true">
                 <path d="M122 127 C215 74, 274 120, 324 194" />
-                <path d="M489 92 C423 117, 386 149, 353 205" />
                 <path d="M104 327 C194 296, 257 277, 317 248" />
               </svg>
-
-              <div className="ld-visual-card ld-savings-card ld-float-card ld-float-b">
-                <div className="ld-card-label">Save up to</div>
-                <strong className="ld-savings-percent" data-count="25">0%</strong>
-                <span>More neighbors, more savings</span>
-              </div>
 
               <div className="ld-visual-card ld-live-bids ld-float-card ld-float-c">
                 <div className="ld-live-bids-head">
@@ -131,27 +132,31 @@ export default function HomePage() {
             </div>
           </div>
 
+          <div className="ld-shell ld-trusted-strip ld-reveal-up" aria-label="Bundleen marketplace values">
+            <p>Designed for homeowners and trusted local professionals</p>
+            <div className="ld-trusted-values" aria-hidden="true">
+              <span>Local</span><span>Verified</span><span>Competitive</span><span>Transparent</span><span>Community</span>
+            </div>
+          </div>
+
           <div className="ld-shell ld-stats-grid ld-reveal-up" id="requests">
             <article className="ld-metric-card ld-metric-teal">
               <div className="ld-metric-icon"><img src="/modern/icons/neighbors.svg" alt="" width={31} height={31} /></div>
               <div className="ld-metric-number" data-count="24">0</div>
               <h2>Active Bundles</h2>
               <p>+6 this week</p>
-              <svg className="ld-mini-chart" viewBox="0 0 220 42" aria-hidden="true"><path d="M4 34 C27 18, 39 33, 58 20 S92 27, 111 15 S145 24, 165 11 S194 17, 216 4" /></svg>
             </article>
             <article className="ld-metric-card ld-metric-amber">
               <div className="ld-metric-icon"><img src="/modern/icons/clipboard.svg" alt="" width={31} height={31} /></div>
               <div className="ld-metric-number" data-count="12">0</div>
               <h2>Your Requests</h2>
               <p>3 in progress</p>
-              <div className="ld-metric-progress"><span style={{ width: "68%" }} /></div>
             </article>
             <article className="ld-metric-card ld-metric-teal">
               <div className="ld-metric-icon"><img src="/modern/icons/savings.svg" alt="" width={31} height={31} /></div>
               <div className="ld-metric-number currency" data-count="2540">$0</div>
               <h2>Total Saved</h2>
               <p>by your neighborhood</p>
-              <svg className="ld-mini-chart" viewBox="0 0 220 42" aria-hidden="true"><path d="M4 34 C27 15, 41 25, 61 14 S93 19, 113 10 S149 18, 171 8 S198 13, 216 2" /></svg>
             </article>
             <article className="ld-metric-card ld-metric-navy">
               <div className="ld-metric-icon"><img src="/modern/icons/gavel.svg" alt="" width={31} height={31} /></div>
@@ -178,8 +183,9 @@ export default function HomePage() {
               <article className="ld-activity-card ld-reveal-up">
                 <div className="ld-activity-icon ld-activity-blue"><img src="/modern/icons/cleaning.svg" alt="" width={30} height={30} /></div>
                 <div className="ld-activity-main">
-                  <div className="ld-activity-title-row"><h3>Driveway pressure washing</h3><span className="ld-status ld-status-amber">Bundle forming</span></div>
+                  <div className="ld-activity-title-row"><h3>Driveway pressure washing</h3></div>
                   <p>6 neighbors joined · closes in 1 day</p>
+                  <span className="ld-status ld-status-amber">Bundle forming</span>
                   <div className="ld-activity-progress"><span style={{ width: "72%" }} /></div>
                 </div>
                 <div className="ld-activity-saving"><span>Est. savings</span><strong>$120</strong><small>22% off</small></div>
@@ -188,8 +194,9 @@ export default function HomePage() {
               <article className="ld-activity-card ld-reveal-up">
                 <div className="ld-activity-icon ld-activity-teal"><img src="/modern/icons/plumbing.svg" alt="" width={30} height={30} /></div>
                 <div className="ld-activity-main">
-                  <div className="ld-activity-title-row"><h3>Kitchen faucet installation</h3><span className="ld-status ld-status-purple">Bid received</span></div>
+                  <div className="ld-activity-title-row"><h3>Kitchen faucet installation</h3></div>
                   <p>3 bids received · Greenview Estates</p>
+                  <span className="ld-status ld-status-purple">Bid received</span>
                   <div className="ld-activity-progress ld-activity-progress-purple"><span style={{ width: "88%" }} /></div>
                 </div>
                 <div className="ld-activity-saving"><span>Best bid</span><strong>$98</strong><small>Save $52</small></div>
@@ -224,13 +231,13 @@ export default function HomePage() {
                 <span className="ld-section-kicker">Popular services</span>
                 <h2 id="services-title">Start with what your home needs</h2>
               </div>
-              <Link className="ld-text-link" href="/get-started">View all services →</Link>
+              <Link className="ld-text-link" href="/post-request">View all services →</Link>
             </div>
             <div className="ld-services-grid">
-              <Link href="/get-started" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-teal"><img src="/modern/icons/cleaning.svg" alt="" /></span><strong>Cleaning</strong><small>Home, office</small></Link>
-              <Link href="/get-started" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-blue"><img src="/modern/icons/plumbing.svg" alt="" /></span><strong>Plumbing</strong><small>Fix, install</small></Link>
-              <Link href="/get-started" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-amber"><img src="/modern/icons/electrical.svg" alt="" /></span><strong>Electrical</strong><small>Repair, install</small></Link>
-              <Link href="/get-started" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-purple"><img src="/modern/icons/painting.svg" alt="" /></span><strong>Painting</strong><small>Interior, exterior</small></Link>
+              <Link href="/post-request" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-teal"><img src="/modern/icons/cleaning.svg" alt="" /></span><strong>Cleaning</strong><small>Home, office</small></Link>
+              <Link href="/post-request" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-blue"><img src="/modern/icons/plumbing.svg" alt="" /></span><strong>Plumbing</strong><small>Fix, install</small></Link>
+              <Link href="/post-request" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-amber"><img src="/modern/icons/electrical.svg" alt="" /></span><strong>Electrical</strong><small>Repair, install</small></Link>
+              <Link href="/post-request" className="ld-service-card ld-reveal-up"><span className="ld-service-art ld-service-purple"><img src="/modern/icons/painting.svg" alt="" /></span><strong>Painting</strong><small>Interior, exterior</small></Link>
             </div>
           </div>
         </section>
@@ -298,13 +305,6 @@ export default function HomePage() {
         </div>
         <div className="ld-shell ld-footer-demo-note">Demo contact details — replace them before publishing.</div>
       </footer>
-
-      <nav className="ld-mobile-bottom-nav" aria-label="Mobile app navigation">
-        <Link className="is-active" href="/"><img src="/modern/icons/home.svg" alt="" /><span>Home</span></Link>
-        <Link href="/sign-in"><img src="/modern/icons/chat.svg" alt="" /><span>Chat</span></Link>
-        <Link href="/sign-in"><img src="/modern/icons/clipboard.svg" alt="" /><span>Bids</span></Link>
-        <Link href="/sign-in"><img src="/modern/icons/profile.svg" alt="" /><span>Profile</span></Link>
-      </nav>
 
       <LandingInteractions />
     </div>
