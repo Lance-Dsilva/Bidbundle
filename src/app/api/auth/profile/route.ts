@@ -20,6 +20,13 @@ function hasPrismaCode(error: unknown, code: string): boolean {
   );
 }
 
+function isDatabaseConfigurationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message === "Neither DATABASE_URL nor DIRECT_URL is set."
+  );
+}
+
 /**
  * Creates or refreshes the Bundleen profile for an already authenticated
  * Clerk identity. Credentials, verification codes, and session tokens never
@@ -186,6 +193,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json(
         { error: "That email is already linked to another Bundleen profile." },
         { status: 409 },
+      );
+    }
+
+    if (isDatabaseConfigurationError(error)) {
+      console.error("[auth] Profile database connection is not configured.");
+      return NextResponse.json(
+        { error: "Profile storage is not configured for this deployment." },
+        { status: 503 },
       );
     }
 

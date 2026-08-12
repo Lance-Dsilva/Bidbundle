@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
     primaryPhoneNumber: { phoneNumber: "+1 215 555 0192" },
   } as Record<string, unknown> | null,
   guardFailure: null as unknown,
-  upsertBehaviour: "success" as "success" | "duplicate" | "error",
+  upsertBehaviour: "success" as "success" | "duplicate" | "error" | "unconfigured",
   lastUpsertArgs: null as {
     where: Record<string, unknown>;
     create: Record<string, unknown>;
@@ -58,6 +58,9 @@ const client = {
       state.lastUpsertArgs = args;
       if (state.upsertBehaviour === "duplicate") throw new FakePrismaError("P2002");
       if (state.upsertBehaviour === "error") throw new Error("database password=secret");
+      if (state.upsertBehaviour === "unconfigured") {
+        throw new Error("Neither DATABASE_URL nor DIRECT_URL is set.");
+      }
       return { id: "user_db_1", role: state.existingRole ?? args.create.role ?? "homeowner" };
     },
   },
@@ -338,5 +341,15 @@ describe("operational failures", () => {
     const response = await POST(profileRequest({ role: "homeowner" }));
     expect(response.status).toBe(500);
     expect(JSON.stringify(await response.json())).not.toMatch(/password|database|secret/i);
+  });
+
+  it("reports an unconfigured deployment without exposing environment names", async () => {
+    state.upsertBehaviour = "unconfigured";
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await POST(profileRequest({ role: "homeowner" }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "Profile storage is not configured for this deployment.",
+    });
   });
 });

@@ -17,10 +17,13 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
+  // Prefer the pooled URL for serverless traffic. A direct URL is also a
+  // valid runtime connection and keeps profile setup working when a Vercel
+  // environment was configured with only the migration credential.
+  const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 
   if (!connectionString) {
-    throw new Error("DATABASE_URL is not set.");
+    throw new Error("Neither DATABASE_URL nor DIRECT_URL is set.");
   }
 
   return new PrismaClient({
