@@ -81,6 +81,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   const [hydrated, setHydrated] = useState(false);
   const [sessionAccepted, setSessionAccepted] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
+  const [switchAccountError, setSwitchAccountError] = useState<string | null>(null);
 
   const stepCount = role === "provider" ? 5 : 4;
 
@@ -105,6 +106,25 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
     }
     setHydrated(true);
   }, [alreadyVerified, router]);
+
+  useEffect(() => {
+    if (!switchingAccount) return;
+
+    // Clerk can clear its client-side user before its redirect callback
+    // settles. A hard navigation guarantees that the Server Component reads
+    // the new signed-out cookie state and renders the actual signup flow.
+    if (user === null) {
+      window.location.replace("/get-started");
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setSwitchingAccount(false);
+      setSwitchAccountError("Sign-out took too long. Please try again.");
+    }, 8_000);
+
+    return () => window.clearTimeout(timeout);
+  }, [switchingAccount, user]);
 
   const continueFromName = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -211,17 +231,29 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
           <Button
             className="h-11 w-full rounded-xl text-sm"
             disabled={switchingAccount}
-            onClick={async () => {
+            onClick={() => {
               setSwitchingAccount(true);
+              setSwitchAccountError(null);
               clearOnboardingDraft();
               clearSignUpName();
-              await signOut({ redirectUrl: "/get-started" });
+              void signOut({ redirectUrl: "/get-started" })
+                .then(() => window.location.replace("/get-started"))
+                .catch(() => {
+                  setSwitchingAccount(false);
+                  setSwitchAccountError("We could not sign you out. Please try again.");
+                });
             }}
             variant="secondary"
           >
             {switchingAccount ? "Signing out…" : "Use another account"}
           </Button>
         </div>
+
+        {switchAccountError ? (
+          <p aria-live="polite" className="mt-3 text-sm font-medium text-red-600">
+            {switchAccountError}
+          </p>
+        ) : null}
 
         <p className="mt-5 text-xs leading-5 text-[#98a2b3]">
           To test email verification, choose another account and use an email that is not already
