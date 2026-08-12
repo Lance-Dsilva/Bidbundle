@@ -7,6 +7,28 @@ import { defineConfig } from "prisma/config";
 loadEnv({ path: ".env.local", quiet: true });
 loadEnv({ path: ".env", quiet: true });
 
+function migrationDatabaseUrl(): string {
+  const configuredUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || "";
+  if (!configuredUrl) return "";
+
+  try {
+    const url = new URL(configuredUrl);
+
+    // Neon identifies its PgBouncer endpoint with `-pooler`. Prisma Client
+    // should use that endpoint, but schema migrations need a direct session so
+    // advisory locks are released reliably. Also repair a DIRECT_URL that was
+    // accidentally copied from Neon's pooled connection tab.
+    if (url.hostname.endsWith(".neon.tech") && url.hostname.includes("-pooler.")) {
+      url.hostname = url.hostname.replace("-pooler.", ".");
+    }
+
+    return url.toString();
+  } catch {
+    // Preserve Prisma's own useful validation error for malformed URLs.
+    return configuredUrl;
+  }
+}
+
 /**
  * Prisma 7 removed the schema-level `directUrl` property, so the direct
  * (non-pooled) connection is wired up here instead: the CLI — `migrate`,
@@ -23,6 +45,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env.DIRECT_URL || process.env.DATABASE_URL || "",
+    url: migrationDatabaseUrl(),
   },
 });

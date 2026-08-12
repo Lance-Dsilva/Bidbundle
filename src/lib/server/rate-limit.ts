@@ -11,14 +11,12 @@ import { isUnknownIp } from "@/lib/server/request-ip";
  * Upstash-backed protection for Bundleen-owned account/profile mutations.
  * Clerk independently protects its managed sign-in and sign-up endpoints.
  *
- * These thresholds are initial security defaults, not tuned values. They are
- * deliberately strict; revisit them once real traffic shows how often ordinary
- * users trip them (shared office NAT and mobile carrier CGNAT put many people
- * behind one address, which is the most likely source of false positives).
+ * These thresholds are initial security defaults, not tuned values. Revisit
+ * them once real traffic shows how often ordinary users retry these actions.
  */
 export const RATE_LIMITS = {
-  /** Per-IP Bundleen profile creation. */
-  register: { attempts: 5, window: "15 m" },
+  /** Per-account profile completion. Allows ordinary retries during onboarding. */
+  register: { attempts: 20, window: "15 m" },
   /** Per-user profile photo uploads. */
   avatarUpload: { attempts: 10, window: "1 h" },
 } as const;
@@ -45,12 +43,10 @@ export type RateLimitDecision = {
 /**
  * Turns identifying limiter inputs into a stable, non-reversible bucket key.
  *
- * Redis keys end up in Upstash's storage, logs, and console, so the raw
- * address never goes in. The digest is salted with
- * `RATE_LIMIT_IDENTIFIER_SECRET` to stop an
- * attacker who reads the key space from confirming a guessed address by
- * hashing it themselves — an unsalted SHA-256 of an IP is trivially reversible
- * against the small IPv4 address space.
+ * Redis keys end up in Upstash's storage, logs, and console, so raw account
+ * identifiers or network addresses never go in. The digest is salted with
+ * `RATE_LIMIT_IDENTIFIER_SECRET` to stop someone who reads the key space from
+ * confirming a guessed identifier by hashing it themselves.
  */
 export function buildIdentifier(parts: readonly string[]): string {
   const salt = process.env.RATE_LIMIT_IDENTIFIER_SECRET ?? "";

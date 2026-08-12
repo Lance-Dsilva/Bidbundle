@@ -7,9 +7,7 @@ import {
   RateLimiterUnavailableError,
   buildIdentifier,
   isRedisConfigured,
-  shouldEnforceIpLimit,
 } from "@/lib/server/rate-limit";
-import { getRequestIp } from "@/lib/server/request-ip";
 
 /**
  * Wording is identical for every failure mode a caller can trigger and never
@@ -51,19 +49,21 @@ function warnLimiterMissingOnce(): void {
  * Returns `null` when the request may proceed, or a {@link GuardFailure}
  * describing why it may not.
  */
-export async function guardRegistration(request: Request): Promise<GuardFailure | null> {
-  const ip = getRequestIp(request);
-
+export async function guardRegistration(userId: string): Promise<GuardFailure | null> {
   if (!isRedisConfigured()) {
     if (requiresRateLimiter()) return { kind: "unavailable" };
     warnLimiterMissingOnce();
     return null;
   }
 
-  if (!shouldEnforceIpLimit(ip)) return null;
-
   try {
-    const decision = await consumeRateLimit("register", buildIdentifier(["register", ip]));
+    // Clerk has already authenticated this request. Limiting by account keeps
+    // retries from one signup isolated from everyone sharing the same home,
+    // office, mobile-carrier, or preview-deployment IP address.
+    const decision = await consumeRateLimit(
+      "register",
+      buildIdentifier(["profile-setup-v2", userId]),
+    );
     if (!decision.success) {
       return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
     }

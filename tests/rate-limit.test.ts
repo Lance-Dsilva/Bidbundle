@@ -271,39 +271,36 @@ describe("consumeRateLimit", () => {
 
 describe("guardRegistration", () => {
   it("permits attempts below the threshold", async () => {
-    const request = requestFrom("203.0.113.5");
     for (let attempt = 0; attempt < RATE_LIMITS.register.attempts; attempt += 1) {
-      expect(await guardRegistration(request)).toBeNull();
+      expect(await guardRegistration("user_1")).toBeNull();
     }
   });
 
   it("blocks the attempt past the threshold with a Retry-After", async () => {
-    const request = requestFrom("203.0.113.5");
     for (let attempt = 0; attempt < RATE_LIMITS.register.attempts; attempt += 1) {
-      await guardRegistration(request);
+      await guardRegistration("user_1");
     }
 
-    const failure = await guardRegistration(request);
+    const failure = await guardRegistration("user_1");
     expect(failure).toEqual({
       kind: "rate-limited",
       retryAfterSeconds: expect.any(Number),
     });
   });
 
-  it("gives a different IP its own budget", async () => {
-    const blocked = requestFrom("203.0.113.5");
+  it("gives a different signed-in account its own budget", async () => {
     for (let attempt = 0; attempt <= RATE_LIMITS.register.attempts; attempt += 1) {
-      await guardRegistration(blocked);
+      await guardRegistration("user_1");
     }
 
-    expect(await guardRegistration(blocked)).not.toBeNull();
-    expect(await guardRegistration(requestFrom("198.51.100.9"))).toBeNull();
+    expect(await guardRegistration("user_1")).not.toBeNull();
+    expect(await guardRegistration("user_2")).toBeNull();
   });
 
   it("reports unavailable when Redis fails in a deployed environment", async () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     redisDown = true;
-    expect(await guardRegistration(requestFrom("203.0.113.5"))).toEqual({ kind: "unavailable" });
+    expect(await guardRegistration("user_1")).toEqual({ kind: "unavailable" });
   });
 });
 
@@ -337,7 +334,7 @@ describe("local profile setup", () => {
     resetRateLimiterCache();
 
     expect(requiresRateLimiter()).toBe(false);
-    expect(await guardRegistration(requestFrom("203.0.113.5"))).toBeNull();
+    expect(await guardRegistration("user_1")).toBeNull();
   });
 });
 

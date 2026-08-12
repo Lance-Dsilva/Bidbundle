@@ -31,7 +31,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const failure = await guardRegistration(request);
+  const failure = await guardRegistration(userId);
   if (failure) return guardFailureResponse(failure);
 
   const contentType = request.headers.get("content-type") ?? "";
