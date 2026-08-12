@@ -27,7 +27,7 @@ const benefits = [
 /** The light signup story panel shown in the supplied desktop references. */
 export function AuthShowcase(_props: AuthShowcaseProps) {
   return (
-    <aside className="auth-showcase relative hidden min-h-screen overflow-hidden lg:flex lg:w-[38%] lg:shrink-0 lg:flex-col">
+    <aside className="auth-showcase relative hidden min-h-screen w-full overflow-hidden lg:flex lg:flex-col">
       <div className="pointer-events-none absolute inset-0 auth-showcase-glow" />
       <div className="relative z-10 flex min-h-screen flex-col px-[clamp(38px,5vw,58px)] py-12">
         <div className="flex items-center gap-3">

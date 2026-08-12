@@ -24,7 +24,7 @@ export default async function SignUpPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <div className="signup-layout bg-white">
       <AuthShowcase
         testimonial={{
           quote:
