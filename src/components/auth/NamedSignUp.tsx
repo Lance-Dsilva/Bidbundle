@@ -61,7 +61,7 @@ function AccountStepLoading() {
   );
 }
 
-export function NamedSignUp() {
+export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boolean }) {
   const router = useRouter();
   const [stage, setStage] = useState<SignUpStage>("name");
   const [name, setName] = useState<SignUpName | null>(null);
@@ -86,7 +86,6 @@ export function NamedSignUp() {
       setName(savedName);
       setFirstName(savedName.firstName);
       setLastName(savedName.lastName);
-      setStage(draft ? "account" : "role");
     }
     if (draft) {
       setRole(draft.role);
@@ -94,9 +93,15 @@ export function NamedSignUp() {
       setNeighborhood(draft.neighborhood);
       setCoords({ lat: draft.latitude, lng: draft.longitude });
       setProviderBusiness(draft.providerBusiness);
+      if (alreadyVerified) {
+        setStage("account");
+        router.replace("/get-started/profile");
+      } else {
+        setStage("account");
+      }
     }
     setHydrated(true);
-  }, [router]);
+  }, [alreadyVerified, router]);
 
   const continueFromName = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -150,6 +155,7 @@ export function NamedSignUp() {
     };
     saveOnboardingDraft(draft);
     setStage("account");
+    if (alreadyVerified) router.replace("/get-started/profile");
   };
 
   if (!hydrated) {
@@ -265,6 +271,14 @@ export function NamedSignUp() {
           stepCount={stepCount}
           confirmLabel="Continue to email verification"
         />
+      </div>
+    );
+  }
+
+  if (alreadyVerified) {
+    return (
+      <div className="auth-step-enter w-full max-w-md">
+        <AccountStepLoading />
       </div>
     );
   }

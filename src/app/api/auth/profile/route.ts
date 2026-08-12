@@ -191,6 +191,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     console.error("[auth] Clerk profile synchronization failed", {
       name: error instanceof Error ? error.name : "UnknownError",
+      // Prisma error codes identify the failed operation category without
+      // logging query parameters such as email addresses or home addresses.
+      code:
+        typeof error === "object" && error !== null && "code" in error
+          ? String((error as { code?: unknown }).code)
+          : undefined,
     });
     return NextResponse.json(
       { error: "We could not finish your Bundleen profile. Please try again." },

@@ -3,13 +3,25 @@ import { redirect } from "next/navigation";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { NamedSignUp } from "@/components/auth/NamedSignUp";
+import { db } from "@/lib/server/db";
+import { DASHBOARD_BY_ROLE, isAppRole } from "@/lib/validation/auth";
 
 export default async function SignUpPage() {
-  // Once Clerk has created a complete session, skip mounting <SignUp /> again.
-  // The prebuilt component otherwise briefly redirects signed-in users through
-  // its Home URL before our onboarding redirect becomes visible.
   const { userId } = await auth();
-  if (userId) redirect("/get-started/profile");
+  let alreadyVerified = false;
+
+  if (userId) {
+    // A Clerk session can exist even when the Bundleen profile save previously
+    // failed. Completed users go to their dashboard; incomplete users restart
+    // the same visible onboarding flow instead of being dropped into a second,
+    // older role/location form.
+    const profile = await db.user.findUnique({
+      where: { clerkUserId: userId },
+      select: { role: true },
+    });
+    if (profile && isAppRole(profile.role)) redirect(DASHBOARD_BY_ROLE[profile.role]);
+    alreadyVerified = true;
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -34,7 +46,7 @@ export default async function SignUpPage() {
               "radial-gradient(circle, rgba(122,154,126,0.14) 0%, transparent 68%)",
           }}
         />
-        <NamedSignUp />
+        <NamedSignUp alreadyVerified={alreadyVerified} />
       </main>
     </div>
   );

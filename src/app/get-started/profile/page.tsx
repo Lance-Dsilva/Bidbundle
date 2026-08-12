@@ -39,10 +39,12 @@ type ProfileCompletion = {
 
 function OnboardingHandoff({
   error,
+  onEdit,
   onRetry,
   working = true,
 }: {
   error?: string | null;
+  onEdit?: () => void;
   onRetry?: () => void;
   working?: boolean;
 }) {
@@ -80,9 +82,16 @@ function OnboardingHandoff({
           {working ? (
             <div className="mx-auto mt-6 h-2 w-48 max-w-full animate-pulse rounded-full bg-[#d9efeb]" />
           ) : onRetry ? (
-            <Button className="mx-auto mt-6 h-11 rounded-full px-8 text-sm" onClick={onRetry} variant="warm">
-              Try again
-            </Button>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button className="h-11 rounded-full px-8 text-sm" onClick={onRetry} variant="warm">
+                Try again
+              </Button>
+              {onEdit ? (
+                <Button className="h-11 rounded-full px-8 text-sm" onClick={onEdit} variant="secondary">
+                  Review details
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </main>
@@ -209,7 +218,13 @@ export default function CompleteProfilePage() {
 
     const draft = getOnboardingDraft();
     setDraftChecked(true);
-    if (!draft) return;
+    if (!draft) {
+      // A verified Clerk account whose Bundleen profile is incomplete resumes
+      // at the first visible signup step. `/get-started` detects the existing
+      // session and skips only Clerk's already-completed verification screen.
+      router.replace("/get-started");
+      return;
+    }
 
     automaticCompletionStarted.current = true;
     setPendingDraft(draft);
@@ -222,12 +237,18 @@ export default function CompleteProfilePage() {
   if (!isLoaded) return <OnboardingHandoff />;
   if (!user) return <RedirectToSignIn />;
   if (!draftChecked) return <OnboardingHandoff />;
+  if (!pendingDraft) return <OnboardingHandoff />;
   if (pendingDraft) {
     return (
       <OnboardingHandoff
         error={apiError}
         working={submitting}
         onRetry={() => void finishProfile({ draft: pendingDraft })}
+        onEdit={() => {
+          clearOnboardingDraft();
+          setPendingDraft(null);
+          router.replace("/get-started");
+        }}
       />
     );
   }
