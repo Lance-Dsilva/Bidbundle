@@ -638,7 +638,39 @@ section,
 /* ─── Signup / get-started split layout ──── */
 .signup-layout { display: grid; grid-template-columns: 1fr; min-height: 100vh; }
 @media (min-width: 1024px) {
-  .signup-layout { grid-template-columns: 40% 60%; }
+  .signup-layout { grid-template-columns: 38% 62%; }
+}
+
+.auth-showcase {
+  background:
+    radial-gradient(circle at 18% 14%, rgba(218,244,232,.72), transparent 34%),
+    radial-gradient(circle at 76% 68%, rgba(225,245,235,.78), transparent 31%),
+    linear-gradient(135deg,#fbfefd 0%,#eef8f3 100%);
+}
+.auth-showcase-glow {
+  background-image: radial-gradient(circle, rgba(15,143,92,.10) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.35), transparent 64%);
+}
+
+.bundleen-map-pin {
+  display: flex;
+  width: 34px;
+  height: 42px;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8px;
+  border-radius: 50% 50% 50% 0;
+  background: #119664;
+  box-shadow: 0 5px 14px rgba(10,112,72,.28);
+  transform: rotate(-45deg);
+}
+.bundleen-map-pin > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: white;
+  transform: rotate(45deg);
 }
 
 @keyframes auth-step-enter {

@@ -211,26 +211,26 @@ export function VerifyAreaStep({
   };
 
   return (
-    <section className="py-6">
-      <header className="pb-6">
+    <section className="flex min-h-[805px] flex-col px-1 py-7 sm:px-2">
+      <header className="pb-7">
         <button
           aria-label="Back"
-          className="mb-3 flex h-10 w-10 items-center justify-center rounded-full text-[var(--ink-700)] transition hover:bg-[var(--cream-100)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--terracotta-600)]"
+          className="mb-6 flex h-9 w-9 items-center justify-center rounded-full text-[#27364b] transition hover:bg-[#f1f5f3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#129664]"
           type="button"
           onClick={onBack}
         >
-          <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6" />
           </svg>
         </button>
         <StepProgress current={stepNumber} total={stepCount} />
-        <h1 className="mt-2 font-display text-[2.4rem] font-bold italic tracking-tight text-[var(--ink-900)]">
+        <h1 className="mt-7 text-[34px] font-extrabold leading-none tracking-[-0.045em] text-[#111f32] sm:text-[38px]">
           {role === "provider" ? "Set your base area" : "Confirm your area"}
         </h1>
-        <p className="mt-2 text-[14px] leading-6 text-[var(--ink-500)]">
+        <p className="mt-3 text-[15px] leading-6 text-[#6b7690]">
           {role === "provider"
             ? "Tell us where your business is based so we can show nearby live requests first."
-            : "Tell us where you live so we can match you with neighbors within your 4 mi community radius"}
+            : "Tell us where you live so we can match you with neighbors in your area."}
         </p>
       </header>
 
@@ -294,13 +294,13 @@ export function VerifyAreaStep({
             {locationError}
           </p>
         ) : null}
-        <div className="flex items-center gap-2 rounded-2xl border px-4 py-2.5"
+        <div className="flex min-h-[54px] items-center gap-3 rounded-xl border px-4 py-3"
           style={{ borderColor: locationStatus === "detected" ? "var(--sage-100)" : "var(--border-warm)", background: locationStatus === "detected" ? "var(--sage-50)" : "var(--cream-50)" }}>
-          <span className="flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold"
+          <span className="flex h-6 w-6 items-center justify-center rounded-full text-white text-[11px] font-bold"
             style={{ background: locationStatus === "detected" ? "var(--sage-600)" : locationStatus === "denied" ? "var(--ink-300)" : "var(--terracotta-400)" }}>
             {locationStatus === "detected" ? "✓" : locationStatus === "denied" ? "!" : "…"}
           </span>
-          <span className="text-[13px] font-medium" style={{ color: locationStatus === "detected" ? "var(--sage-700)" : "var(--ink-600)" }}>
+          <span className="text-[13px] font-medium" style={{ color: locationStatus === "detected" ? "#087b50" : "var(--ink-600)" }}>
             {locationStatus === "detected" ? role === "provider"
               ? "Base location detected — nearby jobs will be prioritised automatically"
               : "Location detected — neighbourhood matched automatically" :
@@ -315,7 +315,7 @@ export function VerifyAreaStep({
 
         {role === "provider" ? (
           <>
-            <div className="rounded-[24px] border bg-[var(--sage-50)] p-4" style={{ borderColor: "var(--sage-100)" }}>
+            <div className="rounded-xl border bg-[var(--sage-50)] px-4 py-4" style={{ borderColor: "var(--sage-100)" }}>
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--sage-600)] text-white">
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.2">
@@ -327,14 +327,14 @@ export function VerifyAreaStep({
               <p className="mt-1 pl-7 text-xs text-[var(--sage-600)]">Next you&apos;ll add your business details and the major area you serve.</p>
             </div>
 
-            <div className="rounded-[24px] border bg-[var(--terracotta-50)] p-4" style={{ borderColor: "var(--terracotta-100)" }}>
+            <div className="rounded-xl border bg-[#fafbfc] px-4 py-4" style={{ borderColor: "#e1e5e9" }}>
               <p className="text-sm font-medium text-[var(--ink-900)]">Coverage note</p>
               <p className="mt-0.5 text-xs text-[var(--ink-500)]">We&apos;ll rank jobs closest to this base area first, then expand by your service radius.</p>
             </div>
           </>
         ) : (
           <>
-            <div className="rounded-[24px] border bg-[var(--sage-50)] p-4" style={{ borderColor: "var(--sage-100)" }}>
+            <div className="rounded-xl border bg-[var(--sage-50)] px-4 py-4" style={{ borderColor: "var(--sage-100)" }}>
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--sage-600)] text-white">
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.2">
@@ -348,23 +348,28 @@ export function VerifyAreaStep({
               </p>
             </div>
 
-            <div className="rounded-[24px] border bg-[var(--terracotta-50)] p-4" style={{ borderColor: "var(--terracotta-100)" }}>
-              <p className="text-sm font-medium text-[var(--ink-900)]">Residency requirement</p>
-              <p className="mt-0.5 text-xs text-[var(--ink-500)]">Must have lived 6+ months to join group bids</p>
+            <div className="flex items-start gap-3 rounded-xl border bg-[#fafbfc] px-4 py-4" style={{ borderColor: "#e1e5e9" }}>
+              <span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#536176] text-[12px] font-bold text-[#536176]">i</span>
+              <span>
+                <p className="text-sm font-medium text-[var(--ink-900)]">Residency requirement</p>
+                <p className="mt-0.5 text-xs text-[var(--ink-500)]">Must have lived 6+ months to join group bids</p>
+              </span>
             </div>
           </>
         )}
       </div>
 
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <StepProgress current={stepNumber} total={stepCount} />
-          <span className="text-[12px] text-[var(--ink-400)]">{stepNumber} of {stepCount}</span>
+      <footer className="mt-auto flex flex-col gap-5 border-t border-[#edf0f2] pt-7 sm:flex-row sm:items-end sm:justify-between">
+        <div className="w-full sm:max-w-[395px]">
+          <p className="text-[14px] text-[#727d94]">Step {stepNumber} of {stepCount}</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#e5e8ec]">
+            <div className="h-full rounded-full bg-[#119664]" style={{ width: `${(stepNumber / stepCount) * 100}%` }} />
+          </div>
         </div>
-        <Button className="h-12 w-full rounded-full text-[14px] font-semibold" onClick={() => void handleConfirm()} variant="warm" disabled={submitting || resolving || !address.trim()}>
+        <Button className="h-[52px] w-full rounded-lg px-12 text-[15px] font-semibold sm:w-auto" onClick={() => void handleConfirm()} variant="warm" disabled={submitting || resolving || !address.trim()}>
           {submitting ? "Creating account…" : resolving ? "Verifying address…" : confirmLabel}
         </Button>
-      </div>
+      </footer>
     </section>
   );
 }

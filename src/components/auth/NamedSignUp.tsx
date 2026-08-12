@@ -224,14 +224,14 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
 
   if (stage === "role") {
     return (
-      <div className="auth-step-enter w-full max-w-xl rounded-[22px] border border-[#e4e7ec] bg-white px-7 sm:px-9">
+      <div className="auth-step-enter w-full max-w-[750px] rounded-[18px] border border-[#dfe3e7] bg-white px-7 shadow-[0_12px_38px_rgba(16,24,40,.07)] sm:px-9 lg:px-10">
         <RoleStep
           role={role}
           onBack={() => setStage("name")}
           onContinue={() => setStage("location")}
           onRoleChange={setRole}
-          stepNumber={2}
-          stepCount={stepCount}
+          stepNumber={1}
+          stepCount={2}
         />
       </div>
     );
@@ -239,7 +239,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
 
   if (stage === "location") {
     return (
-      <div className="auth-step-enter w-full max-w-xl rounded-[22px] border border-[#e4e7ec] bg-white px-7 sm:px-9">
+      <div className="auth-step-enter w-full max-w-[790px] rounded-[18px] border border-[#dfe3e7] bg-white px-7 shadow-[0_12px_38px_rgba(16,24,40,.07)] sm:px-9 lg:px-10">
         <VerifyAreaStep
           address={address}
           role={role}
@@ -250,8 +250,8 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
             setCoords(lat === null || lng === null ? null : { lat, lng })
           }
           onNeighborhoodDetected={setNeighborhood}
-          stepNumber={3}
-          stepCount={stepCount}
+          stepNumber={2}
+          stepCount={2}
           confirmLabel={role === "provider" ? "Continue to business details" : "Continue to email verification"}
         />
       </div>

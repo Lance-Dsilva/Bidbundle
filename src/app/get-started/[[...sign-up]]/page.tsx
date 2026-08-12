@@ -24,7 +24,7 @@ export default async function SignUpPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-white">
       <AuthShowcase
         testimonial={{
           quote:
@@ -36,16 +36,8 @@ export default async function SignUpPage() {
       />
 
       <main
-        className="relative flex flex-1 items-center justify-center overflow-y-auto px-5 py-10"
-        style={{ background: "linear-gradient(180deg, #FAF6F0 0%, #F1ECE2 100%)" }}
+        className="relative flex flex-1 items-center justify-center overflow-y-auto bg-white px-5 py-8 lg:px-12"
       >
-        <div
-          className="pointer-events-none absolute bottom-[10%] left-[-6%] h-[220px] w-[220px] rounded-full opacity-60"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(122,154,126,0.14) 0%, transparent 68%)",
-          }}
-        />
         <NamedSignUp alreadyVerified={alreadyVerified} />
       </main>
     </div>

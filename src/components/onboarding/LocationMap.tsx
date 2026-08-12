@@ -1,6 +1,6 @@
 "use client";
 
-import type { CircleMarker, Map as LeafletMap } from "leaflet";
+import type { Map as LeafletMap, Marker } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 
 import { geoapifyConfig, geoapifyTileUrl } from "@/lib/geoapify";
@@ -17,7 +17,7 @@ const ATTRIBUTION =
 export function LocationMap({ latitude, longitude, locality }: LocationMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
-  const markerRef = useRef<CircleMarker | null>(null);
+  const markerRef = useRef<Marker | null>(null);
   const positionRef = useRef({ latitude, longitude });
   const [mapError, setMapError] = useState<string | null>(null);
   positionRef.current = { latitude, longitude };
@@ -39,7 +39,7 @@ export function LocationMap({ latitude, longitude, locality }: LocationMapProps)
         const map = leaflet.map(containerRef.current, {
           center,
           zoom: hasPosition ? 14 : 3,
-          zoomControl: true,
+          zoomControl: false,
           scrollWheelZoom: false,
         });
         leaflet
@@ -52,15 +52,14 @@ export function LocationMap({ latitude, longitude, locality }: LocationMapProps)
 
         mapRef.current = map;
         if (hasPosition) {
-          markerRef.current = leaflet
-            .circleMarker(center, {
-              color: "#ffffff",
-              fillColor: "#E8623F",
-              fillOpacity: 1,
-              radius: 8,
-              weight: 3,
-            })
-            .addTo(map);
+          markerRef.current = leaflet.marker(center, {
+            icon: leaflet.divIcon({
+              className: "",
+              html: '<span class="bundleen-map-pin"><span></span></span>',
+              iconAnchor: [17, 40],
+              iconSize: [34, 42],
+            }),
+          }).addTo(map);
         }
       })
       .catch(() => setMapError("The map could not be loaded."));
@@ -84,15 +83,14 @@ export function LocationMap({ latitude, longitude, locality }: LocationMapProps)
       if (cancelled) return;
       if (markerRef.current) markerRef.current.setLatLng([latitude, longitude]);
       else {
-        markerRef.current = leaflet
-          .circleMarker([latitude, longitude], {
-            color: "#ffffff",
-            fillColor: "#E8623F",
-            fillOpacity: 1,
-            radius: 8,
-            weight: 3,
-          })
-          .addTo(map);
+        markerRef.current = leaflet.marker([latitude, longitude], {
+          icon: leaflet.divIcon({
+            className: "",
+            html: '<span class="bundleen-map-pin"><span></span></span>',
+            iconAnchor: [17, 40],
+            iconSize: [34, 42],
+          }),
+        }).addTo(map);
       }
       map.flyTo([latitude, longitude], 14, { animate: true, duration: 0.6 });
     });
@@ -103,14 +101,14 @@ export function LocationMap({ latitude, longitude, locality }: LocationMapProps)
 
   if (!geoapifyConfig.apiKey) {
     return (
-      <div className="flex h-[160px] items-center justify-center rounded-[24px] border bg-[var(--cream-50)] px-6 text-center text-sm text-[var(--ink-500)]" style={{ borderColor: "var(--border-warm)" }}>
+      <div className="flex h-[175px] items-center justify-center rounded-2xl border bg-[var(--cream-50)] px-6 text-center text-sm text-[var(--ink-500)]" style={{ borderColor: "var(--border-warm)" }}>
         Add NEXT_PUBLIC_GEOAPIFY_API_KEY to enable address lookup and the map.
       </div>
     );
   }
 
   return (
-    <div className="relative h-[160px] overflow-hidden rounded-[24px] border" style={{ borderColor: "var(--border-warm)" }}>
+    <div className="relative h-[175px] overflow-hidden rounded-2xl border" style={{ borderColor: "#d8e1dd" }}>
       <div ref={containerRef} className="h-full w-full" role="img" aria-label={locality ? `Map showing ${locality}` : "Location map"} />
       {locality ? (
         <div className="pointer-events-none absolute right-3 top-2.5 z-[500] rounded-full bg-white/90 px-3 py-1 text-[10px] font-semibold text-[var(--terracotta-600)] shadow-sm backdrop-blur-sm">
