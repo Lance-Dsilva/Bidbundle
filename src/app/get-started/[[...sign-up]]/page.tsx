@@ -1,7 +1,16 @@
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { NamedSignUp } from "@/components/auth/NamedSignUp";
 
-export default function SignUpPage() {
+export default async function SignUpPage() {
+  // Once Clerk has created a complete session, skip mounting <SignUp /> again.
+  // The prebuilt component otherwise briefly redirects signed-in users through
+  // its Home URL before our onboarding redirect becomes visible.
+  const { userId } = await auth();
+  if (userId) redirect("/get-started/profile");
+
   return (
     <div className="flex min-h-screen">
       <AuthShowcase

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/Input";
  * decided by staff from the details below, and the community radius is fixed
  * for everyone.
  */
-type ProviderBusinessData = {
+export type ProviderBusinessData = {
   companyName: string;
   bio: string;
   services: string[];
@@ -29,6 +29,7 @@ type ProviderBusinessStepProps = {
   submitting?: boolean;
   stepNumber?: number;
   stepCount?: number;
+  confirmLabel?: string;
 };
 
 const serviceOptions = [
@@ -72,6 +73,7 @@ export function ProviderBusinessStep({
   submitting = false,
   stepNumber = 3,
   stepCount = 3,
+  confirmLabel = "Finish provider setup",
 }: ProviderBusinessStepProps) {
   const areaSuggestions = buildAreaSuggestions(address);
   const isComplete =
@@ -212,15 +214,15 @@ export function ProviderBusinessStep({
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            {[1, 2, 3, 4].map((n) => (
+            {Array.from({ length: stepCount }, (_, index) => index + 1).map((n) => (
               <span
                 key={n}
-                className={`rounded-full transition-all duration-300 ${n === 4 ? "h-2 w-6" : "h-2 w-2"}`}
-                style={{ background: n === 4 ? "var(--terracotta-600)" : "rgba(232,98,63,0.40)" }}
+                className={`rounded-full transition-all duration-300 ${n === stepNumber ? "h-2 w-6" : "h-2 w-2"}`}
+                style={{ background: n <= stepNumber ? "var(--terracotta-600)" : "rgba(232,98,63,0.40)" }}
               />
             ))}
           </div>
-          <span className="text-[12px] text-[var(--ink-400)]">4 of 4</span>
+          <span className="text-[12px] text-[var(--ink-400)]">{stepNumber} of {stepCount}</span>
         </div>
         <Button
           className="h-12 w-full rounded-full text-[14px] font-semibold"
@@ -228,7 +230,7 @@ export function ProviderBusinessStep({
           variant="warm"
           disabled={!isComplete || submitting}
         >
-          {submitting ? "Creating account…" : "Finish provider setup"}
+          {submitting ? "Creating account…" : confirmLabel}
         </Button>
       </div>
     </section>

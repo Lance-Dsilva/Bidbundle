@@ -641,6 +641,17 @@ section,
   .signup-layout { grid-template-columns: 40% 60%; }
 }
 
+@keyframes auth-step-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.auth-step-enter {
+  animation: auth-step-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-step-enter { animation: none; }
+}
+
 .auth-headline {
   font-size: clamp(1.75rem, 5vw, 2.25rem);
   line-height: 1.15;
