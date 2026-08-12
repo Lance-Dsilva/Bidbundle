@@ -22,6 +22,11 @@ const validDraft: OnboardingDraft = {
 describe("isOnboardingDraft", () => {
   it("accepts a complete same-tab onboarding handoff", () => {
     expect(isOnboardingDraft(validDraft)).toBe(true);
+    expect(isOnboardingDraft({ ...validDraft, completionAuthorized: true })).toBe(true);
+  });
+
+  it("rejects malformed account-completion authorization", () => {
+    expect(isOnboardingDraft({ ...validDraft, completionAuthorized: "yes" })).toBe(false);
   });
 
   it("rejects drafts without verified coordinates", () => {

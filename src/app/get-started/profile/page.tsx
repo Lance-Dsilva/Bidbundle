@@ -226,6 +226,14 @@ export default function CompleteProfilePage() {
       return;
     }
 
+    if (draft.completionAuthorized !== true) {
+      // Drafts created before the account-confirmation step was introduced
+      // must not silently submit under whatever Clerk session is in the
+      // browser. `/get-started` now asks the user to confirm or switch it.
+      router.replace("/get-started");
+      return;
+    }
+
     automaticCompletionStarted.current = true;
     setPendingDraft(draft);
     void finishProfile({ draft });

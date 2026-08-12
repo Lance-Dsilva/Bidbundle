@@ -18,6 +18,12 @@ export type OnboardingDraft = {
   latitude: number;
   longitude: number;
   providerBusiness: ProviderBusinessDraft;
+  /**
+   * True only after the user deliberately entered Clerk's account step or
+   * confirmed an already-active Clerk session. Older drafts intentionally
+   * omit it and must return to the account confirmation screen.
+   */
+  completionAuthorized?: boolean;
 };
 
 const ONBOARDING_DRAFT_STORAGE_KEY = "bundleen.onboarding-draft";
@@ -50,6 +56,8 @@ export function isOnboardingDraft(value: unknown): value is OnboardingDraft {
     Number.isFinite(draft.longitude) &&
     draft.longitude >= -180 &&
     draft.longitude <= 180 &&
+    (draft.completionAuthorized === undefined ||
+      typeof draft.completionAuthorized === "boolean") &&
     typeof business === "object" &&
     business !== null &&
     isString(business.companyName) &&

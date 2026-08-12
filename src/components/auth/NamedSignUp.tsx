@@ -1,6 +1,6 @@
 "use client";
 
-import { SignUp } from "@clerk/nextjs";
+import { SignUp, useClerk, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -15,12 +15,14 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
+  clearSignUpName,
   fullNameFromSignUp,
   getSignUpName,
   saveSignUpName,
   type SignUpName,
 } from "@/lib/display-name";
 import {
+  clearOnboardingDraft,
   getOnboardingDraft,
   saveOnboardingDraft,
   type OnboardingDraft,
@@ -29,7 +31,7 @@ import {
 import { MAX_NAME_LENGTH, type PublicRole } from "@/lib/validation/auth";
 
 type NameErrors = Partial<Record<keyof SignUpName, string>>;
-type SignUpStage = "name" | "role" | "location" | "provider" | "account";
+type SignUpStage = "session" | "name" | "role" | "location" | "provider" | "account";
 
 const EMPTY_BUSINESS: ProviderBusinessDraft = {
   companyName: "",
@@ -63,6 +65,8 @@ function AccountStepLoading() {
 
 export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boolean }) {
   const router = useRouter();
+  const { signOut } = useClerk();
+  const { user } = useUser();
   const [stage, setStage] = useState<SignUpStage>("name");
   const [name, setName] = useState<SignUpName | null>(null);
   const [firstName, setFirstName] = useState("");
@@ -75,6 +79,8 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   const [providerBusiness, setProviderBusiness] =
     useState<ProviderBusinessDraft>(EMPTY_BUSINESS);
   const [hydrated, setHydrated] = useState(false);
+  const [sessionAccepted, setSessionAccepted] = useState(false);
+  const [switchingAccount, setSwitchingAccount] = useState(false);
 
   const stepCount = role === "provider" ? 5 : 4;
 
@@ -93,12 +99,9 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
       setNeighborhood(draft.neighborhood);
       setCoords({ lat: draft.latitude, lng: draft.longitude });
       setProviderBusiness(draft.providerBusiness);
-      if (alreadyVerified) {
-        setStage("account");
-        router.replace("/get-started/profile");
-      } else {
-        setStage("account");
-      }
+      setStage(alreadyVerified ? "session" : "account");
+    } else if (alreadyVerified) {
+      setStage("session");
     }
     setHydrated(true);
   }, [alreadyVerified, router]);
@@ -152,6 +155,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
       latitude: finalCoords.lat,
       longitude: finalCoords.lng,
       providerBusiness,
+      completionAuthorized: !alreadyVerified || sessionAccepted,
     };
     saveOnboardingDraft(draft);
     setStage("account");
@@ -163,6 +167,67 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
       <div className="auth-step-enter w-full max-w-md">
         <AccountStepLoading />
       </div>
+    );
+  }
+
+  if (stage === "session") {
+    const accountName = user?.fullName?.trim() || "this Clerk account";
+    const accountEmail = user?.primaryEmailAddress?.emailAddress;
+    const draft = getOnboardingDraft();
+
+    return (
+      <section className="auth-step-enter relative w-full max-w-md rounded-2xl border border-[#d8e7e3] bg-white px-7 py-8 text-center shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#eaf8f5] text-xl font-bold text-[#0f8f83]">
+          ✓
+        </span>
+        <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f8f83]">
+          Existing session detected
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-[#1f2937]">
+          You’re already signed in
+        </h1>
+        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#667085]">
+          Continue with <strong className="text-[#1f2937]">{accountName}</strong>
+          {accountEmail ? <> ({accountEmail})</> : null}. Clerk has already verified this account,
+          so you do not need another email code.
+        </p>
+
+        <div className="mt-7 space-y-3">
+          <Button
+            className="h-11 w-full rounded-xl text-sm"
+            onClick={() => {
+              setSessionAccepted(true);
+              if (draft) {
+                saveOnboardingDraft({ ...draft, completionAuthorized: true });
+                router.replace("/get-started/profile");
+              } else {
+                setStage("name");
+              }
+            }}
+            variant="warm"
+          >
+            Continue with this account
+          </Button>
+          <Button
+            className="h-11 w-full rounded-xl text-sm"
+            disabled={switchingAccount}
+            onClick={async () => {
+              setSwitchingAccount(true);
+              clearOnboardingDraft();
+              clearSignUpName();
+              await signOut({ redirectUrl: "/get-started" });
+            }}
+            variant="secondary"
+          >
+            {switchingAccount ? "Signing out…" : "Use another account"}
+          </Button>
+        </div>
+
+        <p className="mt-5 text-xs leading-5 text-[#98a2b3]">
+          To test email verification, choose another account and use an email that is not already
+          registered in Clerk.
+        </p>
+      </section>
     );
   }
 
