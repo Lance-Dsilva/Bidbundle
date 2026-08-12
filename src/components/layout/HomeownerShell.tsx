@@ -10,6 +10,7 @@ import { useHomeownerRequests } from "@/hooks/useHomeownerRequests";
 import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 import { useNotifications } from "@/hooks/useNotifications";
+import { initialsFromName } from "@/lib/display-name";
 
 const navigation = [
   { label: "Overview", href: "/app/homeowner/dashboard", icon: "home" as const },
@@ -38,12 +39,7 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
   if (pathname === "/app/homeowner/dashboard") return children;
 
   const displayName = userName || user?.full_name || "Homeowner";
-  const initials = (displayName || "NB")
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const initials = initialsFromName(displayName);
   const groupCount = requests.filter((request) => request.status === "grouping").length;
   const recentActivity = [
     ...otherMembers.slice(0, 2).map((member) => ({
@@ -115,7 +111,9 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
         </section>
 
         <div className="dash-sidebar-profile">
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
+            {initials}
+          </Link>
           <div><strong>{displayName}</strong><span>Homeowner</span></div>
           <Link href="/app/homeowner/profile" className="dash-icon-btn" aria-label="Open profile">
             <Icon name="chevron-right" size={16} />
@@ -132,7 +130,9 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
             <Icon name="bell" size={18} />
             {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
           </button>
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
+            {initials}
+          </Link>
         </div>
       </div>
 
@@ -142,7 +142,9 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
             <Icon name="bell" size={18} />
             {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
           </button>
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
+            {initials}
+          </Link>
         </div>
 
         <div className="dash-workspace">

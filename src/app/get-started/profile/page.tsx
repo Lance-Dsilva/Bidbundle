@@ -8,6 +8,7 @@ import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessStep";
 import { RoleStep } from "@/components/onboarding/RoleStep";
 import { VerifyAreaStep } from "@/components/onboarding/VerifyAreaStep";
+import { clearSignUpName, fullNameFromSignUp, getSignUpName } from "@/lib/display-name";
 import type { PublicRole } from "@/lib/validation/auth";
 import { saveRole } from "@/utils/onboardingState";
 
@@ -67,12 +68,21 @@ export default function CompleteProfilePage() {
     setApiError(null);
 
     try {
+      const signUpName = getSignUpName();
+      const fullName = signUpName ? fullNameFromSignUp(signUpName) : user.fullName ?? undefined;
+
+      // `initialValues` gives Clerk these fields during sign-up. Updating here
+      // also covers social sign-up providers that return without applying them.
+      if (signUpName && user.fullName !== fullName) {
+        await user.update({ firstName: signUpName.firstName, lastName: signUpName.lastName });
+      }
+
       const response = await fetch("/api/auth/profile", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: user.fullName ?? undefined,
+          fullName,
           phone: user.primaryPhoneNumber?.phoneNumber ?? undefined,
           role,
           address,
@@ -105,6 +115,7 @@ export default function CompleteProfilePage() {
       // Everything the form collected is now in Neon; the sessionStorage draft
       // that used to hold it has no reason to exist.
       saveRole(result.role);
+      clearSignUpName();
       router.replace(result.redirectTo);
       router.refresh();
     } catch {

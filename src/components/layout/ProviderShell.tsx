@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderJobFeed } from "@/hooks/useProviderJobFeed";
+import { initialsFromName } from "@/lib/display-name";
 
 const providerNavigation = [
   { label: "Overview", href: "/app/provider/dashboard", icon: "home" as const },
@@ -31,12 +32,9 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
   const { jobs } = useProviderJobFeed();
   const { notifications, markRead, dismiss } = useNotifications();
   const providerName = profile?.company_name || userName || "Service Provider";
-  const initials = providerName
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "SP";
+  const providerInitials = initialsFromName(providerName, "SP");
+  const accountName = userName || providerName;
+  const accountInitials = initialsFromName(accountName, "SP");
 
   const scrollToNotifications = () => {
     document.querySelector<HTMLElement>("#provider-notifications")?.scrollIntoView({
@@ -82,7 +80,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
         </section>
 
         <div className="dash-sidebar-profile">
-          <div className="dash-avatar">{initials}</div>
+          <div className="dash-avatar">{providerInitials}</div>
           <div><strong>{providerName}</strong><span>Service provider</span></div>
           <Link href="/app/provider/profile" className="dash-icon-btn" aria-label="Open provider profile">
             <Icon name="chevron-right" size={16} />
@@ -99,7 +97,9 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
             <Icon name="bell" size={18} />
             {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
           </button>
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/provider/profile" aria-label={`Open ${accountName}'s profile`}>
+            {accountInitials}
+          </Link>
         </div>
       </div>
 
@@ -109,7 +109,9 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
             <Icon name="bell" size={18} />
             {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
           </button>
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/provider/profile" aria-label={`Open ${accountName}'s profile`}>
+            {accountInitials}
+          </Link>
         </div>
 
         <div className="dash-workspace">

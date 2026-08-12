@@ -12,6 +12,7 @@ import { useHomeownerRequests } from "@/hooks/useHomeownerRequests";
 import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 import { useNotifications } from "@/hooks/useNotifications";
+import { initialsFromName } from "@/lib/display-name";
 
 const POPULAR_SERVICES: { label: string; icon: "cleaning" | "plumbing" | "electrical" | "painting"; blurb: string }[] = [
   { label: "Cleaning", icon: "cleaning", blurb: "Home, office" },
@@ -99,12 +100,8 @@ export default function HomeownerDashboard() {
     return <PageSkeleton />;
   }
 
-  const initials = (user?.full_name ?? "")
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "NB";
+  const displayName = user?.full_name ?? "Homeowner";
+  const initials = initialsFromName(user?.full_name);
 
   const scrollToNotifications = () => {
     const target = window.matchMedia("(min-width: 1280px)").matches
@@ -167,7 +164,7 @@ export default function HomeownerDashboard() {
         <div className="dash-sidebar-profile">
           <div className="dash-avatar">{initials}</div>
           <div>
-            <strong>{user?.full_name ?? "Homeowner"}</strong>
+            <strong>{displayName}</strong>
             <span>Homeowner</span>
           </div>
           <Link href="/app/homeowner/profile" className="dash-icon-btn" aria-label="Open profile">
@@ -185,7 +182,9 @@ export default function HomeownerDashboard() {
             <Icon name="bell" size={18} />
             {notifications.length > 0 && <span className="dash-notif-dot" />}
           </button>
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
+            {initials}
+          </Link>
         </div>
       </div>
 
@@ -195,7 +194,9 @@ export default function HomeownerDashboard() {
             <Icon name="bell" size={18} />
             {notifications.length > 0 && <span className="dash-notif-dot" />}
           </button>
-          <div className="dash-avatar">{initials}</div>
+          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
+            {initials}
+          </Link>
         </div>
 
       <div className="dash-workspace">
