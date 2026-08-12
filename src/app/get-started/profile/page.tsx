@@ -7,7 +7,10 @@ import { useState } from "react";
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessStep";
 import { RoleStep } from "@/components/onboarding/RoleStep";
-import { VerifyAreaStep } from "@/components/onboarding/VerifyAreaStep";
+import {
+  VerifyAreaStep,
+  type VerifiedLocation,
+} from "@/components/onboarding/VerifyAreaStep";
 import { clearSignUpName, fullNameFromSignUp, getSignUpName } from "@/lib/display-name";
 import type { PublicRole } from "@/lib/validation/auth";
 import { saveRole } from "@/utils/onboardingState";
@@ -61,7 +64,7 @@ export default function CompleteProfilePage() {
     setProviderBusiness((current) => ({ ...current, [field]: value }));
   };
 
-  const finishProfile = async () => {
+  const finishProfile = async (verifiedLocation?: VerifiedLocation) => {
     if (!user) return;
 
     setSubmitting(true);
@@ -85,10 +88,11 @@ export default function CompleteProfilePage() {
           fullName,
           phone: user.primaryPhoneNumber?.phoneNumber ?? undefined,
           role,
-          address,
-          neighborhood: neighborhood || providerBusiness.serviceArea || null,
-          latitude: coords?.lat ?? null,
-          longitude: coords?.lng ?? null,
+          address: verifiedLocation?.address ?? address,
+          neighborhood:
+            verifiedLocation?.neighborhood || neighborhood || providerBusiness.serviceArea || null,
+          latitude: verifiedLocation?.latitude ?? coords?.lat ?? null,
+          longitude: verifiedLocation?.longitude ?? coords?.lng ?? null,
           // Claims only. The licensed/insured checkboxes this form used to
           // collect are gone: a provider does not get to mark themselves
           // verified, so there is nothing to send.
@@ -169,9 +173,12 @@ export default function CompleteProfilePage() {
               role={role}
               onAddressChange={setAddress}
               onBack={() => setStep(1)}
-              onConfirm={() => {
+              onConfirm={(location) => {
+                setAddress(location.address);
+                setNeighborhood(location.neighborhood);
+                setCoords({ lat: location.latitude, lng: location.longitude });
                 if (role === "provider") setStep(3);
-                else void finishProfile();
+                else void finishProfile(location);
               }}
               onCoordsDetected={(lat, lng) =>
                 setCoords(lat === null || lng === null ? null : { lat, lng })

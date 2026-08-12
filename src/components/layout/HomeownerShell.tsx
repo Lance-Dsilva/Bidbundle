@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 
 import { Icon } from "@/components/ui/Icon";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
-import { useHomeownerRequests } from "@/hooks/useHomeownerRequests";
 import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -15,8 +14,7 @@ import { initialsFromName } from "@/lib/display-name";
 const navigation = [
   { label: "Overview", href: "/app/homeowner/dashboard", icon: "home" as const },
   { label: "My Requests", href: "/app/homeowner/request", icon: "clipboard" as const },
-  { label: "My Bids", href: "/app/homeowner/bids#bids", icon: "bids" as const },
-  { label: "Groups", href: "/app/homeowner/bids#groups", icon: "users" as const },
+  { label: "My Bids", href: "/app/homeowner/bids", icon: "bids" as const },
   { label: "Messages", href: "/app/homeowner/chat", icon: "chat" as const },
 ];
 
@@ -29,7 +27,6 @@ type HomeownerShellProps = Readonly<{
 export function HomeownerShell({ children, userName }: HomeownerShellProps) {
   const pathname = usePathname();
   const { dashboard, user } = useHomeownerDashboard();
-  const { requests } = useHomeownerRequests();
   const { requests: neighbourhoodRequests } = useNeighbourhoodRequests();
   const { otherMembers, neighbourhoodName } = useNeighbourhoodSummary();
   const { notifications, markRead, dismiss } = useNotifications();
@@ -40,7 +37,6 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
 
   const displayName = userName || user?.full_name || "Homeowner";
   const initials = initialsFromName(displayName);
-  const groupCount = requests.filter((request) => request.status === "grouping").length;
   const recentActivity = [
     ...otherMembers.slice(0, 2).map((member) => ({
       key: `member-${member.user_id}`,
@@ -58,11 +54,7 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
     })),
   ].slice(0, 3);
 
-  const isActive = (href: string) => {
-    const path = href.split("#")[0];
-    if (path === "/app/homeowner/bids") return pathname === path;
-    return pathname === path;
-  };
+  const isActive = (href: string) => pathname === href;
 
   const scrollToNotifications = () => {
     document.querySelector<HTMLElement>("#homeowner-notifications")?.scrollIntoView({
@@ -84,7 +76,6 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
             <Link className={`dash-nav-item${isActive(item.href) ? " is-active" : ""}`} href={item.href} key={item.label}>
               <Icon name={item.icon} size={20} />
               <span>{item.label}</span>
-              {item.label === "Groups" && groupCount > 0 ? <b className="dash-nav-badge teal">{groupCount}</b> : null}
               {item.label === "Messages" && (dashboard?.unread_messages ?? 0) > 0 ? (
                 <b className="dash-nav-badge amber">{dashboard?.unread_messages}</b>
               ) : null}

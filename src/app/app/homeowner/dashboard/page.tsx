@@ -131,10 +131,6 @@ export default function HomeownerDashboard() {
           <Link className="dash-nav-item" href="/app/homeowner/bids">
             <Icon name="bids" size={20} /> <span>My Bids</span>
           </Link>
-          <Link className="dash-nav-item" href="/app/homeowner/bids#groups">
-            <Icon name="users" size={20} /> <span>Groups</span>
-            {groupCount > 0 && <b className="dash-nav-badge teal">{groupCount}</b>}
-          </Link>
           <Link className="dash-nav-item" href="/app/homeowner/chat">
             <Icon name="chat" size={20} /> <span>Messages</span>
             {(dashboard?.unread_messages ?? 0) > 0 && <b className="dash-nav-badge amber">{dashboard?.unread_messages}</b>}

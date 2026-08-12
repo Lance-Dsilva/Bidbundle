@@ -9,6 +9,7 @@ import { PwaProvider } from "@/components/pwa/PwaProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 
 const inter = Inter({
   subsets: ["latin"],

@@ -1,16 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LocationMap } from "@/components/onboarding/LocationMap";
 import { StepProgress } from "@/components/onboarding/StepProgress";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import {
+  autocompleteAddress,
+  geocodeAddress,
+  geoapifyConfig,
+  reverseGeocode,
+  type GeoapifyPlace,
+} from "@/lib/geoapify";
 import type { UserRole } from "@/utils/onboardingState";
+
+export type VerifiedLocation = {
+  address: string;
+  latitude: number;
+  longitude: number;
+  neighborhood: string;
+};
 
 type VerifyAreaStepProps = {
   address: string;
   onAddressChange: (value: string) => void;
   onBack: () => void;
-  onConfirm: () => void;
+  onConfirm: (location: VerifiedLocation) => void;
   onCoordsDetected?: (lat: number | null, lng: number | null) => void;
   /** The locality reverse-geocoding resolved, saved as the user's neighborhood. */
   onNeighborhoodDetected?: (neighborhood: string) => void;
@@ -34,61 +49,6 @@ function HomeIcon() {
   );
 }
 
-function MapView({ lat, lng, locality }: { lat: number | null; lng: number | null; locality: string }) {
-  if (lat !== null && lng !== null) {
-    const delta = 0.018;
-    const bbox = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
-    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
-    return (
-      <div className="relative h-[160px] overflow-hidden rounded-[24px] border" style={{ borderColor: "var(--border-warm)" }}>
-        <iframe
-          src={src}
-          title="Your location"
-          width="100%"
-          height="160"
-          style={{ border: "none", display: "block", pointerEvents: "none" }}
-          loading="lazy"
-        />
-        {locality && (
-          <div className="absolute right-3 top-2.5 rounded-full bg-white/90 px-3 py-1 text-[10px] font-semibold text-[var(--terracotta-600)] backdrop-blur-sm shadow-sm">
-            {locality}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="relative h-[160px] overflow-hidden rounded-[24px] border"
-      style={{
-        borderColor: "var(--border-warm)",
-        backgroundColor: "#F1ECE2",
-        backgroundImage: "radial-gradient(circle, rgba(232,98,63,0.10) 1px, transparent 1px)",
-        backgroundSize: "20px 20px",
-      }}
-    >
-      <div className="absolute inset-x-4 top-7 h-6 rounded-lg bg-white/50" />
-      <div className="absolute left-5 top-16 h-7 w-16 rounded-lg bg-white/45" />
-      <div className="absolute right-6 top-16 h-8 w-20 rounded-lg bg-white/50" />
-      <div className="absolute bottom-10 left-12 h-8 w-20 rounded-xl bg-white/50" />
-      <div className="absolute left-[16%] top-[28%] h-2 w-2 rounded-full bg-[var(--sage-500)] shadow-sm" />
-      <div className="absolute left-[30%] top-[60%] h-2 w-2 rounded-full bg-[var(--sage-500)] shadow-sm" />
-      <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
-        <svg aria-hidden="true" className="h-14 w-14 text-[var(--terracotta-600)]" viewBox="0 0 64 64" fill="none">
-          <circle cx="32" cy="32" r="18" fill="currentColor" fillOpacity="0.10" />
-          <circle cx="32" cy="32" r="10" fill="currentColor" fillOpacity="0.18" />
-          <circle cx="32" cy="32" r="6" fill="currentColor" />
-          <circle cx="32" cy="32" r="2" fill="white" />
-        </svg>
-      </div>
-      <div className="absolute right-3 top-2.5 rounded-full bg-white/90 px-3 py-1 text-[10px] font-semibold text-[var(--ink-400)] backdrop-blur-sm shadow-sm">
-        Detecting location…
-      </div>
-    </div>
-  );
-}
-
 export function VerifyAreaStep({
   address,
   onAddressChange,
@@ -103,61 +63,91 @@ export function VerifyAreaStep({
   confirmLabel = "Confirm my area",
 }: VerifyAreaStepProps) {
   const [locationStatus, setLocationStatus] = useState<
-    "idle" | "detecting" | "detected" | "denied" | "manual"
+    "idle" | "detecting" | "detected" | "denied" | "manual" | "error"
   >("idle");
   const [detectedCoords, setDetectedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [localityName, setLocalityName] = useState("");
+  const [suggestions, setSuggestions] = useState<GeoapifyPlace[]>([]);
+  const [addressFocused, setAddressFocused] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const callbacksRef = useRef({ onAddressChange, onCoordsDetected, onNeighborhoodDetected });
+  callbacksRef.current = { onAddressChange, onCoordsDetected, onNeighborhoodDetected };
+
+  const applyPlace = (place: GeoapifyPlace) => {
+    setDetectedCoords({ lat: place.latitude, lng: place.longitude });
+    setLocalityName(place.neighborhood);
+    setLocationStatus("detected");
+    setLocationError(null);
+    callbacksRef.current.onAddressChange(place.formatted);
+    callbacksRef.current.onCoordsDetected?.(place.latitude, place.longitude);
+    callbacksRef.current.onNeighborhoodDetected?.(place.neighborhood);
+  };
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setLocationStatus("manual");
+      return;
+    }
+    const controller = new AbortController();
     setLocationStatus("detecting");
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         setDetectedCoords({ lat: latitude, lng: longitude });
-        onCoordsDetected?.(latitude, longitude);
-        // Reverse-geocode to fill the address field and locality badge
+        callbacksRef.current.onCoordsDetected?.(latitude, longitude);
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-            { headers: { "Accept-Language": "en" } }
+          const place = await reverseGeocode(latitude, longitude, controller.signal);
+          if (place) applyPlace(place);
+          else setLocationStatus("manual");
+        } catch (error) {
+          if ((error as Error).name === "AbortError") return;
+          setLocationStatus("error");
+          setLocationError(
+            geoapifyConfig.apiKey
+              ? "We found your coordinates but could not resolve the address. Search below instead."
+              : "Geoapify is not configured. Add NEXT_PUBLIC_GEOAPIFY_API_KEY.",
           );
-          if (res.ok) {
-            const data = await res.json() as {
-              address?: {
-                house_number?: string;
-                road?: string;
-                suburb?: string;
-                neighbourhood?: string;
-                city?: string;
-                town?: string;
-                village?: string;
-                county?: string;
-                state?: string;
-                postcode?: string;
-              };
-            };
-            const a = data.address ?? {};
-            const street = [a.house_number, a.road].filter(Boolean).join(" ");
-            const locality = a.suburb ?? a.neighbourhood ?? a.city ?? a.town ?? a.village ?? a.county ?? "";
-            const region = a.state ?? "";
-            const postcode = a.postcode ?? "";
-            const formatted = [street, locality, region, postcode].filter(Boolean).join(", ");
-            if (formatted) onAddressChange(formatted);
-            if (locality) {
-              setLocalityName(locality);
-              onNeighborhoodDetected?.(locality);
-            }
-          }
-        } catch {
-          // geocoding failed — keep existing address
         }
-        setLocationStatus("detected");
       },
       () => setLocationStatus("denied"),
       { timeout: 8000, maximumAge: 60000 }
     );
+    return () => controller.abort();
+    // Browser location should only be requested once when this step mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!addressFocused || address.trim().length < 3 || !geoapifyConfig.apiKey) {
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      void autocompleteAddress(address, controller.signal)
+        .then((places) => {
+          setSuggestions(places);
+          setLocationError(places.length ? null : "No matching address found. Try adding a city or postcode.");
+        })
+        .catch((error) => {
+          if ((error as Error).name !== "AbortError") {
+            setSuggestions([]);
+            setLocationError("Address search is unavailable right now. Please try again.");
+          }
+        })
+        .finally(() => setSearching(false));
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [address, addressFocused]);
 
   const handleManualAddressChange = (value: string) => {
     onAddressChange(value);
@@ -170,6 +160,53 @@ export function VerifyAreaStep({
       setLocationStatus("manual");
       onCoordsDetected?.(null, null);
       onNeighborhoodDetected?.("");
+    }
+    setLocationError(null);
+  };
+
+  const handleSelectPlace = (place: GeoapifyPlace) => {
+    applyPlace(place);
+    setSuggestions([]);
+    setAddressFocused(false);
+  };
+
+  const handleConfirm = async () => {
+    const trimmedAddress = address.trim();
+    if (!trimmedAddress) return;
+
+    if (detectedCoords) {
+      onConfirm({
+        address: trimmedAddress,
+        latitude: detectedCoords.lat,
+        longitude: detectedCoords.lng,
+        neighborhood: localityName,
+      });
+      return;
+    }
+
+    setResolving(true);
+    setLocationError(null);
+    try {
+      const place = await geocodeAddress(trimmedAddress);
+      if (!place) {
+        setLocationError("We could not locate that address. Select a suggestion or enter more detail.");
+        return;
+      }
+      applyPlace(place);
+      onConfirm({
+        address: place.formatted,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        neighborhood: place.neighborhood,
+      });
+    } catch {
+      setLocationError(
+        geoapifyConfig.apiKey
+          ? "We could not verify this address. Please try again."
+          : "Geoapify is not configured. Add NEXT_PUBLIC_GEOAPIFY_API_KEY.",
+      );
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -197,16 +234,66 @@ export function VerifyAreaStep({
         </p>
       </header>
 
-      <MapView lat={detectedCoords?.lat ?? null} lng={detectedCoords?.lng ?? null} locality={localityName} />
+      <LocationMap
+        latitude={detectedCoords?.lat ?? null}
+        longitude={detectedCoords?.lng ?? null}
+        locality={localityName}
+      />
 
       <div className="mt-5 space-y-4">
-        <Input
-          label="Your address"
-          prefixIcon={<HomeIcon />}
-          variant="warm"
-          value={address}
-          onChange={(event) => handleManualAddressChange(event.target.value)}
-        />
+        <div
+          className="relative"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setAddressFocused(false);
+          }}
+        >
+          <Input
+            id="onboarding-address"
+            label="Your address"
+            prefixIcon={<HomeIcon />}
+            variant="warm"
+            value={address}
+            autoComplete="off"
+            aria-controls="address-suggestions"
+            aria-expanded={addressFocused && suggestions.length > 0}
+            onFocus={() => setAddressFocused(true)}
+            onChange={(event) => handleManualAddressChange(event.target.value)}
+          />
+          {searching ? (
+            <span className="absolute right-3 top-[35px] text-xs text-[var(--ink-400)]">Searching…</span>
+          ) : null}
+          {addressFocused && suggestions.length > 0 ? (
+            <ul
+              id="address-suggestions"
+              aria-label="Address suggestions"
+              className="absolute z-[600] mt-1 max-h-56 w-full overflow-y-auto rounded-2xl border bg-white p-1 shadow-xl"
+              style={{ borderColor: "var(--border-warm)" }}
+            >
+              {suggestions.map((place) => (
+                <li key={place.placeId ?? `${place.latitude}-${place.longitude}-${place.formatted}`}>
+                  <button
+                    type="button"
+                    className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-[var(--cream-50)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--terracotta-500)]"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleSelectPlace(place)}
+                  >
+                    <span className="block text-sm font-medium text-[var(--ink-800)]">{place.addressLine1 ?? place.formatted}</span>
+                    {place.addressLine1 ? (
+                      <span className="mt-0.5 block text-xs text-[var(--ink-500)]">
+                        {place.addressLine2 ?? [place.city, place.postcode, place.country].filter(Boolean).join(", ")}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        {locationError ? (
+          <p role="alert" aria-live="polite" className="text-xs text-red-600">
+            {locationError}
+          </p>
+        ) : null}
         <div className="flex items-center gap-2 rounded-2xl border px-4 py-2.5"
           style={{ borderColor: locationStatus === "detected" ? "var(--sage-100)" : "var(--border-warm)", background: locationStatus === "detected" ? "var(--sage-50)" : "var(--cream-50)" }}>
           <span className="flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold"
@@ -217,10 +304,11 @@ export function VerifyAreaStep({
             {locationStatus === "detected" ? role === "provider"
               ? "Base location detected — nearby jobs will be prioritised automatically"
               : "Location detected — neighbourhood matched automatically" :
-             locationStatus === "manual" ? "Using your typed address — the previous map position was removed" :
+             locationStatus === "manual" ? "Choose an address suggestion so its coordinates can be saved" :
              locationStatus === "denied" ? role === "provider"
-              ? "Location access denied — we'll use your typed business base instead"
-              : "Location access denied — neighbourhood will be set from address" :
+              ? "Location access denied — search for your business base instead"
+              : "Location access denied — search for your address instead" :
+             locationStatus === "error" ? "Search for your address to set the correct map location" :
              "Detecting your location…"}
           </span>
         </div>
@@ -273,8 +361,8 @@ export function VerifyAreaStep({
           <StepProgress current={stepNumber} total={stepCount} />
           <span className="text-[12px] text-[var(--ink-400)]">{stepNumber} of {stepCount}</span>
         </div>
-        <Button className="h-12 w-full rounded-full text-[14px] font-semibold" onClick={onConfirm} variant="warm" disabled={submitting || !address.trim()}>
-          {submitting ? "Creating account…" : confirmLabel}
+        <Button className="h-12 w-full rounded-full text-[14px] font-semibold" onClick={() => void handleConfirm()} variant="warm" disabled={submitting || resolving || !address.trim()}>
+          {submitting ? "Creating account…" : resolving ? "Verifying address…" : confirmLabel}
         </Button>
       </div>
     </section>
