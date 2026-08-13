@@ -9,7 +9,7 @@ export default async function AdminSignInPage() {
   if (userId) redirect("/auth/continue");
 
   return (
-    <div className="flex min-h-screen">
+    <div className="signup-layout bg-white">
       <AuthShowcase
         testimonial={{
           quote: "Private operations access for authorized Bundleen staff.",
@@ -19,7 +19,7 @@ export default async function AdminSignInPage() {
         }}
       />
       <main
-        className="relative flex flex-1 items-center justify-center overflow-y-auto px-5 py-10"
+        className="relative flex min-w-0 items-center justify-center overflow-x-hidden overflow-y-auto px-5 py-10 lg:px-12"
         style={{ background: "linear-gradient(180deg, #FAF6F0 0%, #F1ECE2 100%)" }}
       >
         <div className="w-full max-w-md">
@@ -56,4 +56,3 @@ export default async function AdminSignInPage() {
     </div>
   );
 }
-
