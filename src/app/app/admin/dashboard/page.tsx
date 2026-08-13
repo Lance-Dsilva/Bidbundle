@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  * Every number below is a live count. When a count is zero the tile says zero.
  */
 export default async function AdminDashboardPage() {
-  await requireRole(["admin"], "/app/admin/dashboard");
+  const user = await requireRole(["admin"], "/app/admin/dashboard");
   const overview = await getAdminOverview();
 
   const totalCommunities = overview.hoaCommunities + overview.neighborhoodCommunities;
@@ -35,13 +35,24 @@ export default async function AdminDashboardPage() {
         title="Bundleen operations"
         subtitle="Internal portal · communities, members, and providers"
         action={
-          <Link
-            href="/app/admin/communities"
-            className="inline-flex h-9 items-center rounded-xl px-4 text-[13px] font-semibold text-white shadow-sm transition-all"
-            style={{ background: "var(--teal-800)" }}
-          >
-            Manage communities
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {user.adminAccessLevel === "owner" && (
+              <Link
+                href="/app/admin/access"
+                className="inline-flex h-9 items-center rounded-xl border px-4 text-[13px] font-semibold shadow-sm transition-all"
+                style={{ borderColor: "var(--line)", color: "var(--teal-800)", background: "var(--paper)" }}
+              >
+                Share admin access
+              </Link>
+            )}
+            <Link
+              href="/app/admin/communities"
+              className="inline-flex h-9 items-center rounded-xl px-4 text-[13px] font-semibold text-white shadow-sm transition-all"
+              style={{ background: "var(--teal-800)" }}
+            >
+              Manage communities
+            </Link>
+          </div>
         }
       />
 

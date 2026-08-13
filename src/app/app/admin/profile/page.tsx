@@ -19,10 +19,8 @@ export const dynamic = "force-dynamic";
 /**
  * The signed-in staff member's own record.
  *
- * There are no settings here to change. An admin account is provisioned
- * privately — `PUBLIC_ROLES` has no `admin` member, so sign-up cannot produce
- * one — and nothing about that provisioning should be editable from inside the
- * portal it grants access to.
+ * Public sign-up cannot create an admin. The primary owner may grant an
+ * existing verified Bundleen account access from the dedicated access page.
  */
 export default async function AdminProfilePage() {
   const user = await requireRole(["admin"], "/app/admin/profile");
@@ -61,7 +59,7 @@ export default async function AdminProfilePage() {
       <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-7 pb-24">
         <SectionCard
           title="Account"
-          action={<StatusPill label="Bundleen admin" tone="info" withDot={false} />}
+          action={<StatusPill label={user.adminAccessLevel === "owner" ? "Primary owner" : "Bundleen admin"} tone="info" withDot={false} />}
         >
           <PersonLine
             person={person}
@@ -73,10 +71,15 @@ export default async function AdminProfilePage() {
             }
           />
           <p className="mt-4 text-[12px]" style={{ color: "var(--muted)" }}>
-            Admin access is granted directly in the database and cannot be obtained through public
-            sign-up. Community responsibilities are separate scoped records and are never held on a
-            staff account.
+            Admin access is protected by Clerk sign-in and Bundleen's database allow-list. It cannot
+            be obtained through public sign-up. Community responsibilities remain separate scoped
+            records and are never held on a staff account.
           </p>
+          {user.adminAccessLevel === "owner" && (
+            <Link href="/app/admin/access" className="mt-4 inline-flex text-[12px] font-semibold" style={{ color: "var(--teal-800)" }}>
+              Manage admin access →
+            </Link>
+          )}
         </SectionCard>
 
         <SectionCard

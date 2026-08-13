@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   hasProfile: true,
   guardFailure: null as { kind: "rate-limited"; retryAfterSeconds: number } | { kind: "unavailable" } | null,
   guardCalls: 0,
+  accessLevel: "owner" as "owner" | "admin" | null,
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -35,6 +36,14 @@ vi.mock("@/lib/server/db", () => ({
               fullName: "Ops Staff",
               role: state.role,
               isVerified: true,
+              adminAccess:
+                state.accessLevel && state.role === "admin"
+                  ? {
+                      email: "ops@bundleen.test",
+                      level: state.accessLevel,
+                      status: "active",
+                    }
+                  : null,
             }
           : null,
     },
@@ -52,7 +61,7 @@ vi.mock("@/lib/server/auth-guard", async (importOriginal) => {
   };
 });
 
-const { adminErrorResponse, requireAdmin, requireAdminMutation } = await import(
+const { adminErrorResponse, requireAdmin, requireAdminMutation, requireAdminOwner } = await import(
   "@/lib/server/admin-api"
 );
 
@@ -62,6 +71,7 @@ beforeEach(() => {
   state.hasProfile = true;
   state.guardFailure = null;
   state.guardCalls = 0;
+  state.accessLevel = "owner";
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -97,6 +107,24 @@ describe("requireAdmin", () => {
   it("does not consume the write limiter for a read", async () => {
     await requireAdmin();
     expect(state.guardCalls).toBe(0);
+  });
+
+  it("rejects an admin role with no active allow-list record", async () => {
+    state.accessLevel = null;
+    const gate = await requireAdmin();
+    expect(gate.ok).toBe(false);
+    if (!gate.ok) expect(gate.response.status).toBe(403);
+  });
+});
+
+describe("requireAdminOwner", () => {
+  it("admits only the primary owner", async () => {
+    expect((await requireAdminOwner()).ok).toBe(true);
+
+    state.accessLevel = "admin";
+    const sharedAdmin = await requireAdminOwner();
+    expect(sharedAdmin.ok).toBe(false);
+    if (!sharedAdmin.ok) expect(sharedAdmin.response.status).toBe(403);
   });
 });
 

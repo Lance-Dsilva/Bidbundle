@@ -125,5 +125,7 @@ describe("auditActionSummary", () => {
   it("describes every action in plain words", () => {
     expect(auditActionSummary("community_archived")).toBe("archived the community");
     expect(auditActionSummary("provider_license_verified")).toBe("verified a provider licence");
+    expect(auditActionSummary("admin_access_granted")).toBe("granted admin portal access");
+    expect(auditActionSummary("admin_access_revoked")).toBe("revoked admin portal access");
   });
 });

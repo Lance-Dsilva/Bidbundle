@@ -141,6 +141,8 @@ const ACTION_SUMMARIES: Record<AdminAuditAction, string> = {
   provider_license_revoked: "revoked a provider licence verification",
   provider_insurance_verified: "verified provider insurance",
   provider_insurance_revoked: "revoked provider insurance verification",
+  admin_access_granted: "granted admin portal access",
+  admin_access_revoked: "revoked admin portal access",
 };
 
 export function auditActionSummary(action: AdminAuditAction): string {

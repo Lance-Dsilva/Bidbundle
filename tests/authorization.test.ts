@@ -11,6 +11,11 @@ const state = vi.hoisted(() => ({
     fullName: string;
     role: "homeowner" | "provider" | "admin";
     isVerified: boolean;
+    adminAccess: null | {
+      email: string;
+      level: "owner" | "admin";
+      status: "pending" | "active" | "revoked";
+    };
   },
 }));
 
@@ -47,6 +52,10 @@ function signedInAs(role: AppRole) {
     fullName: "Ada Lovelace",
     role,
     isVerified: true,
+    adminAccess:
+      role === "admin"
+        ? { email: "ada@example.com", level: "owner", status: "active" }
+        : null,
   };
 }
 
@@ -67,6 +76,7 @@ describe("getSessionUser", () => {
       name: "Ada Lovelace",
       role: "homeowner",
       isVerified: true,
+      adminAccessLevel: null,
     });
   });
 
@@ -128,6 +138,14 @@ describe("requireRole", () => {
       "REDIRECT:/app/provider/dashboard",
     );
   });
+
+  it("rejects a legacy admin role without an active access grant", async () => {
+    signedInAs("admin");
+    state.databaseUser = { ...state.databaseUser!, adminAccess: null };
+    await expect(requireRole(["admin"])).rejects.toThrow(
+      "REDIRECT:/admin/access-denied",
+    );
+  });
 });
 
 describe("authorizeRequest", () => {
@@ -153,6 +171,14 @@ describe("authorizeRequest", () => {
 
   it("returns 403 for a wrong application role", async () => {
     signedInAs("homeowner");
+    const result = await authorizeRequest(["admin"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(403);
+  });
+
+  it("returns 403 when an admin role has no active database grant", async () => {
+    signedInAs("admin");
+    state.databaseUser = { ...state.databaseUser!, adminAccess: null };
     const result = await authorizeRequest(["admin"]);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(403);

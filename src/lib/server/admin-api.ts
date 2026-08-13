@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import { CommunityRuleError } from "@/lib/community-rules";
+import { AdminAccessError } from "@/lib/server/admin-access";
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
 import { guardAdminMutation, guardFailureResponse } from "@/lib/server/auth-guard";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
@@ -39,6 +40,30 @@ export async function requireAdminMutation(): Promise<AdminGate> {
   return gate;
 }
 
+/** Owner-only access management. Shared admins cannot create more admins. */
+export async function requireAdminOwner(): Promise<AdminGate> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return gate;
+  if (gate.user.adminAccessLevel !== "owner") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Only the primary Bundleen owner can manage admin access." },
+        { status: 403 },
+      ),
+    };
+  }
+  return gate;
+}
+
+export async function requireAdminOwnerMutation(): Promise<AdminGate> {
+  const gate = await requireAdminOwner();
+  if (!gate.ok) return gate;
+  const failure = await guardAdminMutation(gate.user.id);
+  if (failure) return { ok: false, response: guardFailureResponse(failure) };
+  return gate;
+}
+
 /** Reads and parses an admin JSON body under the admin size ceiling. */
 export function readAdminBody(request: Request) {
   return readJsonBody(request, MAX_ADMIN_BODY_BYTES);
@@ -59,6 +84,9 @@ export function notFoundResponse(message = "Not found."): NextResponse {
  * client gets one fixed sentence with no database detail in it.
  */
 export function adminErrorResponse(scope: string, error: unknown): NextResponse {
+  if (error instanceof AdminAccessError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
   if (error instanceof CommunityRuleError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

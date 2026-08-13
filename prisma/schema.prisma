@@ -19,6 +19,20 @@ enum UserRole {
   admin
 }
 
+/// Portal access is an explicit allow-list in addition to the global User
+/// role. The owner is the immutable bootstrap account; ordinary admins can be
+/// granted and revoked only by that owner.
+enum AdminAccessLevel {
+  owner
+  admin
+}
+
+enum AdminAccessStatus {
+  pending
+  active
+  revoked
+}
+
 /// `hoa` represents an existing homeowners association. `neighborhood` is the
 /// location-based grouping used for homeowners who belong to no HOA.
 enum CommunityType {
@@ -73,6 +87,8 @@ enum AdminAuditAction {
   provider_license_revoked
   provider_insurance_verified
   provider_insurance_revoked
+  admin_access_granted
+  admin_access_revoked
 }
 
 enum AdminAuditTargetType {
@@ -80,6 +96,7 @@ enum AdminAuditTargetType {
   membership
   staff_assignment
   provider
+  admin_access
 }
 
 enum Weekday {
@@ -144,6 +161,43 @@ model User {
   staffAssignmentsMade CommunityStaffAssignment[]  @relation("StaffAssigner")
   providerApprovals    ProviderCommunityApproval[]
   auditLogEntries      AdminAuditLog[]             @relation("AuditActor")
+
+  adminAccess          AdminAccessGrant?  @relation("AdminAccessUser")
+  adminAccessGranted   AdminAccessGrant[] @relation("AdminAccessGrantor")
+  adminAccessRevoked   AdminAccessGrant[] @relation("AdminAccessRevoker")
+}
+
+/// Email allow-list for the private Bundleen operations portal.
+///
+/// A pending row is safe: it has no power until a Clerk identity proves the
+/// exact email address. The owner row is created by the migration and cannot
+/// be revoked by the application or by a direct database update.
+model AdminAccessGrant {
+  id     String @id @default(cuid())
+  email  String @unique
+  level  AdminAccessLevel  @default(admin)
+  status AdminAccessStatus @default(pending)
+
+  userId String? @unique
+  user   User?   @relation("AdminAccessUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  previousRole UserRole?
+
+  clerkInvitationId String? @unique
+
+  grantedByUserId String?
+  grantedBy       User?   @relation("AdminAccessGrantor", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  grantedAt        DateTime @default(now())
+  acceptedAt       DateTime?
+
+  revokedByUserId String?
+  revokedBy       User?   @relation("AdminAccessRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, email])
 }
 
 /// A group of homeowners: either a real HOA or a radius around a point.

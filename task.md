@@ -13,6 +13,17 @@ Do not add separate public signup choices or separate customer applications for 
 
 The existing `admin` database role and `/app/admin/**` routes are reserved for Bundleen staff. They are not a third public customer type and must never be obtainable through public registration.
 
+## Admin portal ownership and shared access
+
+- The immutable primary owner is `lancedsilva2000@gmail.com`.
+- Admin authentication is sign-in-only at `/admin/sign-in`; it has no create-account link.
+- The `admin` role alone is insufficient. Every portal request also requires an active `AdminAccessGrant` linked to the signed-in Clerk identity's verified email.
+- Only the primary owner may grant or revoke shared admin access.
+- Shared access is granted to an existing, verified Bundleen/Clerk account by email and stored in Postgres. It never stores or creates a password.
+- Public signup continues to create only homeowner or provider accounts.
+- Revoking shared access immediately restores the account's previous public role and preserves the access history.
+- Admin-access changes are written to the append-only audit log without recording the invited email in audit metadata.
+
 ## Business model
 
 There are two community types:

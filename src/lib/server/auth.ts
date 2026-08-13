@@ -26,6 +26,8 @@ export type SessionUser = {
   name: string | null;
   role: AppRole;
   isVerified: boolean;
+  /** Present only for an active, database-backed admin allow-list entry. */
+  adminAccessLevel: "owner" | "admin" | null;
 };
 
 async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null> {
@@ -38,10 +40,21 @@ async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null
       fullName: true,
       role: true,
       isVerified: true,
+      adminAccess: {
+        select: { email: true, level: true, status: true },
+      },
     },
   });
 
   if (!currentUser || !isAppRole(currentUser.role)) return null;
+
+  const adminAccess =
+    currentUser.role === "admin" &&
+    currentUser.isVerified &&
+    currentUser.adminAccess?.status === "active" &&
+    currentUser.adminAccess.email === currentUser.email.toLowerCase()
+      ? currentUser.adminAccess.level
+      : null;
 
   return {
     id: currentUser.id,
@@ -50,6 +63,7 @@ async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null
     name: currentUser.fullName,
     role: currentUser.role,
     isVerified: currentUser.isVerified,
+    adminAccessLevel: adminAccess,
   };
 }
 
@@ -98,6 +112,12 @@ export async function requireRole(
   callbackPath?: string,
 ): Promise<SessionUser> {
   const user = await requireUser(callbackPath);
+
+  // `admin` in the legacy role column is not sufficient. Portal access also
+  // requires an active email grant, so a stale/manual role edit fails closed.
+  if (allowed.includes("admin") && user.role === "admin" && !user.adminAccessLevel) {
+    redirect("/admin/access-denied");
+  }
 
   if (!allowed.includes(user.role)) {
     redirect(DASHBOARD_BY_ROLE[user.role]);
@@ -170,6 +190,16 @@ export async function authorizeRequest(
       ok: false,
       response: NextResponse.json(
         { error: "You do not have access to this resource." },
+        { status: 403 },
+      ),
+    };
+  }
+
+  if (allowed?.includes("admin") && user.role === "admin" && !user.adminAccessLevel) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "This account does not have active Bundleen admin access." },
         { status: 403 },
       ),
     };
