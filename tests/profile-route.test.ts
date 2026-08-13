@@ -15,7 +15,13 @@ const state = vi.hoisted(() => ({
     primaryPhoneNumber: { phoneNumber: "+1 215 555 0192" },
   } as Record<string, unknown> | null,
   guardFailure: null as unknown,
-  upsertBehaviour: "success" as "success" | "duplicate" | "error" | "unconfigured",
+  upsertBehaviour: "success" as
+    | "success"
+    | "duplicate"
+    | "error"
+    | "unconfigured"
+    | "transientOnce",
+  upsertAttempts: 0,
   lastUpsertArgs: null as {
     where: Record<string, unknown>;
     create: Record<string, unknown>;
@@ -55,11 +61,15 @@ const client = {
       create: Record<string, unknown>;
       update: Record<string, unknown>;
     }) => {
+      state.upsertAttempts += 1;
       state.lastUpsertArgs = args;
       if (state.upsertBehaviour === "duplicate") throw new FakePrismaError("P2002");
       if (state.upsertBehaviour === "error") throw new Error("database password=secret");
       if (state.upsertBehaviour === "unconfigured") {
         throw new Error("Neither DATABASE_URL nor DIRECT_URL is set.");
+      }
+      if (state.upsertBehaviour === "transientOnce" && state.upsertAttempts === 1) {
+        throw new FakePrismaError("P1001");
       }
       return { id: "user_db_1", role: state.existingRole ?? args.create.role ?? "homeowner" };
     },
@@ -128,6 +138,7 @@ beforeEach(() => {
   state.existingRole = null;
   state.roleProfileUpserts = [];
   state.upsertBehaviour = "success";
+  state.upsertAttempts = 0;
   state.lastUpsertArgs = null;
   state.existingProviderClaims = null;
   vi.stubEnv("NODE_ENV", "test");
@@ -341,6 +352,13 @@ describe("operational failures", () => {
     const response = await POST(profileRequest({ role: "homeowner" }));
     expect(response.status).toBe(500);
     expect(JSON.stringify(await response.json())).not.toMatch(/password|database|secret/i);
+  });
+
+  it("retries one transient database failure", async () => {
+    state.upsertBehaviour = "transientOnce";
+    const response = await POST(profileRequest({ role: "homeowner" }));
+    expect(response.status).toBe(200);
+    expect(state.upsertAttempts).toBe(2);
   });
 
   it("reports an unconfigured deployment without exposing environment names", async () => {

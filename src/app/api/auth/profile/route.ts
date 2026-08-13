@@ -10,14 +10,21 @@ import { onboardingProfileSchema } from "@/lib/validation/profile";
 export const runtime = "nodejs";
 
 const UNIQUE_VIOLATION = "P2002";
+const TRANSIENT_DATABASE_CODES = new Set(["P1001", "P1002", "P2024", "P2028"]);
+type PersistenceStage = "user" | "homeowner" | "provider";
+
+function prismaCode(error: unknown, depth = 0): string | undefined {
+  if (depth > 3 || typeof error !== "object" || error === null) return undefined;
+  if ("code" in error && typeof (error as { code?: unknown }).code === "string") {
+    return (error as { code: string }).code;
+  }
+  return "cause" in error
+    ? prismaCode((error as { cause?: unknown }).cause, depth + 1)
+    : undefined;
+}
 
 function hasPrismaCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === code
-  );
+  return prismaCode(error) === code;
 }
 
 function isDatabaseConfigurationError(error: unknown): boolean {
@@ -119,69 +126,92 @@ export async function POST(request: Request): Promise<NextResponse> {
       : { latitude: null, longitude: null }),
   };
 
+  let persistenceStage: PersistenceStage = "user";
+
   try {
-    const user = await db.$transaction(async (tx) => {
-      const saved = await tx.user.upsert({
-        where: { clerkUserId: userId },
-        create: {
-          clerkUserId: userId,
-          email,
-          fullName,
-          phone,
-          role: parsed.data.role,
-          isVerified,
-          ...location,
-        },
-        update: {
-          email,
-          fullName,
-          phone,
-          isVerified,
-          ...location,
-        },
-        // Role comes from the row, not the request: a returning user keeps the
-        // role they already have rather than switching by resubmitting.
-        select: { id: true, role: true },
-      });
+    let user: { id: string; role: "homeowner" | "provider" | "admin" } | undefined;
+    let lastError: unknown;
 
-      // The role profile is created alongside the user so nothing downstream
-      // has to cope with a homeowner who has no homeowner record.
-      if (saved.role === "homeowner") {
-        await tx.homeownerProfile.upsert({
-          where: { userId: saved.id },
-          create: { userId: saved.id },
-          update: {},
-          select: { id: true },
-        });
-      } else if (saved.role === "provider") {
-        // Only what the applicant claims. No verification flag is written here
-        // — `licenseVerifiedAt` and `insuranceVerifiedAt` stay admin-only.
-        //
-        // Keys the form omitted are dropped rather than sent as `null`, so
-        // re-running onboarding cannot blank details saved on the profile
-        // screen since.
-        const claims = parsed.data.providerBusiness ?? {};
-        const currentClaims = await tx.providerProfile.findUnique({
-          where: { userId: saved.id },
-          select: {
-            licenseNumber: true,
-            licenseState: true,
-            insuranceProvider: true,
-            insurancePolicyNumber: true,
-          },
-        });
-        const providerUpdate = providerProfileUpdateData(currentClaims, claims);
+    // Neon can briefly be unavailable while a suspended compute wakes, and a
+    // serverless pool can transiently exhaust its checkout window. The entire
+    // operation is idempotent, so one bounded retry is safe.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      persistenceStage = "user";
+      try {
+        user = await db.$transaction(async (tx) => {
+          const saved = await tx.user.upsert({
+            where: { clerkUserId: userId },
+            create: {
+              clerkUserId: userId,
+              email,
+              fullName,
+              phone,
+              role: parsed.data.role,
+              isVerified,
+              ...location,
+            },
+            update: {
+              email,
+              fullName,
+              phone,
+              isVerified,
+              ...location,
+            },
+            // Role comes from the row, not the request: a returning user keeps the
+            // role they already have rather than switching by resubmitting.
+            select: { id: true, role: true },
+          });
 
-        await tx.providerProfile.upsert({
-          where: { userId: saved.id },
-          create: { userId: saved.id, ...providerUpdate },
-          update: providerUpdate,
-          select: { id: true },
+          // The role profile is created alongside the user so nothing downstream
+          // has to cope with a homeowner who has no homeowner record.
+          if (saved.role === "homeowner") {
+            persistenceStage = "homeowner";
+            await tx.homeownerProfile.upsert({
+              where: { userId: saved.id },
+              create: { userId: saved.id },
+              update: {},
+              select: { id: true },
+            });
+          } else if (saved.role === "provider") {
+            persistenceStage = "provider";
+            // Only what the applicant claims. No verification flag is written here
+            // — `licenseVerifiedAt` and `insuranceVerifiedAt` stay admin-only.
+            //
+            // Keys the form omitted are dropped rather than sent as `null`, so
+            // re-running onboarding cannot blank details saved on the profile
+            // screen since.
+            const claims = parsed.data.providerBusiness ?? {};
+            const currentClaims = await tx.providerProfile.findUnique({
+              where: { userId: saved.id },
+              select: {
+                licenseNumber: true,
+                licenseState: true,
+                insuranceProvider: true,
+                insurancePolicyNumber: true,
+              },
+            });
+            const providerUpdate = providerProfileUpdateData(currentClaims, claims);
+
+            await tx.providerProfile.upsert({
+              where: { userId: saved.id },
+              create: { userId: saved.id, ...providerUpdate },
+              update: providerUpdate,
+              select: { id: true },
+            });
+          }
+
+          return saved;
         });
+        break;
+      } catch (error) {
+        lastError = error;
+        const code = prismaCode(error);
+        if (attempt === 0 && code && TRANSIENT_DATABASE_CODES.has(code)) continue;
+        throw error;
       }
+    }
 
-      return saved;
-    });
+    if (!user) throw lastError ?? new Error("Profile persistence did not return a user.");
 
     return NextResponse.json({
       profileReady: true,
@@ -204,18 +234,22 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
+    const code = prismaCode(error);
+    const reference = `PROFILE-${persistenceStage.toUpperCase()}-${code ?? "UNKNOWN"}`;
+
     console.error("[auth] Clerk profile synchronization failed", {
       name: error instanceof Error ? error.name : "UnknownError",
       // Prisma error codes identify the failed operation category without
       // logging query parameters such as email addresses or home addresses.
-      code:
-        typeof error === "object" && error !== null && "code" in error
-          ? String((error as { code?: unknown }).code)
-          : undefined,
+      code,
+      stage: persistenceStage,
+      reference,
     });
     return NextResponse.json(
-      { error: "We could not finish your Bundleen profile. Please try again." },
-      { status: 500 },
+      {
+        error: `We could not finish your Bundleen profile. Please try again. Reference: ${reference}.`,
+      },
+      { status: code && TRANSIENT_DATABASE_CODES.has(code) ? 503 : 500 },
     );
   }
 }
