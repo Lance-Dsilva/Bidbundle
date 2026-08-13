@@ -49,30 +49,23 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   if (!parsed.success) return validationErrorResponse(fieldErrors(parsed.error));
 
   try {
-    const profile = await db.$transaction(async (tx) => {
-      // Re-read the role inside the transaction. `authorizeRequest` ran against
-      // an earlier snapshot, and a profile row must never outlive the role that
-      // justifies it.
-      const owner = await tx.user.findUnique({
-        where: { id: authorized.user.id },
-        select: { role: true },
-      });
-      if (owner?.role !== "homeowner") return null;
-
-      return tx.homeownerProfile.upsert({
-        where: { userId: authorized.user.id },
-        create: { userId: authorized.user.id, ...parsed.data },
-        update: parsed.data,
-        select: homeownerProfileSelect,
-      });
+    const owner = await db.user.findUnique({
+      where: { id: authorized.user.id },
+      select: { role: true },
     });
-
-    if (!profile) {
+    if (owner?.role !== "homeowner") {
       return NextResponse.json(
         { error: "You do not have access to this resource." },
         { status: 403 },
       );
     }
+
+    const profile = await db.homeownerProfile.upsert({
+      where: { userId: authorized.user.id },
+      create: { userId: authorized.user.id, ...parsed.data },
+      update: parsed.data,
+      select: homeownerProfileSelect,
+    });
 
     return NextResponse.json(serializeHomeownerProfile(profile));
   } catch (error) {

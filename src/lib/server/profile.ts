@@ -125,29 +125,44 @@ type ProviderClaims = Pick<
   "licenseNumber" | "licenseState" | "insuranceProvider" | "insurancePolicyNumber"
 >;
 
+export function providerClaimChanges(
+  current: Partial<ProviderClaims> | null,
+  patch: ProviderProfileUpdate,
+): { licenseChanged: boolean; insuranceChanged: boolean } {
+  return {
+    licenseChanged:
+      current !== null &&
+      (["licenseNumber", "licenseState"] as const).some(
+        (field) => field in patch && patch[field] !== (current[field] ?? null),
+      ),
+    insuranceChanged:
+      current !== null &&
+      (["insuranceProvider", "insurancePolicyNumber"] as const).some(
+        (field) => field in patch && patch[field] !== (current[field] ?? null),
+      ),
+  };
+}
+
 /** Clears staff verification whenever the underlying provider claim changes. */
 export function providerProfileUpdateData(
   current: Partial<ProviderClaims> | null,
   patch: ProviderProfileUpdate,
 ): ProviderProfileUpdate & {
   licenseVerifiedAt?: null;
+  licenseVerifiedByUserId?: null;
   insuranceVerifiedAt?: null;
+  insuranceVerifiedByUserId?: null;
 } {
-  const licenseChanged =
-    current !== null &&
-    (["licenseNumber", "licenseState"] as const).some(
-      (field) => field in patch && patch[field] !== (current[field] ?? null),
-    );
-  const insuranceChanged =
-    current !== null &&
-    (["insuranceProvider", "insurancePolicyNumber"] as const).some(
-      (field) => field in patch && patch[field] !== (current[field] ?? null),
-    );
+  const { licenseChanged, insuranceChanged } = providerClaimChanges(current, patch);
 
   return {
     ...patch,
-    ...(licenseChanged ? { licenseVerifiedAt: null } : {}),
-    ...(insuranceChanged ? { insuranceVerifiedAt: null } : {}),
+    ...(licenseChanged
+      ? { licenseVerifiedAt: null, licenseVerifiedByUserId: null }
+      : {}),
+    ...(insuranceChanged
+      ? { insuranceVerifiedAt: null, insuranceVerifiedByUserId: null }
+      : {}),
   };
 }
 

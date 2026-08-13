@@ -1,89 +1,116 @@
-"use client";
+import Link from "next/link";
 
-import { useRouter } from "next/navigation";
+import {
+  AdminEmptyState,
+  formatDateTime,
+  PersonLine,
+  SectionCard,
+  StatusPill,
+} from "@/components/admin/AdminPrimitives";
+import { AppPageHeader } from "@/components/layout/AppPageHeader";
+import { AdminSignOutButton } from "@/components/admin/AdminSignOutButton";
+import { serializeAuditEntry } from "@/lib/server/audit";
+import { requireRole } from "@/lib/server/auth";
+import { auditSelect, toPersonSummary } from "@/lib/server/communities";
+import { db } from "@/lib/server/db";
 
-import { mockAdminStats } from "@/data/mock/mockAdminDashboard";
+export const dynamic = "force-dynamic";
 
-const settingsItems = [
-  { label: "Community settings", subtitle: "Eligibility rules" },
-  { label: "Notifications", subtitle: "Push & Email on" },
-  { label: "Address & area", subtitle: "Oakwood Heights" },
-  { label: "Help & support", subtitle: "FAQ, Contact" },
-  { label: "About Bundleen", subtitle: "v1.1.0" },
-];
+/**
+ * The signed-in staff member's own record.
+ *
+ * There are no settings here to change. An admin account is provisioned
+ * privately — `PUBLIC_ROLES` has no `admin` member, so sign-up cannot produce
+ * one — and nothing about that provisioning should be editable from inside the
+ * portal it grants access to.
+ */
+export default async function AdminProfilePage() {
+  const user = await requireRole(["admin"], "/app/admin/profile");
 
-const profileStats = [
-  { label: "Members", value: mockAdminStats.totalMembers.toString() },
-  { label: "Active bids", value: mockAdminStats.activeBids.toString() },
-  { label: "Saved", value: `$${mockAdminStats.monthlySavings}` },
-];
+  const [record, myRecentActions] = await Promise.all([
+    db.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, fullName: true, email: true, role: true, avatarUrl: true, createdAt: true },
+    }),
+    db.adminAuditLog.findMany({
+      where: { actorUserId: user.id },
+      select: auditSelect,
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+  ]);
 
-export default function AdminProfilePage() {
-  const router = useRouter();
+  if (!record) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-10">
+        <AdminEmptyState
+          title="Profile unavailable"
+          body="This account no longer has a Bundleen record. Sign out and back in."
+        />
+      </div>
+    );
+  }
+
+  const person = toPersonSummary(record);
+  const entries = myRecentActions.map((row) => serializeAuditEntry(row, toPersonSummary));
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 px-5 py-6 pb-24">
-      <h1 className="text-xl font-bold text-foreground">Profile</h1>
+    <div className="flex flex-col">
+      <AppPageHeader title="Your staff account" subtitle="Bundleen internal portal" />
 
-      <section className="rounded-card bg-surface p-5 text-white shadow-card">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-base font-bold text-white shadow-sm">
-            {mockAdminStats.adminInitials}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-base font-semibold text-white">{mockAdminStats.adminName}</p>
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                Admin
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs text-white/60">{mockAdminStats.communityName}</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-3 divide-x divide-divider rounded-card bg-card p-4 text-center shadow-card">
-        {profileStats.map((stat) => (
-          <div key={stat.label}>
-            <p className="text-lg font-bold text-foreground">{stat.value}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted">{stat.label}</p>
-          </div>
-        ))}
-      </section>
-
-      <div>
-        <div className="divide-y divide-divider overflow-hidden rounded-card bg-card shadow-card">
-          {settingsItems.map((item) => (
-            <button
-              key={item.label}
-              className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-canvas active:bg-canvas/50"
-              type="button"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">{item.label}</p>
-                <p className="mt-0.5 text-xs text-muted">{item.subtitle}</p>
-              </div>
-              <svg
-                aria-hidden="true"
-                className="h-4 w-4 shrink-0 text-muted/60"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
-              </svg>
-            </button>
-          ))}
-        </div>
-
-        <button
-          className="mt-1 w-full rounded-xl py-4 text-center text-sm font-medium text-red-500 transition hover:bg-red-50 active:bg-red-100"
-          type="button"
-          onClick={() => router.push("/")}
+      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-7 pb-24">
+        <SectionCard
+          title="Account"
+          action={<StatusPill label="Bundleen admin" tone="info" withDot={false} />}
         >
-          Sign out
-        </button>
+          <PersonLine
+            person={person}
+            size={48}
+            meta={
+              <>
+                {record.email} · staff since {formatDateTime(record.createdAt.toISOString())}
+              </>
+            }
+          />
+          <p className="mt-4 text-[12px]" style={{ color: "var(--muted)" }}>
+            Admin access is granted directly in the database and cannot be obtained through public
+            sign-up. Community responsibilities are separate scoped records and are never held on a
+            staff account.
+          </p>
+        </SectionCard>
+
+        <SectionCard
+          title="Your recent actions"
+          subtitle="Everything you changed, as recorded in the append-only audit log"
+          action={
+            <Link href="/app/admin/audit" className="text-[12px] font-semibold" style={{ color: "var(--teal-800)" }}>
+              Full log →
+            </Link>
+          }
+        >
+          {entries.length === 0 ? (
+            <AdminEmptyState
+              title="No actions recorded"
+              body="Changes you make in this portal will be listed here."
+            />
+          ) : (
+            <ul className="space-y-2">
+              {entries.map((entry) => (
+                <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[13px]" style={{ color: "var(--ink-900)" }}>
+                    You {entry.summary}
+                    {entry.communityName ? ` · ${entry.communityName}` : ""}
+                  </span>
+                  <time className="text-[11px]" style={{ color: "var(--muted)" }}>
+                    {formatDateTime(entry.createdAt)}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <AdminSignOutButton />
       </div>
     </div>
   );

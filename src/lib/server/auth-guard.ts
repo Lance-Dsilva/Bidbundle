@@ -97,6 +97,34 @@ export async function guardAvatarUpload(userId: string): Promise<GuardFailure | 
   }
 }
 
+/**
+ * Applies a per-admin limiter to internal-portal writes.
+ *
+ * Keyed on the Bundleen account rather than the IP: staff share offices and
+ * VPN exits, and one admin's backlog must not lock out a colleague.
+ */
+export async function guardAdminMutation(userId: string): Promise<GuardFailure | null> {
+  if (!isRedisConfigured()) {
+    if (requiresRateLimiter()) return { kind: "unavailable" };
+    warnLimiterMissingOnce();
+    return null;
+  }
+
+  try {
+    const decision = await consumeRateLimit(
+      "adminMutation",
+      buildIdentifier(["admin-mutation", userId]),
+    );
+    if (!decision.success) {
+      return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+    }
+    return null;
+  } catch (error) {
+    if (error instanceof RateLimiterUnavailableError) return { kind: "unavailable" };
+    throw error;
+  }
+}
+
 /** Builds the JSON `429`/`503` response for an API route handler. */
 export function guardFailureResponse(failure: GuardFailure): NextResponse {
   if (failure.kind === "rate-limited") {

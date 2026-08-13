@@ -108,23 +108,20 @@ export async function POST(request: Request): Promise<NextResponse> {
       token,
     });
 
-    const previousPath = await db.$transaction(async (tx) => {
-      const before = await tx.user.findUnique({
-        where: { id: userId },
-        select: { avatarPath: true },
-      });
-
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          avatarUrl: uploaded.url,
-          avatarPath: path,
-          avatarUpdatedAt: new Date(),
-        },
-      });
-
-      return before?.avatarPath ?? null;
+    const before = await db.user.findUnique({
+      where: { id: userId },
+      select: { avatarPath: true },
     });
+
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        avatarUrl: uploaded.url,
+        avatarPath: path,
+        avatarUpdatedAt: new Date(),
+      },
+    });
+    const previousPath = before?.avatarPath ?? null;
 
     // Only after the row points at the new object — the reverse order can lose
     // both photos if the update fails.

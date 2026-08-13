@@ -10,10 +10,76 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Global account role. `admin` is Bundleen staff and is deliberately absent
+/// from `PUBLIC_ROLES`, so it cannot be reached through public sign-up.
+/// Community responsibilities are NOT roles here — see `CommunityStaffRole`.
 enum UserRole {
   homeowner
   provider
   admin
+}
+
+/// `hoa` represents an existing homeowners association. `neighborhood` is the
+/// location-based grouping used for homeowners who belong to no HOA.
+enum CommunityType {
+  hoa
+  neighborhood
+}
+
+enum CommunityStatus {
+  active
+  archived
+}
+
+/// Homeowner residency in a community. Membership is not permission.
+enum MembershipStatus {
+  pending
+  active
+  removed
+}
+
+/// Scoped operational access, granted only by Bundleen staff.
+enum CommunityStaffRole {
+  neighborhood_manager
+  hoa_manager
+  hoa_team
+}
+
+enum StaffAssignmentStatus {
+  active
+  revoked
+}
+
+/// Whether a provider account may take part in the marketplace. Suspension
+/// blocks provider-only mutations; it never deletes bid or job history.
+enum ProviderAccountStatus {
+  pending
+  active
+  suspended
+}
+
+enum AdminAuditAction {
+  community_created
+  community_updated
+  community_archived
+  community_restored
+  member_added
+  member_status_changed
+  member_removed
+  staff_assigned
+  staff_revoked
+  provider_status_changed
+  provider_license_verified
+  provider_license_revoked
+  provider_insurance_verified
+  provider_insurance_revoked
+}
+
+enum AdminAuditTargetType {
+  community
+  membership
+  staff_assignment
+  provider
 }
 
 enum Weekday {
@@ -69,6 +135,164 @@ model User {
 
   homeownerProfile HomeownerProfile?
   providerProfile  ProviderProfile?
+
+  // ── Community ─────────────────────────────────────────────────────────
+  // Residency and operational access are scoped rows, never booleans on the
+  // account: "manager" is only ever true *of a particular community*.
+  communityMemberships CommunityMembership[]
+  staffAssignments     CommunityStaffAssignment[]  @relation("StaffMember")
+  staffAssignmentsMade CommunityStaffAssignment[]  @relation("StaffAssigner")
+  providerApprovals    ProviderCommunityApproval[]
+  auditLogEntries      AdminAuditLog[]             @relation("AuditActor")
+}
+
+/// A group of homeowners: either a real HOA or a radius around a point.
+///
+/// `centerLatitude`, `centerLongitude`, and `radiusMiles` are nullable at the
+/// column level because an HOA does not need them, and required for a
+/// `neighborhood` by a CHECK constraint in the migration — Prisma cannot
+/// express a conditional requirement.
+model Community {
+  id     String          @id @default(cuid())
+  name   String
+  type   CommunityType
+  status CommunityStatus @default(active)
+
+  centerLatitude  Float?
+  centerLongitude Float?
+
+  /// Admin-owned, never client-owned. Homeowners have no radius control
+  /// anywhere in the product; only Bundleen staff set this, and new
+  /// neighborhoods default to the standard community radius.
+  radiusMiles Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships       CommunityMembership[]
+  staffAssignments  CommunityStaffAssignment[]
+  providerApprovals ProviderCommunityApproval[]
+  auditLogEntries   AdminAuditLog[]
+
+  @@index([type, status])
+  @@index([status, name])
+}
+
+/// Homeowner residency in a community.
+///
+/// Holding this row says nothing about what the user may manage — that is
+/// {@link CommunityStaffAssignment}. Only accounts whose global role is
+/// `homeowner` are accepted, which the service layer enforces.
+model CommunityMembership {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status MembershipStatus @default(pending)
+
+  /// Set when the membership first became `active`, so a removal and re-add
+  /// does not silently rewrite the resident's history.
+  joinedAt DateTime?
+
+  /// The home this resident actually lives in, when they belong to more than
+  /// one community.
+  isPrimary Boolean @default(false)
+
+  /// True when a Bundleen admin placed this member by hand rather than the
+  /// server matching them by radius. Kept so an override is visible on the
+  /// record itself and not only in the audit log.
+  isAdminOverride Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([communityId, userId])
+  @@index([userId, status])
+  @@index([communityId, status])
+}
+
+/// Scoped operational access to one community.
+///
+/// Two rules cannot be written in Prisma and live as partial unique indexes in
+/// the migration instead: at most one *active* assignment per
+/// community/user/role, and at most one *active* `neighborhood_manager` per
+/// community.
+model CommunityStaffAssignment {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("StaffMember", fields: [userId], references: [id], onDelete: Cascade)
+
+  role   CommunityStaffRole
+  status StaffAssignmentStatus @default(active)
+
+  /// The Bundleen admin who granted this. Nobody can be their own assigner —
+  /// the service layer rejects self-assignment.
+  assignedByUserId String?
+  assignedBy       User?    @relation("StaffAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  assignedAt       DateTime @default(now())
+
+  revokedAt       DateTime?
+  /// Plain column rather than a relation: the audit log already holds the
+  /// foreign-keyed record of who acted, and a third `User` back-relation here
+  /// would exist only to be ignored.
+  revokedByUserId String?
+
+  @@index([userId, status])
+  @@index([communityId, status])
+}
+
+/// Communities a provider is approved to serve.
+///
+/// Modelled now so the relationship has one shape when the job/bid flow needs
+/// it. Nothing reads it yet, and no screen invents approvals to display.
+model ProviderCommunityApproval {
+  id             String    @id @default(cuid())
+  communityId    String
+  community      Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  providerUserId String
+  provider       User      @relation(fields: [providerUserId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  @@unique([communityId, providerUserId])
+  @@index([providerUserId])
+}
+
+/// Append-only record of every sensitive Bundleen staff action and narrowly
+/// defined automatic safety event.
+///
+/// A trigger in the migration rejects UPDATE and DELETE, so the actor relation
+/// is `Restrict` rather than `Cascade`: deleting an admin account must not be
+/// able to erase what that account did.
+model AdminAuditLog {
+  id          String               @id @default(cuid())
+  /// Null only for server-generated safety events such as automatically
+  /// invalidating verification after a provider changes the underlying claim.
+  actorUserId String?
+  actor       User?                @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  action      AdminAuditAction
+  targetType  AdminAuditTargetType
+  targetId    String
+
+  communityId    String?
+  community      Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  providerUserId String?
+
+  /// Safe before/after summary only. Never secrets, never street addresses,
+  /// never coordinates — see `redactAuditMetadata`.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([communityId, createdAt])
+  @@index([providerUserId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 /// Homeowner-only profile data. Exactly one row per homeowner `User`.
@@ -119,9 +343,24 @@ model ProviderProfile {
   insuranceProvider     String?
   insurancePolicyNumber String?
 
+  // ── Account status (server/admin controlled) ──────────────────────────
+  // New providers start `pending`. Suspension blocks provider-only mutations
+  // and new bidding; it never removes existing bids or jobs.
+  accountStatus                ProviderAccountStatus @default(pending)
+  accountStatusUpdatedAt       DateTime?
+  /// Bundleen admin who last changed the status. A plain column, not a
+  /// relation — `AdminAuditLog` holds the foreign-keyed history.
+  accountStatusUpdatedByUserId String?
+  /// Internal note on the last status change. Never shown to the provider.
+  accountStatusNote            String?
+
   // ── Verification (server/admin controlled) ────────────────────────────
-  licenseVerifiedAt   DateTime?
-  insuranceVerifiedAt DateTime?
+  // Timestamps are written only by an admin endpoint. Editing the matching
+  // claim above clears them again (`providerProfileUpdateData`).
+  licenseVerifiedAt         DateTime?
+  licenseVerifiedByUserId   String?
+  insuranceVerifiedAt       DateTime?
+  insuranceVerifiedByUserId String?
 
   // ── Payout display metadata (server controlled) ───────────────────────
   // No account or routing number is ever accepted or stored. `payoutLast4` is
@@ -137,4 +376,6 @@ model ProviderProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([accountStatus])
 }

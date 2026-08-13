@@ -19,6 +19,15 @@ export const RATE_LIMITS = {
   register: { attempts: 20, window: "15 m" },
   /** Per-user profile photo uploads. */
   avatarUpload: { attempts: 10, window: "1 h" },
+  /**
+   * Per-admin internal-portal writes: role assignment, membership changes,
+   * provider status and verification.
+   *
+   * Generous, because a staff member working through a backlog legitimately
+   * makes many changes in a sitting. It exists to bound the damage from a
+   * stolen admin session or a runaway script, not to pace ordinary work.
+   */
+  adminMutation: { attempts: 120, window: "5 m" },
 } as const;
 
 type LimiterName = keyof typeof RATE_LIMITS;

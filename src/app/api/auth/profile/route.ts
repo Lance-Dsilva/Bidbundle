@@ -2,6 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import { guardFailureResponse, guardRegistration } from "@/lib/server/auth-guard";
+import { syncNeighborhoodMembership } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
 import { providerProfileUpdateData } from "@/lib/server/profile";
 import { DASHBOARD_BY_ROLE, MAX_AUTH_BODY_BYTES, normalizeEmail } from "@/lib/validation/auth";
@@ -12,6 +13,8 @@ export const runtime = "nodejs";
 const UNIQUE_VIOLATION = "P2002";
 const TRANSIENT_DATABASE_CODES = new Set(["P1001", "P1002", "P2024", "P2028"]);
 type PersistenceStage = "user" | "homeowner" | "provider";
+
+class SuspendedProviderError extends Error {}
 
 function prismaCode(error: unknown, depth = 0): string | undefined {
   if (depth > 3 || typeof error !== "object" || error === null) return undefined;
@@ -32,6 +35,24 @@ function isDatabaseConfigurationError(error: unknown): boolean {
     error instanceof Error &&
     error.message === "Neither DATABASE_URL nor DIRECT_URL is set."
   );
+}
+
+/**
+ * Matches a homeowner to a neighborhood community, if one contains them.
+ *
+ * Deliberately best-effort. The profile is already saved by this point, and a
+ * community placement failing is not a reason to tell someone their signup did
+ * not work — an admin can place them by hand, and the next address change
+ * tries again.
+ */
+async function placeInNeighborhood(userId: string): Promise<void> {
+  try {
+    await syncNeighborhoodMembership(userId);
+  } catch (error) {
+    console.error("[auth] neighborhood placement failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
 }
 
 /**
@@ -145,6 +166,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             role: true,
             providerProfile: {
               select: {
+                accountStatus: true,
                 licenseNumber: true,
                 licenseState: true,
                 insuranceProvider: true,
@@ -157,6 +179,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         // A returning user retains the authorization role already stored in
         // Bundleen. New users receive the role chosen during this signup.
         const effectiveRole = existing?.role ?? parsed.data.role;
+        if (
+          effectiveRole === "provider" &&
+          existing?.providerProfile?.accountStatus === "suspended"
+        ) {
+          throw new SuspendedProviderError();
+        }
         persistenceStage =
           effectiveRole === "homeowner" || effectiveRole === "provider"
             ? effectiveRole
@@ -164,10 +192,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
         const providerUpdate =
           effectiveRole === "provider"
-            ? providerProfileUpdateData(
-                existing?.providerProfile ?? null,
-                parsed.data.providerBusiness ?? {},
-              )
+            ? existing
+              ? {}
+              : providerProfileUpdateData(null, parsed.data.providerBusiness ?? {})
             : null;
 
         user = await db.user.upsert({
@@ -218,12 +245,20 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     if (!user) throw lastError ?? new Error("Profile persistence did not return a user.");
 
+    if (user.role === "homeowner") await placeInNeighborhood(user.id);
+
     return NextResponse.json({
       profileReady: true,
       role: user.role,
       redirectTo: DASHBOARD_BY_ROLE[user.role],
     });
   } catch (error) {
+    if (error instanceof SuspendedProviderError) {
+      return NextResponse.json(
+        { error: "This provider account is suspended. Contact Bundleen support to restore it." },
+        { status: 403 },
+      );
+    }
     if (hasPrismaCode(error, UNIQUE_VIOLATION)) {
       return NextResponse.json(
         { error: "That email is already linked to another Bundleen profile." },

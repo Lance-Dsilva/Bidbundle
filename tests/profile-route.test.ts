@@ -31,6 +31,7 @@ const state = vi.hoisted(() => ({
   existingRole: null as "homeowner" | "provider" | null,
   roleProfileUpserts: [] as Array<{ model: string; args: Record<string, unknown> }>,
   existingProviderClaims: null as null | {
+    accountStatus?: "pending" | "active" | "suspended";
     licenseNumber: string | null;
     licenseState: string | null;
     insuranceProvider: string | null;
@@ -263,7 +264,7 @@ describe("Clerk profile synchronization", () => {
     expect(JSON.stringify(call?.args)).not.toMatch(/VerifiedAt|payout/i);
   });
 
-  it("invalidates prior verification when onboarding changes a provider claim", async () => {
+  it("does not reuse onboarding to mutate an existing provider claim", async () => {
     state.existingRole = "provider";
     state.existingProviderClaims = {
       licenseNumber: "OLD-LICENSE",
@@ -282,10 +283,22 @@ describe("Clerk profile synchronization", () => {
       }),
     );
     const call = state.roleProfileUpserts.find((entry) => entry.model === "providerProfile");
-    expect(call?.args.update).toMatchObject({
-      licenseNumber: "NEW-LICENSE",
-      licenseVerifiedAt: null,
-    });
+    expect(call?.args.update).toEqual({});
+  });
+
+  it("blocks profile completion for an existing suspended provider", async () => {
+    state.existingRole = "provider";
+    state.existingProviderClaims = {
+      accountStatus: "suspended",
+      licenseNumber: "LIC-1",
+      licenseState: null,
+      insuranceProvider: null,
+      insurancePolicyNumber: null,
+    };
+
+    const response = await POST(profileRequest({ role: "provider" }));
+    expect(response.status).toBe(403);
+    expect(state.lastUpsertArgs).toBeNull();
   });
 
   it("rejects a self-granted verification flag outright", async () => {

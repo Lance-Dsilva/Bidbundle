@@ -37,8 +37,9 @@ export const tabsByRole: Record<UserRole, TabDefinition[]> = {
   ],
   admin: [
     { href: "/app/admin/dashboard", icon: "home", label: "Home" },
-    { href: "/app/admin/community", icon: "neighbors", label: "Community" },
-    { href: "/app/admin/reports", icon: "clipboard", label: "Reports" },
+    { href: "/app/admin/communities", icon: "neighbors", label: "Communities" },
+    { href: "/app/admin/providers", icon: "tools", legacyIcon: true, label: "Providers" },
+    { href: "/app/admin/audit", icon: "clipboard", label: "Audit" },
     { href: "/app/admin/profile", icon: "profile", label: "Profile" },
   ],
 };

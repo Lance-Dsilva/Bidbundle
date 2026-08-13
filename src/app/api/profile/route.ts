@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { authorizeRequest } from "@/lib/server/auth";
+import { syncNeighborhoodMembership } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
 import {
   commonProfileSelect,
@@ -56,22 +57,32 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   if (!parsed.success) return validationErrorResponse(fieldErrors(parsed.error));
 
   try {
-    const user = await db.$transaction(async (tx) => {
-      const current = await tx.user.findUnique({
-        where: { id: authorized.user.id },
-        select: { address: true },
-      });
-      if (!current) return null;
+    const current = await db.user.findUnique({
+      where: { id: authorized.user.id },
+      select: { address: true },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Profile not found." }, { status: 404 });
+    }
 
-      return tx.user.update({
-        where: { id: authorized.user.id },
-        data: commonProfileUpdateData(current.address, parsed.data),
-        select: commonProfileSelect,
-      });
+    const user = await db.user.update({
+      where: { id: authorized.user.id },
+      data: commonProfileUpdateData(current.address, parsed.data),
+      select: commonProfileSelect,
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "Profile not found." }, { status: 404 });
+    // A new address may put a homeowner inside a neighborhood they were not in
+    // before. Best-effort and after the save: the profile change is what the
+    // user asked for, and a placement failure must not report it as failed.
+    // The matcher itself never moves or removes an existing membership.
+    if (authorized.user.role === "homeowner") {
+      try {
+        await syncNeighborhoodMembership(authorized.user.id);
+      } catch (error) {
+        console.error("[profile] neighborhood placement failed", {
+          name: error instanceof Error ? error.name : "UnknownError",
+        });
+      }
     }
 
     return NextResponse.json(serializeCommonProfile(user));

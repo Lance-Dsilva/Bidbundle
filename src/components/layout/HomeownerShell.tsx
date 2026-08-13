@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { roleLine, ViewerIdentity } from "@/components/layout/ViewerIdentity";
 import { Icon } from "@/components/ui/Icon";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
+import { useViewerContext } from "@/hooks/useViewerContext";
 import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -30,6 +32,10 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
   const { requests: neighbourhoodRequests } = useNeighbourhoodRequests();
   const { otherMembers, neighbourhoodName } = useNeighbourhoodSummary();
   const { notifications, markRead, dismiss } = useNotifications();
+  // Live scoped-role context. The "Community" link below appears from this,
+  // but the page behind it re-derives the same assignments server-side — a
+  // hidden link is a courtesy, not a permission.
+  const { context } = useViewerContext();
 
   // The overview currently owns this exact shell; the other homeowner routes
   // use the shared version below while the overview content is migrated.
@@ -81,6 +87,16 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
               ) : null}
             </Link>
           ))}
+          {context?.canManageCommunity ? (
+            <Link
+              className={`dash-nav-item${pathname === "/app/homeowner/community" ? " is-active" : ""}`}
+              href="/app/homeowner/community"
+            >
+              <Icon name="users" size={20} />
+              <span>My Community</span>
+              <b className="dash-nav-badge amber">{context.assignments.length}</b>
+            </Link>
+          ) : null}
           <span className="dash-nav-item is-disabled">
             <Icon name="shield" size={20} /><span>Saved Providers</span><b className="dash-nav-soon">Soon</b>
           </span>
@@ -105,7 +121,9 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
           <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
             {initials}
           </Link>
-          <div><strong>{displayName}</strong><span>Homeowner</span></div>
+          {/* Role label comes from the server, never from the route or local
+              storage — an assignment made by staff shows up here on refresh. */}
+          <div><strong>{context?.fullName || displayName}</strong><span>{context ? roleLine(context) : "Homeowner"}</span></div>
           <Link href="/app/homeowner/profile" className="dash-icon-btn" aria-label="Open profile">
             <Icon name="chevron-right" size={16} />
           </Link>
@@ -133,6 +151,9 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
             <Icon name="bell" size={18} />
             {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
           </button>
+          <div className="dash-topbar-identity">
+            <ViewerIdentity context={context} fallbackName={displayName} compact />
+          </div>
           <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
             {initials}
           </Link>

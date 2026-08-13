@@ -10,6 +10,7 @@ import { CategoryBanner, CategoryTile } from "@/components/ui/CategoryArt";
 import { useProviderJobFeed, type JobFeedItem } from "@/hooks/useProviderJobFeed";
 import { useProviderBids } from "@/hooks/useProviderBids";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { useViewerContext } from "@/hooks/useViewerContext";
 import { getToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -207,6 +208,7 @@ export default function ProviderJobFeedPage() {
   const { draftBid, loading: draftLoading, error: draftError } = useBidDrafter();
   const { getForecast, loading: forecastLoading } = useDemandForecast();
   const { profile } = useProviderProfile();
+  const { context } = useViewerContext();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [activeTrade, setActiveTrade] = useState("All trades");
@@ -389,6 +391,14 @@ export default function ProviderJobFeedPage() {
 
   async function handleSubmitBid() {
     if (!activeDraft) return;
+    if (context?.providerStatus !== "active") {
+      setSubmitError(
+        context?.providerStatus === "suspended"
+          ? "Your provider account is suspended. Contact Bundleen support before submitting bids."
+          : "Your provider account must be approved by Bundleen before you can submit bids.",
+      );
+      return;
+    }
     const token = getToken();
     if (!token) {
       setSubmitError("You need to sign in again before submitting a bid.");
@@ -965,6 +975,14 @@ export default function ProviderJobFeedPage() {
               {activeDraft.draft.stub ? " · AI unavailable — showing estimate" : ""}
             </div>
 
+            {context && context.providerStatus !== "active" ? (
+              <div style={{ fontSize: 12, color: "var(--terracotta-600)", marginBottom: 16 }}>
+                {context.providerStatus === "suspended"
+                  ? "Your account is suspended, so new bids are disabled. Contact Bundleen support."
+                  : "New bids are disabled until Bundleen approves your provider account."}
+              </div>
+            ) : null}
+
             {draftError ? (
               <div style={{ fontSize: 12, color: "var(--terracotta-600)", marginBottom: 16 }}>
                 {draftError}
@@ -991,7 +1009,7 @@ export default function ProviderJobFeedPage() {
                 </button>
                 <button
                   style={{ ...btnPrimary, flex: 2, justifyContent: "center" }}
-                  disabled={submitLoading}
+                  disabled={submitLoading || context?.providerStatus !== "active"}
                   onClick={() => void handleSubmitBid()}
                 >
                   <span>{submitLoading ? "Submitting…" : "Submit bid"}</span> {!submitLoading ? <IconArrowR /> : null}

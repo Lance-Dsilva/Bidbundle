@@ -57,6 +57,7 @@ const PROVIDER_ROW = {
   // Claimed but never checked by staff — the API must not call this verified.
   licenseVerifiedAt: null,
   insuranceVerifiedAt: null,
+  accountStatus: "active",
   payoutStatus: "not_connected",
   payoutLast4: null,
   payoutProvider: null,
@@ -105,14 +106,28 @@ const client = {
         licenseState: PROVIDER_ROW.licenseState,
         insuranceProvider: PROVIDER_ROW.insuranceProvider,
         insurancePolicyNumber: PROVIDER_ROW.insurancePolicyNumber,
+        licenseVerifiedAt: PROVIDER_ROW.licenseVerifiedAt,
+        insuranceVerifiedAt: PROVIDER_ROW.insuranceVerifiedAt,
+        accountStatus: PROVIDER_ROW.accountStatus,
       };
     },
     upsert: async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
       record("providerProfile", "upsert", args);
       return { ...PROVIDER_ROW, ...args.update };
     },
+    update: async (args: { data: Record<string, unknown> }) => {
+      record("providerProfile", "update", args);
+      return { ...PROVIDER_ROW, ...args.data };
+    },
   },
-  $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(client),
+  adminAuditLog: {
+    create: async (args: unknown) => {
+      record("adminAuditLog", "create", args);
+      return args;
+    },
+  },
+  $transaction: async (run: Array<Promise<unknown>> | ((tx: unknown) => Promise<unknown>)) =>
+    Array.isArray(run) ? Promise.all(run) : run(client),
 };
 
 vi.mock("@/lib/server/db", () => ({ db: client }));
@@ -359,11 +374,12 @@ describe("PATCH /api/profile/provider", () => {
     );
     expect(response.status).toBe(200);
     const update = state.calls.find(
-      (call) => call.model === "providerProfile" && call.operation === "upsert",
+      (call) => call.model === "providerProfile" && call.operation === "update",
     );
-    expect((update?.args as { update: unknown }).update).toMatchObject({
+    expect((update?.args as { data: unknown }).data).toMatchObject({
       licenseNumber: "LIC-2",
       licenseVerifiedAt: null,
+      licenseVerifiedByUserId: null,
     });
   });
 
@@ -410,7 +426,7 @@ describe("PATCH /api/profile/provider", () => {
   it("reports a database failure without quoting it", async () => {
     signedInAs("provider");
     state.failOn = {
-      target: "providerProfile.upsert",
+      target: "providerProfile.update",
       error: new Error('update "ProviderProfile" set licenseNumber = LIC-SECRET'),
     };
     const response = await providerRoute.PATCH(

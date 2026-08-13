@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { roleLine, ViewerIdentity } from "@/components/layout/ViewerIdentity";
 import { Icon } from "@/components/ui/Icon";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useViewerContext } from "@/hooks/useViewerContext";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderJobFeed } from "@/hooks/useProviderJobFeed";
 import { initialsFromName } from "@/lib/display-name";
@@ -31,6 +33,9 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
   const { dashboard, profile } = useProviderDashboard();
   const { jobs } = useProviderJobFeed();
   const { notifications, markRead, dismiss } = useNotifications();
+  // Account status is server-owned: a suspended provider is told so here, and
+  // the provider write endpoints enforce it independently.
+  const { context } = useViewerContext();
   const providerName = profile?.company_name || userName || "Service Provider";
   const providerInitials = initialsFromName(providerName, "SP");
   const accountName = userName || providerName;
@@ -81,7 +86,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
 
         <div className="dash-sidebar-profile">
           <div className="dash-avatar">{providerInitials}</div>
-          <div><strong>{providerName}</strong><span>Service provider</span></div>
+          <div><strong>{providerName}</strong><span>{context ? roleLine(context) : "Service provider"}</span></div>
           <Link href="/app/provider/profile" className="dash-icon-btn" aria-label="Open provider profile">
             <Icon name="chevron-right" size={16} />
           </Link>
@@ -109,6 +114,9 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
             <Icon name="bell" size={18} />
             {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
           </button>
+          <div className="dash-topbar-identity">
+            <ViewerIdentity context={context} fallbackName={accountName} compact />
+          </div>
           <Link className="dash-avatar" href="/app/provider/profile" aria-label={`Open ${accountName}'s profile`}>
             {accountInitials}
           </Link>

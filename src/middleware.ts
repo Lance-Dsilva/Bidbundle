@@ -6,6 +6,8 @@ const isProtectedRoute = createRouteMatcher([
   "/get-started/profile(.*)",
   "/api/auth/me(.*)",
   "/api/auth/profile(.*)",
+  "/api/admin(.*)",
+  "/api/me(.*)",
 ]);
 
 /**

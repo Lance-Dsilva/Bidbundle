@@ -5,12 +5,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { isTabActive, tabsByRole, useAppRole } from "@/components/layout/AppBottomNav";
+import { roleLine } from "@/components/layout/ViewerIdentity";
 import { CreativeIcon } from "@/components/ui/CreativeIcon";
+import { useViewerContext } from "@/hooks/useViewerContext";
 
 export function AppTopbar() {
   const pathname = usePathname();
   const role = useAppRole();
   const tabs = tabsByRole[role];
+  // Navigation uses the route; the identity label uses the server. Only the
+  // second of those is an authorization-adjacent fact, and only it is trusted.
+  const { context } = useViewerContext();
 
   if (pathname === "/app/homeowner/dashboard") return null;
 
@@ -34,6 +39,16 @@ export function AppTopbar() {
           <button className="bb-icon-btn" aria-label="Notifications" type="button">
             <CreativeIcon name="bell" size={20} />
           </button>
+          {context && (
+            <div className="hidden text-right leading-tight sm:block">
+              <strong className="block text-[13px]" style={{ color: "var(--ink-900)" }}>
+                {context.fullName}
+              </strong>
+              <span className="block text-[11px]" style={{ color: "var(--muted)" }}>
+                {roleLine(context)}
+              </span>
+            </div>
+          )}
           <UserButton
             appearance={{
               elements: { avatarBox: "h-9 w-9" },

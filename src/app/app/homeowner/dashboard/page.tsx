@@ -6,12 +6,14 @@ import Link from "next/link";
 import { CategoryTile } from "@/components/ui/CategoryArt";
 import { Icon } from "@/components/ui/Icon";
 import { PageSkeleton } from "@/components/ui/Skeleton";
+import { ViewerIdentity, roleLine } from "@/components/layout/ViewerIdentity";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
 import { useHomeownerRequests } from "@/hooks/useHomeownerRequests";
 import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useViewerContext } from "@/hooks/useViewerContext";
 import { initialsFromName } from "@/lib/display-name";
 
 const POPULAR_SERVICES: { label: string; icon: "cleaning" | "plumbing" | "electrical" | "painting"; blurb: string }[] = [
@@ -27,6 +29,7 @@ export default function HomeownerDashboard() {
   const { requests: nbRequests, loading: nbRequestsLoading } = useNeighbourhoodRequests();
   const { notifications, markRead, dismiss } = useNotifications();
   const { otherMembers, neighbourhoodName, neighborCount } = useNeighbourhoodSummary();
+  const { context } = useViewerContext();
   const totalSaved = Math.round((dashboard?.total_saved_cents ?? 0) / 100);
   const animatedSavings = useCountUp(totalSaved);
   const groupCount = requests.filter((r) => r.status === "grouping").length;
@@ -135,6 +138,12 @@ export default function HomeownerDashboard() {
             <Icon name="chat" size={20} /> <span>Messages</span>
             {(dashboard?.unread_messages ?? 0) > 0 && <b className="dash-nav-badge amber">{dashboard?.unread_messages}</b>}
           </Link>
+          {context?.canManageCommunity && (
+            <Link className="dash-nav-item" href="/app/homeowner/community">
+              <Icon name="users" size={20} /> <span>My Community</span>
+              <b className="dash-nav-badge amber">{context.assignments.length}</b>
+            </Link>
+          )}
           <span className="dash-nav-item is-disabled">
             <Icon name="shield" size={20} /> <span>Saved Providers</span>
             <b className="dash-nav-soon">Soon</b>
@@ -161,7 +170,7 @@ export default function HomeownerDashboard() {
           <div className="dash-avatar">{initials}</div>
           <div>
             <strong>{displayName}</strong>
-            <span>Homeowner</span>
+            <span>{context ? roleLine(context) : "Homeowner"}</span>
           </div>
           <Link href="/app/homeowner/profile" className="dash-icon-btn" aria-label="Open profile">
             <Icon name="chevron-right" size={16} />
@@ -190,6 +199,9 @@ export default function HomeownerDashboard() {
             <Icon name="bell" size={18} />
             {notifications.length > 0 && <span className="dash-notif-dot" />}
           </button>
+          <div className="dash-topbar-identity">
+            <ViewerIdentity context={context} fallbackName={displayName} compact />
+          </div>
           <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
             {initials}
           </Link>
