@@ -56,6 +56,14 @@ class FakePrismaError extends Error {
 
 const client = {
   user: {
+    findUnique: async () =>
+      state.existingRole
+        ? {
+            role: state.existingRole,
+            providerProfile:
+              state.existingRole === "provider" ? state.existingProviderClaims : null,
+          }
+        : null,
     upsert: async (args: {
       where: Record<string, unknown>;
       create: Record<string, unknown>;
@@ -71,7 +79,22 @@ const client = {
       if (state.upsertBehaviour === "transientOnce" && state.upsertAttempts === 1) {
         throw new FakePrismaError("P1001");
       }
-      return { id: "user_db_1", role: state.existingRole ?? args.create.role ?? "homeowner" };
+      const role = state.existingRole ?? args.create.role ?? "homeowner";
+      const roleData = state.existingRole ? args.update : args.create;
+      if (role === "homeowner" && roleData.homeownerProfile) {
+        const nested = roleData.homeownerProfile as Record<string, unknown>;
+        state.roleProfileUpserts.push({
+          model: "homeownerProfile",
+          args: (nested.upsert as Record<string, unknown> | undefined) ?? nested,
+        });
+      } else if (role === "provider" && roleData.providerProfile) {
+        const nested = roleData.providerProfile as Record<string, unknown>;
+        state.roleProfileUpserts.push({
+          model: "providerProfile",
+          args: (nested.upsert as Record<string, unknown> | undefined) ?? nested,
+        });
+      }
+      return { id: "user_db_1", role };
     },
   },
   homeownerProfile: {
@@ -241,6 +264,7 @@ describe("Clerk profile synchronization", () => {
   });
 
   it("invalidates prior verification when onboarding changes a provider claim", async () => {
+    state.existingRole = "provider";
     state.existingProviderClaims = {
       licenseNumber: "OLD-LICENSE",
       licenseState: null,

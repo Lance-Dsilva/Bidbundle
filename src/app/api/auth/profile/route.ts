@@ -132,75 +132,80 @@ export async function POST(request: Request): Promise<NextResponse> {
     let user: { id: string; role: "homeowner" | "provider" | "admin" } | undefined;
     let lastError: unknown;
 
-    // Neon can briefly be unavailable while a suspended compute wakes, and a
-    // serverless pool can transiently exhaust its checkout window. The entire
-    // operation is idempotent, so one bounded retry is safe.
+    // Use one nested write rather than an interactive transaction. Prisma can
+    // send this as a dependent atomic mutation without holding a serverless
+    // connection open between JavaScript callbacks — the operation that was
+    // failing with P2028 on the deployed Neon pool.
     for (let attempt = 0; attempt < 2; attempt += 1) {
       persistenceStage = "user";
       try {
-        user = await db.$transaction(async (tx) => {
-          const saved = await tx.user.upsert({
-            where: { clerkUserId: userId },
-            create: {
-              clerkUserId: userId,
-              email,
-              fullName,
-              phone,
-              role: parsed.data.role,
-              isVerified,
-              ...location,
-            },
-            update: {
-              email,
-              fullName,
-              phone,
-              isVerified,
-              ...location,
-            },
-            // Role comes from the row, not the request: a returning user keeps the
-            // role they already have rather than switching by resubmitting.
-            select: { id: true, role: true },
-          });
-
-          // The role profile is created alongside the user so nothing downstream
-          // has to cope with a homeowner who has no homeowner record.
-          if (saved.role === "homeowner") {
-            persistenceStage = "homeowner";
-            await tx.homeownerProfile.upsert({
-              where: { userId: saved.id },
-              create: { userId: saved.id },
-              update: {},
-              select: { id: true },
-            });
-          } else if (saved.role === "provider") {
-            persistenceStage = "provider";
-            // Only what the applicant claims. No verification flag is written here
-            // — `licenseVerifiedAt` and `insuranceVerifiedAt` stay admin-only.
-            //
-            // Keys the form omitted are dropped rather than sent as `null`, so
-            // re-running onboarding cannot blank details saved on the profile
-            // screen since.
-            const claims = parsed.data.providerBusiness ?? {};
-            const currentClaims = await tx.providerProfile.findUnique({
-              where: { userId: saved.id },
+        const existing = await db.user.findUnique({
+          where: { clerkUserId: userId },
+          select: {
+            role: true,
+            providerProfile: {
               select: {
                 licenseNumber: true,
                 licenseState: true,
                 insuranceProvider: true,
                 insurancePolicyNumber: true,
               },
-            });
-            const providerUpdate = providerProfileUpdateData(currentClaims, claims);
+            },
+          },
+        });
 
-            await tx.providerProfile.upsert({
-              where: { userId: saved.id },
-              create: { userId: saved.id, ...providerUpdate },
-              update: providerUpdate,
-              select: { id: true },
-            });
-          }
+        // A returning user retains the authorization role already stored in
+        // Bundleen. New users receive the role chosen during this signup.
+        const effectiveRole = existing?.role ?? parsed.data.role;
+        persistenceStage =
+          effectiveRole === "homeowner" || effectiveRole === "provider"
+            ? effectiveRole
+            : "user";
 
-          return saved;
+        const providerUpdate =
+          effectiveRole === "provider"
+            ? providerProfileUpdateData(
+                existing?.providerProfile ?? null,
+                parsed.data.providerBusiness ?? {},
+              )
+            : null;
+
+        user = await db.user.upsert({
+          where: { clerkUserId: userId },
+          create: {
+            clerkUserId: userId,
+            email,
+            fullName,
+            phone,
+            role: effectiveRole,
+            isVerified,
+            ...location,
+            ...(effectiveRole === "homeowner"
+              ? { homeownerProfile: { create: {} } }
+              : effectiveRole === "provider"
+                ? { providerProfile: { create: providerUpdate ?? {} } }
+                : {}),
+          },
+          update: {
+            email,
+            fullName,
+            phone,
+            isVerified,
+            ...location,
+            ...(effectiveRole === "homeowner"
+              ? { homeownerProfile: { upsert: { create: {}, update: {} } } }
+              : effectiveRole === "provider"
+                ? {
+                    providerProfile: {
+                      upsert: {
+                        create: providerUpdate ?? {},
+                        update: providerUpdate ?? {},
+                      },
+                    },
+                  }
+                : {}),
+          },
+          select: { id: true, role: true },
         });
         break;
       } catch (error) {
