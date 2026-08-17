@@ -12,7 +12,8 @@ export default function AppLayout({ children }: Readonly<{ children: ReactNode }
   if (
     pathname.startsWith("/app/homeowner") ||
     pathname.startsWith("/app/provider") ||
-    pathname.startsWith("/app/hoa")
+    pathname.startsWith("/app/hoa") ||
+    pathname.startsWith("/app/admin")
   ) {
     return children;
   }

@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Icon } from "@/components/ui/Icon";
 import type { CommunityListQuery } from "@/lib/validation/community";
 
 /**
@@ -42,30 +43,25 @@ export function CommunityFilters({ query }: { query: CommunityListQuery }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const selectStyle = {
-    background: "var(--paper)",
-    borderColor: "var(--line)",
-    color: "var(--ink-900)",
-  };
-
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <input
-        type="search"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search by community name"
-        aria-label="Search communities by name"
-        className="h-9 min-w-0 flex-1 rounded-xl border px-3 text-[13px] outline-none"
-        style={selectStyle}
-      />
+    <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-3">
+      <label className="flex h-9 min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-400 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+        <Icon name="search" size={15} />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search customer accounts"
+          aria-label="Search communities by name"
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-slate-800 outline-none placeholder:text-slate-400"
+        />
+      </label>
 
       <select
         value={query.type ?? ""}
         onChange={(event) => apply({ type: event.target.value || null })}
         aria-label="Filter by community type"
-        className="h-9 rounded-xl border px-2 text-[13px]"
-        style={selectStyle}
+        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-700 outline-none focus:border-emerald-500"
       >
         <option value="">All types</option>
         <option value="hoa">HOA</option>
@@ -76,8 +72,7 @@ export function CommunityFilters({ query }: { query: CommunityListQuery }) {
         value={query.status ?? ""}
         onChange={(event) => apply({ status: event.target.value || null })}
         aria-label="Filter by status"
-        className="h-9 rounded-xl border px-2 text-[13px]"
-        style={selectStyle}
+        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-700 outline-none focus:border-emerald-500"
       >
         <option value="">All statuses</option>
         <option value="active">Active</option>
@@ -88,8 +83,7 @@ export function CommunityFilters({ query }: { query: CommunityListQuery }) {
         value={query.managerState ?? ""}
         onChange={(event) => apply({ managerState: event.target.value || null })}
         aria-label="Filter by manager state"
-        className="h-9 rounded-xl border px-2 text-[13px]"
-        style={selectStyle}
+        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-700 outline-none focus:border-emerald-500"
       >
         <option value="">Any manager state</option>
         <option value="assigned">Has a manager</option>

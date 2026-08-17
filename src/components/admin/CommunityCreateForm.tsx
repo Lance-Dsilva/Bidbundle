@@ -16,7 +16,7 @@ import { COMMUNITY_RADIUS_MI } from "@/lib/validation/profile";
  */
 export function CommunityCreateForm() {
   const router = useRouter();
-  const [type, setType] = useState<"hoa" | "neighborhood">("neighborhood");
+  const [type, setType] = useState<"hoa" | "neighborhood">("hoa");
   const [name, setName] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -54,19 +54,15 @@ export function CommunityCreateForm() {
     }
   }
 
-  const inputStyle = {
-    background: "var(--paper)",
-    borderColor: "var(--line)",
-    color: "var(--ink-900)",
-  };
-  const inputClass = "h-9 w-full rounded-xl border px-3 text-[13px] outline-none";
+  const inputStyle = {};
+  const inputClass = "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[12px] text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
 
   return (
     <form className="space-y-3" onSubmit={submit}>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-            Community name
+          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
+            Account name
           </span>
           <input
             className={inputClass}
@@ -84,8 +80,8 @@ export function CommunityCreateForm() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-            Type
+          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
+            Customer segment
           </span>
           <select
             className={inputClass}
@@ -93,8 +89,8 @@ export function CommunityCreateForm() {
             value={type}
             onChange={(event) => setType(event.target.value as "hoa" | "neighborhood")}
           >
-            <option value="neighborhood">Location-based neighborhood</option>
             <option value="hoa">Official HOA</option>
+            <option value="neighborhood">Location-based neighborhood</option>
           </select>
         </label>
       </div>
@@ -102,7 +98,7 @@ export function CommunityCreateForm() {
       {type === "neighborhood" && (
         <div className="grid gap-3 md:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
+            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
               Centre latitude
             </span>
             <input
@@ -124,7 +120,7 @@ export function CommunityCreateForm() {
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
+            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
               Centre longitude
             </span>
             <input
@@ -146,7 +142,7 @@ export function CommunityCreateForm() {
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
+            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
               Radius (miles)
             </span>
             <input
@@ -176,10 +172,10 @@ export function CommunityCreateForm() {
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex h-9 items-center rounded-xl px-4 text-[13px] font-semibold text-white transition-all disabled:opacity-60"
-        style={{ background: "var(--teal-800)" }}
+        className="inline-flex h-10 items-center rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+        style={{}}
       >
-        {pending ? "Creating…" : "Create community"}
+        {pending ? "Creating…" : type === "hoa" ? "Create HOA account" : "Create neighborhood"}
       </button>
     </form>
   );

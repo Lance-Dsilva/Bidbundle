@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { AdminCrmShell } from "@/components/admin/AdminCrmShell";
 import { requireRole } from "@/lib/server/auth";
 
 /**
@@ -10,7 +11,15 @@ import { requireRole } from "@/lib/server/auth";
  * an account provisioned deliberately.
  */
 export default async function AdminLayout({ children }: Readonly<{ children: ReactNode }>) {
-  await requireRole(["admin"], "/app/admin/dashboard");
+  const user = await requireRole(["admin"], "/app/admin/dashboard");
 
-  return <>{children}</>;
+  return (
+    <AdminCrmShell
+      userName={user.name}
+      userEmail={user.email}
+      accessLevel={user.adminAccessLevel}
+    >
+      {children}
+    </AdminCrmShell>
+  );
 }

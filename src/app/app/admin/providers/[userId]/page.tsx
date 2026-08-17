@@ -33,7 +33,7 @@ export default async function AdminProviderDetailPage({ params }: PageProps) {
         }
       />
 
-      <div className="mx-auto w-full max-w-5xl px-4 py-7 pb-24">
+      <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 xl:px-8">
         <ProviderAdminControls initialProvider={provider} />
       </div>
     </div>
