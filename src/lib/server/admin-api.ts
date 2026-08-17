@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { CommunityRuleError } from "@/lib/community-rules";
 import { AdminAccessError } from "@/lib/server/admin-access";
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
+import { HoaWorkflowError } from "@/lib/server/hoa";
 import { guardAdminMutation, guardFailureResponse } from "@/lib/server/auth-guard";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
 import { MAX_ADMIN_BODY_BYTES } from "@/lib/validation/community";
@@ -65,8 +66,8 @@ export async function requireAdminOwnerMutation(): Promise<AdminGate> {
 }
 
 /** Reads and parses an admin JSON body under the admin size ceiling. */
-export function readAdminBody(request: Request) {
-  return readJsonBody(request, MAX_ADMIN_BODY_BYTES);
+export function readAdminBody(request: Request, maxBytes: number = MAX_ADMIN_BODY_BYTES) {
+  return readJsonBody(request, maxBytes);
 }
 
 export { validationErrorResponse };
@@ -88,6 +89,9 @@ export function adminErrorResponse(scope: string, error: unknown): NextResponse 
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
   if (error instanceof CommunityRuleError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof HoaWorkflowError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
 

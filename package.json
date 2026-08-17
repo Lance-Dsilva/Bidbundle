@@ -10,6 +10,8 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "typecheck": "tsc --noEmit --incremental false",
+    "seed:demo-communities": "prisma db execute --file prisma/demo-communities.sql",
+    "seed:demo-hoa": "prisma db execute --file prisma/demo-hoa.sql",
     "postinstall": "prisma generate"
   },
   "dependencies": {

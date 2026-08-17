@@ -57,6 +57,10 @@ export type NeighborhoodMatch = {
   distanceMi: number;
 };
 
+export type NeighborhoodCapacityCandidate = NeighborhoodCandidate & {
+  currentHomeowners: number;
+};
+
 /**
  * Picks the one neighborhood community a homeowner belongs to.
  *
@@ -97,6 +101,109 @@ export function matchNeighborhood(
   }
 
   return best;
+}
+
+/**
+ * Capacity-aware form of {@link matchNeighborhood}.
+ *
+ * Pending members count as occupants because they reserve a place while an
+ * admin reviews the browser-supplied location. Full communities are removed
+ * before the usual nearest-centre/stable-id matching rules are applied.
+ */
+export function matchAvailableNeighborhood(
+  home: Coordinates,
+  candidates: readonly NeighborhoodCapacityCandidate[],
+  maxHomeowners: number,
+): NeighborhoodMatch | null {
+  if (!Number.isInteger(maxHomeowners) || maxHomeowners < 1) return null;
+
+  return matchNeighborhood(
+    home,
+    candidates.filter(
+      (candidate) =>
+        Number.isInteger(candidate.currentHomeowners) &&
+        candidate.currentHomeowners >= 0 &&
+        candidate.currentHomeowners < maxHomeowners,
+    ),
+  );
+}
+
+export type CoordinateBounds = {
+  minLatitude: number;
+  maxLatitude: number;
+  /** One range normally, two when the search circle crosses the antimeridian. */
+  longitudeRanges: readonly { min: number; max: number }[];
+};
+
+/** Normalizes a longitude to the inclusive [-180, 180] interval. */
+function normalizeLongitude(longitude: number): number {
+  const normalized = ((longitude + 180) % 360 + 360) % 360 - 180;
+  return normalized === -180 && longitude > 0 ? 180 : normalized;
+}
+
+/**
+ * Conservative database pre-filter for a circular radius query.
+ *
+ * The result is only a performance aid. Callers must still use Haversine for
+ * the final verdict because the rectangle includes points outside the circle.
+ */
+export function coordinateBoundsForRadius(
+  center: Coordinates,
+  radiusMiles: number,
+): CoordinateBounds {
+  if (!Number.isFinite(radiusMiles) || radiusMiles < 0) {
+    throw new RangeError("Radius must be a non-negative finite number.");
+  }
+
+  const angularDistance = radiusMiles / EARTH_RADIUS_MI;
+  const latitudeDelta = (angularDistance * 180) / Math.PI;
+  const minLatitude = Math.max(-90, center.latitude - latitudeDelta);
+  const maxLatitude = Math.min(90, center.latitude + latitudeDelta);
+
+  const cosineLatitude = Math.abs(Math.cos(toRadians(center.latitude)));
+  const longitudeDelta =
+    minLatitude === -90 || maxLatitude === 90 || cosineLatitude < 1e-12
+      ? 180
+      : Math.min(180, latitudeDelta / cosineLatitude);
+
+  if (longitudeDelta === 180) {
+    return {
+      minLatitude,
+      maxLatitude,
+      longitudeRanges: [{ min: -180, max: 180 }],
+    };
+  }
+
+  const rawMin = center.longitude - longitudeDelta;
+  const rawMax = center.longitude + longitudeDelta;
+
+  if (rawMin < -180) {
+    return {
+      minLatitude,
+      maxLatitude,
+      longitudeRanges: [
+        { min: -180, max: normalizeLongitude(rawMax) },
+        { min: normalizeLongitude(rawMin), max: 180 },
+      ],
+    };
+  }
+
+  if (rawMax > 180) {
+    return {
+      minLatitude,
+      maxLatitude,
+      longitudeRanges: [
+        { min: -180, max: normalizeLongitude(rawMax) },
+        { min: normalizeLongitude(rawMin), max: 180 },
+      ],
+    };
+  }
+
+  return {
+    minLatitude,
+    maxLatitude,
+    longitudeRanges: [{ min: rawMin, max: rawMax }],
+  };
 }
 
 /**

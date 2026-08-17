@@ -40,6 +40,20 @@ export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
  */
 export const COMMUNITY_RADIUS_MI = 4;
 
+/**
+ * Automatic neighborhood formation policy.
+ *
+ * A single homeowner is not treated as a community. Once this many verified,
+ * unassigned homeowners are within the standard radius of a seed homeowner,
+ * the server creates a neighborhood for them. The upper bound keeps one
+ * radius from growing into an unmanageably large operational group; a full
+ * neighborhood is skipped and the next eligible cluster forms separately.
+ *
+ * These values are server-owned product policy, never customer input.
+ */
+export const MIN_HOMEOWNERS_TO_FORM_NEIGHBORHOOD = 3;
+export const MAX_HOMEOWNERS_PER_NEIGHBORHOOD = 50;
+
 /** Accepted avatar image types and size ceiling, shared by client and route. */
 export const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const MAX_AVATAR_BYTES = 4 * 1024 * 1024;

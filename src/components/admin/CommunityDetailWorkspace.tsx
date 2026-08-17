@@ -25,6 +25,8 @@ import {
   type CommunityStaffRole,
   type MembershipStatus,
 } from "@/lib/validation/community";
+import { HoaManagerInvitationPanel } from "@/components/admin/HoaManagerInvitationPanel";
+import { HoaOnboardingPanel } from "@/components/admin/HoaOnboardingPanel";
 
 /** Thrown when an admin declines a confirmation dialog. Not an error. */
 class Cancelled extends Error {}
@@ -149,12 +151,21 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
         )}
       </SectionCard>
 
+      {community.type === "hoa" && (
+        <SectionCard
+          title="HOA onboarding"
+          subtitle="Legal profile, verified location, onboarding pipeline, and the real unit inventory homeowner invitations bind to."
+        >
+          <HoaOnboardingPanel communityId={community.id} />
+        </SectionCard>
+      )}
+
       <SectionCard
         title={community.type === "neighborhood" ? "Neighborhood manager" : "HOA manager and team"}
         subtitle={
           community.type === "neighborhood"
             ? "Only active members of this neighborhood can be its manager, and only one holds it at a time."
-            : "HOA managers and team members do not have to live in the HOA."
+            : "The first HOA manager receives a separate invitation-only account. Team access remains scoped to this HOA."
         }
       >
         {staff.length === 0 ? (
@@ -213,7 +224,7 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
           </ul>
         )}
 
-        {community.status === "active" && (
+        {community.status === "active" && community.type === "neighborhood" && (
           <AssignRoleForm
             communityId={community.id}
             communityType={community.type}
@@ -223,6 +234,20 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
             onAssign={(body) =>
               run("assign", () => assignStaffRole(community.id, body))
             }
+          />
+        )}
+        {community.status === "active" && community.type === "hoa" && community.manager === null && (
+          <HoaManagerInvitationPanel communityId={community.id} />
+        )}
+        {community.status === "active" && community.type === "hoa" && community.manager !== null && (
+          <AssignRoleForm
+            communityId={community.id}
+            communityType={community.type}
+            managerRole={managerRole}
+            hasManager
+            teamOnly
+            busy={busyKey !== null}
+            onAssign={(body) => run("assign-team", () => assignStaffRole(community.id, body))}
           />
         )}
       </SectionCard>
@@ -261,10 +286,10 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
         />
       )}
 
-      {community.status === "active" && (
+      {community.status === "active" && community.type === "neighborhood" && (
         <SectionCard
           title="Add a member"
-          subtitle="Only homeowner accounts can be members. The server recalculates the distance itself and records a manual placement as an override."
+          subtitle="Automatic radius matching is immediate. Use this only for an exceptional, audited manual override."
         >
           <AddMemberForm
             communityId={community.id}
@@ -542,6 +567,7 @@ function AssignRoleForm({
   communityType,
   managerRole,
   hasManager,
+  teamOnly = false,
   busy,
   onAssign,
 }: {
@@ -549,6 +575,7 @@ function AssignRoleForm({
   communityType: "hoa" | "neighborhood";
   managerRole: CommunityStaffRole;
   hasManager: boolean;
+  teamOnly?: boolean;
   busy: boolean;
   onAssign: (body: {
     userId: string;
@@ -556,7 +583,7 @@ function AssignRoleForm({
     replaceExistingManager?: boolean;
   }) => Promise<boolean>;
 }) {
-  const [role, setRole] = useState<CommunityStaffRole>(managerRole);
+  const [role, setRole] = useState<CommunityStaffRole>(teamOnly ? "hoa_team" : managerRole);
   const [search, setSearch] = useState("");
   const [candidates, setCandidates] = useState<StaffCandidate[]>([]);
   const [userId, setUserId] = useState("");
@@ -589,8 +616,11 @@ function AssignRoleForm({
     };
   }, [communityId, role, search]);
 
-  const roleOptions: CommunityStaffRole[] =
-    communityType === "neighborhood" ? ["neighborhood_manager"] : ["hoa_manager", "hoa_team"];
+  const roleOptions: CommunityStaffRole[] = teamOnly
+    ? ["hoa_team"]
+    : communityType === "neighborhood"
+      ? ["neighborhood_manager"]
+      : ["hoa_manager", "hoa_team"];
 
   const replacingManager = hasManager && role === managerRole;
 
@@ -740,7 +770,7 @@ function AddMemberForm({
   busy: boolean;
   onAdd: (body: {
     userId: string;
-    status: "pending" | "active";
+    status: "active";
     isAdminOverride: boolean;
   }) => Promise<boolean>;
 }) {
@@ -748,7 +778,6 @@ function AddMemberForm({
   const [search, setSearch] = useState("");
   const [candidates, setCandidates] = useState<StaffCandidate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<"pending" | "active">("active");
   const [isOverride, setIsOverride] = useState(false);
 
   const inputClass = "h-9 w-full rounded-xl border px-3 text-[13px] outline-none";
@@ -791,7 +820,7 @@ function AddMemberForm({
         event.preventDefault();
         const succeeded = await onAdd({
           userId: userId.trim(),
-          status,
+          status: "active",
           isAdminOverride: isOverride,
         });
         if (succeeded) {
@@ -802,7 +831,7 @@ function AddMemberForm({
         }
       }}
     >
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
             Search homeowner
@@ -849,20 +878,6 @@ function AddMemberForm({
           </select>
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-            Join state
-          </span>
-          <select
-            className={inputClass}
-            style={inputStyle}
-            value={status}
-            onChange={(event) => setStatus(event.target.value as "pending" | "active")}
-          >
-            <option value="active">Active</option>
-            <option value="pending">Pending</option>
-          </select>
-        </label>
       </div>
 
       <label className="flex items-center gap-2 text-[12px]" style={{ color: "var(--ink-700)" }}>

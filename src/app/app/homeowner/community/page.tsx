@@ -1,38 +1,41 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
+import { ResidentHoaWorkspace } from "@/components/hoa/ResidentHoaWorkspace";
 import { requireRole } from "@/lib/server/auth";
 import { listManagedCommunities, resolveViewerContext } from "@/lib/server/communities";
+import { getResidentHoaHub } from "@/lib/server/hoa-market";
 import { initialsFromName } from "@/lib/display-name";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The community-management section of the homeowner dashboard.
- *
- * This is a conditional part of the ordinary homeowner experience, not a
- * separate account type: there is no `/hoa-manager` or `/neighborhood-manager`
- * application, and a resident with no scoped role is simply sent back to their
- * dashboard.
+ * Community hub for ordinary HOA residents and neighborhood managers.
  *
  * Authorization happens here, on the server, from live assignments —
  * `listManagedCommunities` scopes its reads to the communities this account
  * actually holds a role in. Hiding the nav link does none of that work.
  *
- * Read-only for this release. Bundleen admin assignment and enforcement are
- * the priority, and inventing manager write powers before they are specified
- * would be guessing at product.
+ * HOA management itself lives in `/app/hoa/**`; this route never grants those
+ * powers merely because someone is an HOA resident.
  */
 export default async function HomeownerCommunityPage() {
   const user = await requireRole(["homeowner"], "/app/homeowner/community");
 
-  const [context, managed] = await Promise.all([
+  const [context, managed, residentHoa] = await Promise.all([
     resolveViewerContext(user),
     listManagedCommunities(user.id),
+    getResidentHoaHub(user.id),
   ]);
 
-  // Not a manager: nothing here belongs to them, so send them home rather than
-  // showing an empty management screen they cannot use.
-  if (managed.length === 0) redirect("/app/homeowner/dashboard");
+  // A homeowner with neither resident HOA content nor a scoped management role
+  // has no community hub to render.
+  if (managed.length === 0 && residentHoa.communities.length === 0) {
+    redirect("/app/homeowner/dashboard");
+  }
+
+  const neighborhoodManagement = managed.filter((item) => item.community.type === "neighborhood");
+  const managesHoa = managed.some((item) => item.community.type === "hoa");
 
   return (
     <div className="space-y-6">
@@ -40,12 +43,20 @@ export default async function HomeownerCommunityPage() {
         <span className="bb-eyebrow">{context.roleLabel}</span>
         <h1 className="bb-page-heading">My community</h1>
         <p className="bb-page-subtitle">
-          A read-only view of the communities you help run. Bundleen staff make every membership
-          and role change; contact them to add or remove someone.
+          See HOA-wide requests and surveys, or review the neighborhood you help manage.
         </p>
       </header>
 
-      {managed.map(({ community, roleLabels, members }) => {
+      {managesHoa ? (
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--teal-50)] p-4">
+          <p className="text-sm text-[var(--ink-700)]">HOA operations use the dedicated manager dashboard.</p>
+          <Link className="mt-2 inline-flex text-sm font-semibold text-[var(--teal-800)]" href="/app/hoa/dashboard">Open HOA manager dashboard →</Link>
+        </div>
+      ) : null}
+
+      <ResidentHoaWorkspace hub={residentHoa} />
+
+      {neighborhoodManagement.map(({ community, roleLabels, members }) => {
         const active = members;
 
         return (
@@ -112,12 +123,6 @@ export default async function HomeownerCommunityPage() {
               ))}
             </ul>
 
-            {community.pendingMemberCount > 0 && (
-              <p className="mt-4 text-[12px]" style={{ color: "var(--muted)" }}>
-                {community.pendingMemberCount} membership{community.pendingMemberCount === 1 ? "" : "s"} awaiting Bundleen
-                review.
-              </p>
-            )}
           </section>
         );
       })}

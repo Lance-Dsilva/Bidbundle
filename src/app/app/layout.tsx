@@ -9,7 +9,11 @@ import { AppTopbar } from "@/components/layout/AppTopbar";
 export default function AppLayout({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
 
-  if (pathname.startsWith("/app/homeowner") || pathname.startsWith("/app/provider")) {
+  if (
+    pathname.startsWith("/app/homeowner") ||
+    pathname.startsWith("/app/provider") ||
+    pathname.startsWith("/app/hoa")
+  ) {
     return children;
   }
 

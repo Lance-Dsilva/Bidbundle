@@ -34,9 +34,11 @@ export type CommunityRuleCode =
   | "already_assigned"
   | "neighborhood_requires_geometry"
   | "manager_membership_required"
+  | "community_type_membership_conflict"
   | "manual_override_required"
   | "stale_review"
-  | "provider_not_active";
+  | "provider_not_active"
+  | "hoa_manager_invitation_required";
 
 /** HTTP status each rule failure maps to. */
 const STATUS_BY_CODE: Record<CommunityRuleCode, number> = {
@@ -50,9 +52,11 @@ const STATUS_BY_CODE: Record<CommunityRuleCode, number> = {
   already_assigned: 409,
   neighborhood_requires_geometry: 400,
   manager_membership_required: 409,
+  community_type_membership_conflict: 409,
   manual_override_required: 409,
   stale_review: 409,
   provider_not_active: 403,
+  hoa_manager_invitation_required: 409,
 };
 
 /**

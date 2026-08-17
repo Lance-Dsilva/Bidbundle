@@ -15,6 +15,7 @@ import { initialsFromName } from "@/lib/display-name";
 const providerNavigation = [
   { label: "Overview", href: "/app/provider/dashboard", icon: "home" as const },
   { label: "Job Feed", href: "/app/provider/job-feed", icon: "search" as const },
+  { label: "HOA Jobs", href: "/app/provider/hoa", icon: "bids" as const },
   { label: "My Bids", href: "/app/provider/bids", icon: "bids" as const },
   { label: "Messages", href: "/app/provider/messages", icon: "chat" as const },
   { label: "Schedule", href: "/app/provider/schedule", icon: "calendar" as const },

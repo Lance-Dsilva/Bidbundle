@@ -23,6 +23,7 @@ const state = vi.hoisted(() => ({
   assignmentById: null as Record<string, unknown> | null,
   memberAssignments: [] as Array<Record<string, unknown>>,
   neighborhoodCandidates: [] as Array<Record<string, unknown>>,
+  nearbyHomeowners: [] as Array<Record<string, unknown>>,
   created: [] as Array<Record<string, unknown>>,
   batches: [] as Op[][],
 }));
@@ -41,6 +42,7 @@ vi.mock("@/lib/server/db", () => ({
     },
     user: {
       findUnique: async () => state.user,
+      findMany: async () => state.nearbyHomeowners,
     },
     communityMembership: {
       findUnique: async () => state.membership,
@@ -50,6 +52,7 @@ vi.mock("@/lib/server/db", () => ({
         state.created.push(args.data);
         return op("communityMembership", "create")(args);
       },
+      createMany: op("communityMembership", "createMany"),
     },
     communityStaffAssignment: {
       // Three different lookups share this method, distinguished by their
@@ -67,6 +70,11 @@ vi.mock("@/lib/server/db", () => ({
     adminAuditLog: {
       create: op("adminAuditLog", "create"),
     },
+    $queryRaw: async () =>
+      state.nearbyHomeowners.map((homeowner) => ({
+        id: homeowner.id,
+        distanceMi: homeowner.distanceMi ?? 1,
+      })),
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;
@@ -97,6 +105,8 @@ beforeEach(() => {
   state.user = {
     id: "u1",
     role: "homeowner",
+    isVerified: true,
+    neighborhood: "Mission",
     latitude: 37.77,
     longitude: -122.42,
     communityMemberships: [{ status: "active" }],
@@ -107,6 +117,7 @@ beforeEach(() => {
   state.assignmentById = null;
   state.memberAssignments = [];
   state.neighborhoodCandidates = [];
+  state.nearbyHomeowners = [];
   state.created = [];
   state.batches = [];
 });
@@ -209,29 +220,20 @@ describe("assignStaffRole", () => {
     state.community = { ...state.community!, type: "hoa", radiusMiles: null };
     state.user = { id: "u1", role: "homeowner", communityMemberships: [] };
 
-    await assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_manager" });
+    await assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_team" });
     expect(opsOf("communityStaffAssignment", "create")).toHaveLength(1);
   });
 
-  it("requires confirmation and atomically replaces an existing HOA manager", async () => {
+  it("requires the separate invitation flow for an HOA manager", async () => {
     state.community = { ...state.community!, type: "hoa", radiusMiles: null };
     state.user = { id: "u1", role: "homeowner", communityMemberships: [] };
     state.incumbentManager = { id: "hoa-old", userId: "u9" };
 
     await expect(
       assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_manager" }),
-    ).rejects.toMatchObject({ code: "manager_already_assigned" });
+    ).rejects.toMatchObject({ code: "hoa_manager_invitation_required" });
 
-    await assignStaffRole(ADMIN, "c1", {
-      userId: "u1",
-      role: "hoa_manager",
-      replaceExistingManager: true,
-    });
-    expect(lastBatch()[0]).toMatchObject({
-      model: "communityStaffAssignment",
-      action: "update",
-      args: { where: { id: "hoa-old" } },
-    });
+    expect(state.batches).toHaveLength(0);
   });
 
   it("reports a missing community without touching the database", async () => {
@@ -355,6 +357,35 @@ describe("addMember", () => {
       isAdminOverride: true,
     });
   });
+
+  it("does not add an HOA resident to a location-based neighborhood", async () => {
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      latitude: 37.77,
+      longitude: -122.42,
+      communityMemberships: [{ community: { type: "hoa" } }],
+    };
+
+    await expect(
+      addMember(ADMIN, "c1", { userId: "u1", status: "pending" }),
+    ).rejects.toMatchObject({ code: "community_type_membership_conflict", status: 409 });
+  });
+
+  it("requires removing a neighborhood before adding an HOA", async () => {
+    state.community = { ...state.community!, type: "hoa", radiusMiles: null };
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      latitude: 37.77,
+      longitude: -122.42,
+      communityMemberships: [{ community: { type: "neighborhood" } }],
+    };
+
+    await expect(
+      addMember(ADMIN, "c1", { userId: "u1", status: "active" }),
+    ).rejects.toMatchObject({ code: "community_type_membership_conflict", status: 409 });
+  });
 });
 
 describe("revokeStaffAssignment", () => {
@@ -406,12 +437,26 @@ describe("syncNeighborhoodMembership", () => {
     expect(state.created).toHaveLength(0);
   });
 
-  it("does nothing when no neighborhood contains the homeowner", async () => {
+  it("waits when no neighborhood matches and too few homeowners are nearby", async () => {
     state.membership = null;
-    state.user = { role: "homeowner", latitude: 0, longitude: 0 };
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      isVerified: true,
+      neighborhood: "Nowhere",
+      latitude: 0,
+      longitude: 0,
+    };
     state.neighborhoodCandidates = [
-      { id: "c1", centerLatitude: 37.77, centerLongitude: -122.42, radiusMiles: 4 },
+      {
+        id: "c1",
+        centerLatitude: 37.77,
+        centerLongitude: -122.42,
+        radiusMiles: 4,
+        _count: { memberships: 2 },
+      },
     ];
+    state.nearbyHomeowners = [];
 
     await expect(syncNeighborhoodMembership("u1")).resolves.toBeNull();
     expect(state.created).toHaveLength(0);
@@ -419,7 +464,14 @@ describe("syncNeighborhoodMembership", () => {
 
   it("does nothing for a homeowner with no stored coordinates", async () => {
     state.membership = null;
-    state.user = { role: "homeowner", latitude: null, longitude: null };
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      isVerified: true,
+      neighborhood: null,
+      latitude: null,
+      longitude: null,
+    };
     state.neighborhoodCandidates = [
       { id: "c1", centerLatitude: 37.77, centerLongitude: -122.42, radiusMiles: 4 },
     ];
@@ -429,7 +481,14 @@ describe("syncNeighborhoodMembership", () => {
 
   it("never places a provider account", async () => {
     state.membership = null;
-    state.user = { role: "provider", latitude: 37.7749, longitude: -122.4194 };
+    state.user = {
+      id: "u1",
+      role: "provider",
+      isVerified: true,
+      neighborhood: "Mission",
+      latitude: 37.7749,
+      longitude: -122.4194,
+    };
     state.neighborhoodCandidates = [
       { id: "c1", centerLatitude: 37.77, centerLongitude: -122.42, radiusMiles: 4 },
     ];
@@ -437,18 +496,121 @@ describe("syncNeighborhoodMembership", () => {
     await expect(syncNeighborhoodMembership("u1")).resolves.toBeNull();
   });
 
-  it("creates a pending, non-override membership in the matching neighborhood", async () => {
+  it("creates an active, non-override membership in the matching neighborhood", async () => {
     state.membership = null;
-    state.user = { role: "homeowner", latitude: 37.7749, longitude: -122.4194 };
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      isVerified: true,
+      neighborhood: "Mission",
+      latitude: 37.7749,
+      longitude: -122.4194,
+    };
     state.neighborhoodCandidates = [
-      { id: "far", centerLatitude: 37.8, centerLongitude: -122.44, radiusMiles: 10 },
-      { id: "near", centerLatitude: 37.775, centerLongitude: -122.4195, radiusMiles: 4 },
+      {
+        id: "far",
+        centerLatitude: 37.8,
+        centerLongitude: -122.44,
+        radiusMiles: 10,
+        _count: { memberships: 4 },
+      },
+      {
+        id: "near",
+        centerLatitude: 37.775,
+        centerLongitude: -122.4195,
+        radiusMiles: 4,
+        _count: { memberships: 10 },
+      },
     ];
 
     await expect(syncNeighborhoodMembership("u1")).resolves.toBe("near");
     expect(state.created).toEqual([
       // Pending, so a human confirms a location the browser merely reported.
-      { communityId: "near", userId: "u1", status: "pending" },
+      {
+        communityId: "near",
+        userId: "u1",
+        status: "active",
+        joinedAt: expect.any(Date),
+        isPrimary: true,
+        isAdminOverride: false,
+      },
     ]);
+  });
+
+  it("does not automatically place an unverified homeowner", async () => {
+    state.membership = null;
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      isVerified: false,
+      neighborhood: "Mission",
+      latitude: 37.7749,
+      longitude: -122.4194,
+    };
+
+    await expect(syncNeighborhoodMembership("u1")).resolves.toBeNull();
+    expect(state.created).toHaveLength(0);
+  });
+
+  it("skips a full matching community and waits for a viable cluster", async () => {
+    state.membership = null;
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      isVerified: true,
+      neighborhood: "Mission",
+      latitude: 37.7749,
+      longitude: -122.4194,
+    };
+    state.neighborhoodCandidates = [
+      {
+        id: "full",
+        centerLatitude: 37.775,
+        centerLongitude: -122.4195,
+        radiusMiles: 4,
+        _count: { memberships: 50 },
+      },
+    ];
+    state.nearbyHomeowners = [];
+
+    await expect(syncNeighborhoodMembership("u1")).resolves.toBeNull();
+    expect(state.created).toHaveLength(0);
+    expect(state.batches).toHaveLength(0);
+  });
+
+  it("forms and audits a neighborhood when three unassigned homeowners are nearby", async () => {
+    state.membership = null;
+    state.user = {
+      id: "u1",
+      role: "homeowner",
+      isVerified: true,
+      neighborhood: "North Burnet",
+      latitude: 30.4,
+      longitude: -97.72,
+    };
+    state.nearbyHomeowners = [
+      { id: "u3", distanceMi: 2 },
+      { id: "u2", distanceMi: 1 },
+    ];
+
+    const communityId = await syncNeighborhoodMembership("u1");
+
+    expect(communityId).toEqual(expect.any(String));
+    expect(state.batches).toHaveLength(1);
+    expect(opsOf("community", "create")[0].args.data).toMatchObject({
+      id: communityId,
+      name: "North Burnet Neighborhood",
+      type: "neighborhood",
+      status: "active",
+      centerLatitude: 30.4,
+      centerLongitude: -97.72,
+      radiusMiles: 4,
+    });
+    expect(opsOf("communityMembership", "createMany")[0].args.data).toEqual([
+      expect.objectContaining({ userId: "u1", communityId, status: "active", joinedAt: expect.any(Date) }),
+      expect.objectContaining({ userId: "u2", communityId, status: "active", joinedAt: expect.any(Date) }),
+      expect.objectContaining({ userId: "u3", communityId, status: "active", joinedAt: expect.any(Date) }),
+    ]);
+    expect(opsOf("adminAuditLog", "create")).toHaveLength(1);
   });
 });

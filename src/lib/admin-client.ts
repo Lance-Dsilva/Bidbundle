@@ -4,6 +4,7 @@ import type {
   ProviderDetail,
   StaffCandidate,
 } from "@/lib/community-types";
+import type { HoaInvitationSummary } from "@/lib/hoa-types";
 
 /**
  * Browser-side calls into `/api/admin/**`.
@@ -141,6 +142,26 @@ export function fetchHomeownerCandidates(communityId: string, search: string) {
   const params = new URLSearchParams({ communityId, search });
   return send<{ candidates: StaffCandidate[] }>(
     `/api/admin/homeowners?${params.toString()}`,
+  );
+}
+
+export function fetchHoaManagerInvitations(communityId: string) {
+  return send<{ invitations: HoaInvitationSummary[] }>(
+    `/api/admin/communities/${communityId}/manager-invitations`,
+  );
+}
+
+export function sendHoaManagerInvitation(communityId: string, email: string) {
+  return send<{ invitation: HoaInvitationSummary }>(
+    `/api/admin/communities/${communityId}/manager-invitations`,
+    { method: "POST", body: JSON.stringify({ email }) },
+  );
+}
+
+export function revokeHoaManagerInvitation(communityId: string, invitationId: string) {
+  return send<{ revoked: true }>(
+    `/api/admin/communities/${communityId}/manager-invitations/${invitationId}`,
+    { method: "DELETE" },
   );
 }
 

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/server/db";
+import { isHoaManager } from "@/lib/server/hoa";
 import { DASHBOARD_BY_ROLE, isAppRole, type AppRole } from "@/lib/validation/auth";
 
 /**
@@ -123,6 +124,17 @@ export async function requireRole(
     redirect(DASHBOARD_BY_ROLE[user.role]);
   }
 
+  return user;
+}
+
+/**
+ * Page guard for the dedicated HOA operations portal. The global homeowner
+ * role is intentionally insufficient: access exists only while a live,
+ * community-scoped `hoa_manager` assignment exists in the database.
+ */
+export async function requireHoaManager(callbackPath = "/app/hoa/dashboard"): Promise<SessionUser> {
+  const user = await requireRole(["homeowner"], callbackPath);
+  if (!(await isHoaManager(user.id))) redirect("/app/homeowner/dashboard");
   return user;
 }
 

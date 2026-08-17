@@ -104,10 +104,10 @@ export default async function AdminDashboardPage() {
             accent="var(--navy-500)"
           />
           <StatTile
-            label="Pending memberships"
-            value={overview.pendingMemberships}
-            hint="Awaiting review"
-            accent={overview.pendingMemberships > 0 ? "var(--gold-600)" : "var(--teal-800)"}
+            label="Pending HOA invites"
+            value={overview.pendingHoaInvitations}
+            hint="Waiting for email acceptance"
+            accent={overview.pendingHoaInvitations > 0 ? "var(--gold-600)" : "var(--teal-800)"}
           />
           <StatTile
             label="Suspended providers"

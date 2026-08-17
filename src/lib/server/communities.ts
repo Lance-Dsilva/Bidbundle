@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import type {
   AdminOverview,
   AdminPersonSummary,
@@ -25,7 +25,11 @@ import {
   viewerRoleLabel,
 } from "@/lib/community-rules";
 import { initialsFromName } from "@/lib/display-name";
-import { isWithinCommunity, matchNeighborhood } from "@/lib/geo";
+import {
+  coordinateBoundsForRadius,
+  isWithinCommunity,
+  matchAvailableNeighborhood,
+} from "@/lib/geo";
 import { buildAuditEntry, serializeAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { isAppRole } from "@/lib/validation/auth";
@@ -38,6 +42,11 @@ import {
   type MembershipUpdateInput,
   type StaffAssignInput,
 } from "@/lib/validation/community";
+import {
+  COMMUNITY_RADIUS_MI,
+  MAX_HOMEOWNERS_PER_NEIGHBORHOOD,
+  MIN_HOMEOWNERS_TO_FORM_NEIGHBORHOOD,
+} from "@/lib/validation/profile";
 
 /**
  * Community reads and writes for the internal Bundleen portal.
@@ -414,6 +423,7 @@ export async function listHomeownerCandidates(
 
 export async function getAdminOverview(): Promise<AdminOverview> {
   const managerFilter = MANAGER_ASSIGNMENT_FILTER;
+  const now = new Date();
 
   const [
     hoaCommunities,
@@ -423,6 +433,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     homeowners,
     activeMemberships,
     pendingMemberships,
+    pendingHoaInvitations,
     providerCounts,
     providersAwaitingVerification,
     auditRows,
@@ -434,6 +445,12 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     db.user.count({ where: { role: "homeowner" } }),
     db.communityMembership.count({ where: { status: "active" } }),
     db.communityMembership.count({ where: { status: "pending" } }),
+    db.communityInvitation.count({
+      where: {
+        status: "pending",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    }),
     db.providerProfile.groupBy({ by: ["accountStatus"], _count: { _all: true } }),
     db.providerProfile.count({
       where: { OR: [{ licenseVerifiedAt: null }, { insuranceVerifiedAt: null }] },
@@ -463,6 +480,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     homeowners,
     activeMemberships,
     pendingMemberships,
+    pendingHoaInvitations,
     providersByStatus,
     providersAwaitingVerification,
     recentAudit: auditRows.map((row) => serializeAuditEntry(row, toPersonSummary)),
@@ -629,7 +647,16 @@ export async function addMember(
 
   const user = await db.user.findUnique({
     where: { id: input.userId },
-    select: { id: true, role: true, latitude: true, longitude: true },
+    select: {
+      id: true,
+      role: true,
+      latitude: true,
+      longitude: true,
+      communityMemberships: {
+        where: currentMembershipWhere,
+        select: { community: { select: { type: true } } },
+      },
+    },
   });
   if (!user) throw new CommunityRuleError("not_found", "That account no longer exists.");
 
@@ -645,6 +672,20 @@ export async function addMember(
     // duplicate request a true no-op and prevents it from downgrading an
     // active neighborhood manager to a pending resident.
     return { membershipId: existing.id, alreadyMember: true };
+  }
+
+  const conflictingType = community.type === "hoa" ? "neighborhood" : "hoa";
+  if (
+    user.communityMemberships.some(
+      (membership) => membership.community.type === conflictingType,
+    )
+  ) {
+    throw new CommunityRuleError(
+      "community_type_membership_conflict",
+      community.type === "hoa"
+        ? "Remove this homeowner from their location-based neighborhood before adding them to an HOA."
+        : "An HOA resident cannot also join a location-based neighborhood community.",
+    );
   }
 
   // Recomputed here, never accepted from the request. It is recorded so an
@@ -895,6 +936,13 @@ export async function assignStaffRole(
 ): Promise<{ assignmentId: string; replacedAssignmentId: string | null }> {
   const community = await requireCommunity(communityId);
 
+  if (input.role === "hoa_manager") {
+    throw new CommunityRuleError(
+      "hoa_manager_invitation_required",
+      "HOA managers must accept the separate manager-account invitation instead of being assigned from an existing homeowner account.",
+    );
+  }
+
   const assignee = await db.user.findUnique({
     where: { id: input.userId },
     select: {
@@ -932,7 +980,7 @@ export async function assignStaffRole(
   }
 
   const incumbent =
-    input.role === "neighborhood_manager" || input.role === "hoa_manager"
+    input.role === "neighborhood_manager"
       ? await db.communityStaffAssignment.findFirst({
           where: { communityId, role: input.role, status: "active" },
           select: { id: true, userId: true },
@@ -1059,37 +1107,156 @@ export async function revokeStaffAssignment(
 
 /* ── Geolocation matching ────────────────────────────────────────────────── */
 
-/**
- * The neighborhood a homeowner's stored coordinates fall into.
- *
- * Only active neighborhood communities are considered, so an HOA resident is
- * never pulled into a radius-based group. Overlapping radii resolve through
- * `matchNeighborhood`: nearest centre, then lowest id. Returns `null` when the
- * homeowner has no coordinates or falls inside nothing — an honest "no match"
- * rather than a nearest-anyway guess.
- */
-export async function findNeighborhoodForUser(
-  userId: string,
-): Promise<{ communityId: string; distanceMi: number } | null> {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { latitude: true, longitude: true, role: true },
-  });
+type NeighborhoodPlacementUser = {
+  id: string;
+  role: string;
+  isVerified: boolean;
+  neighborhood: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
 
-  if (!user || user.role !== "homeowner" || user.latitude === null || user.longitude === null) {
+const currentMembershipWhere: Prisma.CommunityMembershipWhereInput = {
+  status: { in: ["active", "pending"] },
+};
+
+function automaticNeighborhoodName(neighborhood: string | null): string {
+  const locality = neighborhood?.trim().replace(/\s+/g, " ").slice(0, 90);
+  return locality ? `${locality} Neighborhood` : "Local Neighborhood";
+}
+
+async function readPlacementUser(userId: string): Promise<NeighborhoodPlacementUser | null> {
+  return db.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      role: true,
+      isVerified: true,
+      neighborhood: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
+}
+
+async function findAvailableNeighborhoodForUser(user: NeighborhoodPlacementUser) {
+  if (
+    user.role !== "homeowner" ||
+    !user.isVerified ||
+    user.latitude === null ||
+    user.longitude === null
+  ) {
     return null;
   }
 
   const candidates = await db.community.findMany({
     where: { type: "neighborhood", status: "active" },
-    select: { id: true, centerLatitude: true, centerLongitude: true, radiusMiles: true },
+    select: {
+      id: true,
+      centerLatitude: true,
+      centerLongitude: true,
+      radiusMiles: true,
+      _count: { select: { memberships: { where: currentMembershipWhere } } },
+    },
   });
 
-  return matchNeighborhood({ latitude: user.latitude, longitude: user.longitude }, candidates);
+  return matchAvailableNeighborhood(
+    { latitude: user.latitude, longitude: user.longitude },
+    candidates.map((candidate) => ({
+      ...candidate,
+      currentHomeowners: candidate._count.memberships,
+    })),
+    MAX_HOMEOWNERS_PER_NEIGHBORHOOD,
+  );
 }
 
 /**
- * Places a homeowner in the neighborhood their stored coordinates fall into.
+ * Verified homeowners near `seed` who have no current membership of any kind.
+ *
+ * The `none` relation is the HOA exclusion as well as duplicate-neighborhood
+ * protection: an HOA resident, even one physically inside this circle, never
+ * enters the automatic candidate set. The rectangle is a DB pre-filter only;
+ * the Haversine pass below makes the actual radius decision.
+ */
+async function findUnassignedHomeownersNear(
+  seed: NeighborhoodPlacementUser & { latitude: number; longitude: number },
+) {
+  const bounds = coordinateBoundsForRadius(seed, COMMUNITY_RADIUS_MI);
+  const longitudePredicate = Prisma.join(
+    bounds.longitudeRanges.map(
+      (range) =>
+        Prisma.sql`("longitude" >= ${range.min} AND "longitude" <= ${range.max})`,
+    ),
+    " OR ",
+  );
+
+  // Exact Haversine ordering happens in Postgres, after an index-friendly
+  // bounding-box filter. Only the nearest available slots cross the network;
+  // a dense city therefore does not load every local homeowner into memory.
+  const rows = await db.$queryRaw<Array<{ id: string; distanceMi: number }>>(Prisma.sql`
+    WITH eligible AS (
+      SELECT
+        candidate."id",
+        2 * 3958.7613 * ASIN(
+          LEAST(
+            1,
+            SQRT(
+              POWER(SIN(RADIANS(candidate."latitude" - ${seed.latitude}) / 2), 2) +
+              COS(RADIANS(${seed.latitude})) *
+              COS(RADIANS(candidate."latitude")) *
+              POWER(SIN(RADIANS(candidate."longitude" - ${seed.longitude}) / 2), 2)
+            )
+          )
+        ) AS "distanceMi"
+      FROM "User" candidate
+      WHERE candidate."id" <> ${seed.id}
+        AND candidate."role" = 'homeowner'
+        AND candidate."isVerified" = true
+        AND candidate."latitude" IS NOT NULL
+        AND candidate."longitude" IS NOT NULL
+        AND candidate."latitude" >= ${bounds.minLatitude}
+        AND candidate."latitude" <= ${bounds.maxLatitude}
+        AND (${longitudePredicate})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "CommunityMembership" membership
+          WHERE membership."userId" = candidate."id"
+            AND membership."status" IN ('active', 'pending')
+        )
+    )
+    SELECT "id", "distanceMi"
+    FROM eligible
+    WHERE "distanceMi" <= ${COMMUNITY_RADIUS_MI}
+    ORDER BY "distanceMi", "id"
+    LIMIT ${MAX_HOMEOWNERS_PER_NEIGHBORHOOD - 1}
+  `);
+
+  return [
+    { id: seed.id, distanceMi: 0 },
+    ...rows.map((row) => ({ id: row.id, distanceMi: Number(row.distanceMi) })),
+  ];
+}
+
+/**
+ * The neighborhood a homeowner's stored coordinates fall into.
+ *
+ * Only active neighborhood communities are considered, so an HOA resident is
+ * never pulled into a radius-based group. Full communities are skipped, and
+ * overlapping eligible radii resolve through `matchAvailableNeighborhood`:
+ * nearest centre, then lowest id. Returns `null` when the homeowner has no
+ * coordinates or falls inside nothing — an honest "no match" rather than a
+ * nearest-anyway guess.
+ */
+export async function findNeighborhoodForUser(
+  userId: string,
+): Promise<{ communityId: string; distanceMi: number } | null> {
+  const user = await readPlacementUser(userId);
+  return user ? findAvailableNeighborhoodForUser(user) : null;
+}
+
+/**
+ * Places a homeowner in a neighborhood or forms one when a local cluster is
+ * large enough.
  *
  * Called after onboarding and after an address change. Four things it
  * deliberately does *not* do:
@@ -1100,37 +1267,134 @@ export async function findNeighborhoodForUser(
  *   removing a member is an admin decision with an audit entry behind it.
  * - It never trusts a distance or community id from the request. Both the
  *   coordinates and the match are read and computed here.
- * - It never manufactures an admin actor, so it writes no audit entry. A
- *   radius match is the system doing arithmetic, not staff making a call; the
- *   membership row records `isAdminOverride: false` to say which it was.
- * - It creates the membership as `pending`, not `active`. A signup location is
- *   a hint a browser supplied, so a human confirms it — the admin overview
- *   surfaces the pending count for exactly this queue.
+ * - It never manufactures an admin actor. A radius match is the system doing
+ *   arithmetic, not staff making a call; membership rows record
+ *   `isAdminOverride: false`. A newly formed community does get one actor-less
+ *   audit row so its origin remains traceable without logging addresses or
+ *   coordinates.
+ * - It does not create an approval queue. Matching is the product decision:
+ *   once the verified homeowner is inside the configured radius, the
+ *   membership is active immediately. HOA membership remains invitation-only
+ *   and never enters this matcher.
  *
  * Returns the community it joined the user to, or `null` when it did nothing.
  */
-export async function syncNeighborhoodMembership(userId: string): Promise<string | null> {
+async function syncNeighborhoodMembershipAttempt(
+  userId: string,
+  retryAfterConflict: boolean,
+): Promise<string | null> {
   const existing = await db.communityMembership.findFirst({
-    where: { userId, status: { in: ["active", "pending"] } },
+    where: { userId, ...currentMembershipWhere },
     select: { communityId: true },
   });
   if (existing) return null;
 
-  const match = await findNeighborhoodForUser(userId);
-  if (!match) return null;
-
-  // `create` rather than `upsert`: a `removed` membership means someone
-  // decided this person does not belong here, and the matcher must not undo
-  // that. The unique pair makes a concurrent duplicate a no-op.
-  try {
-    await db.communityMembership.create({
-      data: { communityId: match.communityId, userId, status: "pending" },
-    });
-  } catch {
+  const user = await readPlacementUser(userId);
+  if (
+    !user ||
+    user.role !== "homeowner" ||
+    !user.isVerified ||
+    user.latitude === null ||
+    user.longitude === null
+  ) {
     return null;
   }
 
-  return match.communityId;
+  const match = await findAvailableNeighborhoodForUser(user);
+
+  if (match) {
+    // `create` rather than `upsert`: a `removed` membership means someone
+    // decided this person does not belong here, and the matcher must not undo
+    // that. The unique pair makes a concurrent duplicate a no-op.
+    try {
+      await db.communityMembership.create({
+        data: {
+          communityId: match.communityId,
+          userId,
+          status: "active",
+          joinedAt: new Date(),
+          isPrimary: true,
+          isAdminOverride: false,
+        },
+      });
+    } catch (error) {
+      if (isUniqueWriteConflict(error)) {
+        return retryAfterConflict
+          ? null
+          : syncNeighborhoodMembershipAttempt(userId, true);
+      }
+      throw error;
+    }
+
+    return match.communityId;
+  }
+
+  const nearby = await findUnassignedHomeownersNear({
+    ...user,
+    latitude: user.latitude,
+    longitude: user.longitude,
+  });
+  if (
+    nearby.length < MIN_HOMEOWNERS_TO_FORM_NEIGHBORHOOD ||
+    !nearby.some((homeowner) => homeowner.id === user.id)
+  ) {
+    return null;
+  }
+
+  const communityId = randomUUID();
+  const operations = [
+    db.community.create({
+      data: {
+        id: communityId,
+        name: automaticNeighborhoodName(user.neighborhood),
+        type: "neighborhood",
+        status: "active",
+        centerLatitude: user.latitude,
+        centerLongitude: user.longitude,
+        radiusMiles: COMMUNITY_RADIUS_MI,
+      },
+    }),
+    db.communityMembership.createMany({
+      data: [...nearby].sort((left, right) => left.id.localeCompare(right.id)).map((homeowner) => ({
+        id: randomUUID(),
+        communityId,
+        userId: homeowner.id,
+        status: "active" as const,
+        joinedAt: new Date(),
+        isPrimary: true,
+        isAdminOverride: false,
+      })),
+    }),
+    db.adminAuditLog.create({
+      data: buildAuditEntry({
+        actorUserId: null,
+        action: "community_created",
+        targetType: "community",
+        targetId: communityId,
+        communityId,
+        metadata: { type: "neighborhood", radiusMiles: COMMUNITY_RADIUS_MI },
+      }),
+    }),
+  ];
+
+  try {
+    await db.$transaction(operations);
+  } catch (error) {
+    // Another request may have grouped one of these users first. Never create
+    // a second current placement just to make this request report success.
+    if (isUniqueWriteConflict(error)) {
+      return retryAfterConflict
+        ? null
+        : syncNeighborhoodMembershipAttempt(userId, true);
+    }
+    throw error;
+  }
+
+  return communityId;
+}
+
+export async function syncNeighborhoodMembership(userId: string): Promise<string | null> {
+  return syncNeighborhoodMembershipAttempt(userId, false);
 }
 
 /* ── Viewer context ──────────────────────────────────────────────────────── */

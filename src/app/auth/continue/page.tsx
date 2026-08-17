@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/lib/server/db";
 import { activateApprovedAdminIdentity } from "@/lib/server/admin-access";
+import { isHoaManager } from "@/lib/server/hoa";
 import { DASHBOARD_BY_ROLE, isAppRole } from "@/lib/validation/auth";
 
 /** Resolves a successful Clerk sign-in to the user's live Bundleen role. */
@@ -31,9 +32,12 @@ export default async function ContinueAfterAuthentication() {
 
   const profile = await db.user.findUnique({
     where: { clerkUserId: userId },
-    select: { role: true },
+    select: { id: true, role: true },
   });
 
   if (!profile || !isAppRole(profile.role)) redirect("/get-started/profile");
+  if (profile.role === "homeowner" && (await isHoaManager(profile.id))) {
+    redirect("/app/hoa/dashboard");
+  }
   redirect(DASHBOARD_BY_ROLE[profile.role]);
 }

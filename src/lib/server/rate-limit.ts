@@ -28,6 +28,8 @@ export const RATE_LIMITS = {
    * stolen admin session or a runaway script, not to pace ordinary work.
    */
   adminMutation: { attempts: 120, window: "5 m" },
+  /** HOA manager invitations, requests, and surveys, scoped per manager. */
+  hoaMutation: { attempts: 60, window: "5 m" },
 } as const;
 
 type LimiterName = keyof typeof RATE_LIMITS;

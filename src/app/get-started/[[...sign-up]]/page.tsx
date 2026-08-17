@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { NamedSignUp } from "@/components/auth/NamedSignUp";
 import { db } from "@/lib/server/db";
+import { isHoaManager } from "@/lib/server/hoa";
 import { DASHBOARD_BY_ROLE, isAppRole } from "@/lib/validation/auth";
 
 export default async function SignUpPage() {
@@ -17,9 +18,14 @@ export default async function SignUpPage() {
     // older role/location form.
     const profile = await db.user.findUnique({
       where: { clerkUserId: userId },
-      select: { role: true },
+      select: { id: true, role: true },
     });
-    if (profile && isAppRole(profile.role)) redirect(DASHBOARD_BY_ROLE[profile.role]);
+    if (profile && isAppRole(profile.role)) {
+      if (profile.role === "homeowner" && (await isHoaManager(profile.id))) {
+        redirect("/app/hoa/dashboard");
+      }
+      redirect(DASHBOARD_BY_ROLE[profile.role]);
+    }
     alreadyVerified = true;
   }
 

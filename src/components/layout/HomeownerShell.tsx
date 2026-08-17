@@ -36,6 +36,9 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
   // but the page behind it re-derives the same assignments server-side — a
   // hidden link is a courtesy, not a permission.
   const { context } = useViewerContext();
+  const hasHoaCommunity = context?.communities.some(
+    (community) => community.communityType === "hoa" && community.status === "active",
+  );
 
   // The overview currently owns this exact shell; the other homeowner routes
   // use the shared version below while the overview content is migrated.
@@ -87,14 +90,16 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
               ) : null}
             </Link>
           ))}
-          {context?.canManageCommunity ? (
+          {context?.canManageCommunity || hasHoaCommunity ? (
             <Link
               className={`dash-nav-item${pathname === "/app/homeowner/community" ? " is-active" : ""}`}
               href="/app/homeowner/community"
             >
               <Icon name="users" size={20} />
               <span>My Community</span>
-              <b className="dash-nav-badge amber">{context.assignments.length}</b>
+              {context && context.assignments.length > 0 ? (
+                <b className="dash-nav-badge amber">{context.assignments.length}</b>
+              ) : null}
             </Link>
           ) : null}
           <span className="dash-nav-item is-disabled">

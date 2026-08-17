@@ -181,6 +181,7 @@ export type AdminOverview = {
   homeowners: number;
   activeMemberships: number;
   pendingMemberships: number;
+  pendingHoaInvitations: number;
   providersByStatus: Record<ProviderAccountStatus, number>;
   providersAwaitingVerification: number;
   recentAudit: AuditEntry[];

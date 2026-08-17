@@ -89,6 +89,23 @@ enum AdminAuditAction {
   provider_insurance_revoked
   admin_access_granted
   admin_access_revoked
+  community_invitation_sent
+  community_invitation_accepted
+  community_invitation_revoked
+  hoa_request_created
+  hoa_request_status_changed
+  hoa_survey_created
+  hoa_survey_status_changed
+  hoa_profile_updated
+  hoa_unit_created
+  hoa_unit_updated
+  hoa_units_imported
+  hoa_participants_locked
+  hoa_bid_awarded
+  hoa_schedule_published
+  hoa_visit_corrected
+  review_moderated
+  provider_service_area_changed
 }
 
 enum AdminAuditTargetType {
@@ -97,6 +114,144 @@ enum AdminAuditTargetType {
   staff_assignment
   provider
   admin_access
+  community_invitation
+  hoa_request
+  hoa_survey
+  hoa_profile
+  hoa_unit
+  service_bid
+  service_agreement
+  service_visit
+  review
+  provider_service_area
+}
+
+enum CommunityInvitationRole {
+  hoa_manager
+  homeowner
+}
+
+enum CommunityInvitationStatus {
+  pending
+  accepted
+  revoked
+}
+
+enum HoaRequestKind {
+  compulsory_recurring
+  optional_group
+}
+
+/// Server-enforced request lifecycle. Compulsory recurring requests move
+/// `draft -> open_for_bids`; optional requests pass through
+/// `collecting_interest` and lock their participants before bids open.
+enum HoaRequestStatus {
+  draft
+  collecting_interest
+  open_for_bids
+  bidding_closed
+  awarded
+  scheduled
+  in_progress
+  completed
+  cancelled
+  failed
+}
+
+/// HOA onboarding progress, owned by the Bundleen admin portal.
+enum HoaOnboardingStatus {
+  draft
+  manager_invited
+  manager_active
+  residents_inviting
+  live
+  archived
+}
+
+enum UnitOccupancyStatus {
+  vacant
+  invite_pending
+  occupied
+  inactive
+}
+
+/// A resident's explicit answer to an optional request while enrollment is
+/// open, or the server's audience snapshot for a compulsory request.
+enum ParticipationResponse {
+  joined
+  declined
+}
+
+enum ServiceBidStatus {
+  draft
+  submitted
+  withdrawn
+  accepted
+  rejected
+  expired
+}
+
+enum BidPricingBasis {
+  total
+  per_home
+  per_visit
+}
+
+enum ServiceAgreementStatus {
+  active
+  completed
+  cancelled
+}
+
+enum ServiceOccurrenceStatus {
+  planned
+  in_progress
+  completed
+  cancelled
+}
+
+enum ServiceVisitStatus {
+  unscheduled
+  scheduled
+  en_route
+  in_progress
+  completed
+  skipped
+  blocked
+  cancelled
+}
+
+enum ReviewStatus {
+  published
+  removed
+}
+
+enum ProviderServiceAreaStatus {
+  active
+  removed
+}
+
+enum NotificationKind {
+  invitation
+  survey
+  request
+  bid
+  award
+  schedule
+  visit
+  review
+}
+
+enum OutboxStatus {
+  pending
+  delivered
+  failed
+}
+
+enum HoaSurveyStatus {
+  draft
+  open
+  closed
 }
 
 enum Weekday {
@@ -156,15 +311,28 @@ model User {
   // ── Community ─────────────────────────────────────────────────────────
   // Residency and operational access are scoped rows, never booleans on the
   // account: "manager" is only ever true *of a particular community*.
-  communityMemberships CommunityMembership[]
-  staffAssignments     CommunityStaffAssignment[]  @relation("StaffMember")
-  staffAssignmentsMade CommunityStaffAssignment[]  @relation("StaffAssigner")
-  providerApprovals    ProviderCommunityApproval[]
-  auditLogEntries      AdminAuditLog[]             @relation("AuditActor")
+  communityMemberships         CommunityMembership[]
+  staffAssignments             CommunityStaffAssignment[]  @relation("StaffMember")
+  staffAssignmentsMade         CommunityStaffAssignment[]  @relation("StaffAssigner")
+  communityInvitationsSent     CommunityInvitation[]       @relation("CommunityInvitationSender")
+  communityInvitationsAccepted CommunityInvitation[]       @relation("CommunityInvitationAcceptor")
+  hoaRequestsCreated           HoaServiceRequest[]         @relation("HoaRequestCreator")
+  hoaRequestParticipations     HoaRequestParticipation[]
+  hoaSurveysCreated            HoaSurvey[]                 @relation("HoaSurveyCreator")
+  hoaSurveyVotes               HoaSurveyVote[]
+  providerApprovals            ProviderCommunityApproval[]
+  auditLogEntries              AdminAuditLog[]             @relation("AuditActor")
+  providerServiceAreas         ProviderServiceArea[]
+  serviceBids                  ServiceBid[]                @relation("BidProvider")
+  serviceAgreementsWon         ServiceAgreement[]          @relation("AgreementProvider")
+  serviceAgreementsAwarded     ServiceAgreement[]          @relation("AgreementAwarder")
+  reviewsWritten               Review[]                    @relation("ReviewAuthor")
+  reviewsReceived              Review[]                    @relation("ReviewProvider")
+  notifications                Notification[]
 
-  adminAccess          AdminAccessGrant?  @relation("AdminAccessUser")
-  adminAccessGranted   AdminAccessGrant[] @relation("AdminAccessGrantor")
-  adminAccessRevoked   AdminAccessGrant[] @relation("AdminAccessRevoker")
+  adminAccess        AdminAccessGrant?  @relation("AdminAccessUser")
+  adminAccessGranted AdminAccessGrant[] @relation("AdminAccessGrantor")
+  adminAccessRevoked AdminAccessGrant[] @relation("AdminAccessRevoker")
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -173,8 +341,8 @@ model User {
 /// exact email address. The owner row is created by the migration and cannot
 /// be revoked by the application or by a direct database update.
 model AdminAccessGrant {
-  id     String @id @default(cuid())
-  email  String @unique
+  id     String            @id @default(cuid())
+  email  String            @unique
   level  AdminAccessLevel  @default(admin)
   status AdminAccessStatus @default(pending)
 
@@ -186,13 +354,13 @@ model AdminAccessGrant {
   clerkInvitationId String? @unique
 
   grantedByUserId String?
-  grantedBy       User?   @relation("AdminAccessGrantor", fields: [grantedByUserId], references: [id], onDelete: SetNull)
-  grantedAt        DateTime @default(now())
-  acceptedAt       DateTime?
+  grantedBy       User?     @relation("AdminAccessGrantor", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  grantedAt       DateTime  @default(now())
+  acceptedAt      DateTime?
 
   revokedByUserId String?
-  revokedBy       User?   @relation("AdminAccessRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
-  revokedAt        DateTime?
+  revokedBy       User?     @relation("AdminAccessRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  revokedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -225,11 +393,91 @@ model Community {
 
   memberships       CommunityMembership[]
   staffAssignments  CommunityStaffAssignment[]
+  invitations       CommunityInvitation[]
+  hoaRequests       HoaServiceRequest[]
+  hoaSurveys        HoaSurvey[]
   providerApprovals ProviderCommunityApproval[]
   auditLogEntries   AdminAuditLog[]
+  hoaProfile        HoaProfile?
+  units             CommunityUnit[]
+  serviceAgreements ServiceAgreement[]
 
   @@index([type, status])
   @@index([status, name])
+}
+
+/// Legal and onboarding detail for one official HOA. Exactly one row per
+/// `hoa`-type community; a `neighborhood` community never has one.
+model HoaProfile {
+  id          String    @id @default(cuid())
+  communityId String    @unique
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  legalName   String
+  displayName String?
+
+  addressLine1 String
+  addressLine2 String?
+  locality     String
+  region       String
+  postalCode   String
+  country      String @default("US")
+
+  latitude  Float?
+  longitude Float?
+
+  /// IANA name such as `America/Chicago`. Occurrence dates are computed in it.
+  timezone String @default("America/Chicago")
+
+  /// Declared homes/units. Honest capacity, not the active homeowner count —
+  /// the unit inventory represents vacant and uninvited homes.
+  totalHomes Int
+
+  referenceCode String?
+  serviceNotes  String?
+
+  onboardingStatus HoaOnboardingStatus @default(draft)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([onboardingStatus])
+}
+
+/// One home/unit in an HOA's inventory. The private service location: exact
+/// coordinates and access notes are exposed only to the scoped manager, the
+/// resident of this unit, Bundleen admins, and the awarded provider.
+model CommunityUnit {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  /// Display label such as `Home 14`, `Unit 2B`, or `11804 Cedar Lane`.
+  label String
+
+  // Null address fields inherit the HOA's primary address.
+  addressLine1 String?
+  locality     String?
+  region       String?
+  postalCode   String?
+  latitude     Float?
+  longitude    Float?
+
+  occupancyStatus UnitOccupancyStatus @default(vacant)
+
+  /// Gate codes, pet warnings, etc. Strictly authorized; never audited.
+  accessNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships    CommunityMembership[]
+  invitations    CommunityInvitation[]
+  participations HoaRequestParticipation[]
+  visits         ServiceVisit[]
+
+  @@unique([communityId, label])
+  @@index([communityId, occupancyStatus])
 }
 
 /// Homeowner residency in a community.
@@ -244,7 +492,7 @@ model CommunityMembership {
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  status MembershipStatus @default(pending)
+  status MembershipStatus @default(active)
 
   /// Set when the membership first became `active`, so a removal and re-add
   /// does not silently rewrite the resident's history.
@@ -259,12 +507,24 @@ model CommunityMembership {
   /// record itself and not only in the audit log.
   isAdminOverride Boolean @default(false)
 
+  /// Server-assigned capacity slot for a current, non-override neighborhood
+  /// placement. A partial unique index and trigger allocate slots 1..50; HOA
+  /// and explicit admin-override memberships keep this null.
+  neighborhoodSlot Int?
+
+  /// The HOA home this resident occupies. Required for `hoa` memberships and
+  /// always null for `neighborhood` ones (trigger-enforced). A partial unique
+  /// index allows one active primary homeowner per unit.
+  unitId String?
+  unit   CommunityUnit? @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([communityId, userId])
   @@index([userId, status])
   @@index([communityId, status])
+  @@index([unitId, status])
 }
 
 /// Scoped operational access to one community.
@@ -297,6 +557,399 @@ model CommunityStaffAssignment {
 
   @@index([userId, status])
   @@index([communityId, status])
+}
+
+/// An email-bound invitation to one HOA. The invitation has no authority by
+/// itself: acceptance requires Clerk to prove the exact verified email, after
+/// which the server creates either a resident membership or a scoped manager
+/// assignment. Raw invitation tickets are owned by Clerk and never stored.
+model CommunityInvitation {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  email  String
+  role   CommunityInvitationRole
+  status CommunityInvitationStatus @default(pending)
+
+  /// The specific home a homeowner invitation is bound to. Required for
+  /// homeowner invitations, null for manager invitations (trigger-enforced).
+  unitId String?
+  unit   CommunityUnit? @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  clerkInvitationId String? @unique
+
+  invitedByUserId String
+  invitedBy       User      @relation("CommunityInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  invitedAt       DateTime  @default(now())
+  expiresAt       DateTime?
+
+  acceptedByUserId String?
+  acceptedBy       User?     @relation("CommunityInvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  acceptedAt       DateTime?
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([communityId, email, role])
+  @@index([email, status])
+  @@index([communityId, status])
+}
+
+/// A community service request owned by an HOA manager. Compulsory recurring
+/// requests are visible to every active resident; optional group requests use
+/// participation rows to record who chose to join.
+model HoaServiceRequest {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  createdByUserId String
+  createdBy       User   @relation("HoaRequestCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  title           String
+  category        String
+  description     String
+  kind            HoaRequestKind
+  recurrenceLabel String?
+  status          HoaRequestStatus @default(draft)
+  opensAt         DateTime?
+
+  /// Optional requests: when resident enrollment closes.
+  enrollmentClosesAt DateTime?
+  /// When provider bidding closes. Required before `open_for_bids`.
+  biddingClosesAt    DateTime?
+  /// Requested first service date for the winning provider.
+  startDate          DateTime?
+  /// Recurring cadence in days (e.g. 14 for biweekly). Null for one-off work.
+  recurrenceIntervalDays Int?
+  /// How many occurrences the agreement materializes. 1 for one-off work.
+  totalOccurrences       Int  @default(1)
+
+  /// Optional requests: minimum/maximum homes needed before an award.
+  minHomes Int?
+  maxHomes Int?
+
+  /// Set when the participant set was snapshotted/locked so providers quote
+  /// against a stable number of homes. Immutable afterwards.
+  participantsLockedAt DateTime?
+  awardedAt            DateTime?
+
+  participations HoaRequestParticipation[]
+  bids           ServiceBid[]
+  agreement      ServiceAgreement?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([communityId, status, createdAt])
+  @@index([status, category, biddingClosesAt])
+}
+
+/// One unit's relationship to one request: a resident's explicit join/decline
+/// for optional requests, or the server's audience snapshot for compulsory
+/// requests (where `userId` may be null for vacant units).
+model HoaRequestParticipation {
+  id        String            @id @default(cuid())
+  requestId String
+  request   HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId    String?
+  unit      CommunityUnit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  response ParticipationResponse @default(joined)
+  joinedAt DateTime              @default(now())
+  updatedAt DateTime             @default(now()) @updatedAt
+
+  @@unique([requestId, unitId])
+  @@index([userId, joinedAt])
+  @@index([requestId, response])
+}
+
+/// Structured provider coverage: a center-plus-radius circle and/or a set of
+/// postal codes. A provider with no active area is eligible nowhere.
+model ProviderServiceArea {
+  id             String @id @default(cuid())
+  providerUserId String
+  provider       User   @relation(fields: [providerUserId], references: [id], onDelete: Cascade)
+
+  label String
+
+  centerLatitude  Float?
+  centerLongitude Float?
+  radiusMiles     Float?
+
+  postalCodes String[] @default([])
+
+  status ProviderServiceAreaStatus @default(active)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerUserId, status])
+}
+
+/// One provider's current bid on one request. Revisions update the row and
+/// increment `version` while bidding is open; a partial unique index allows at
+/// most one accepted bid per request.
+model ServiceBid {
+  id        String            @id @default(cuid())
+  requestId String
+  request   HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  providerUserId String
+  provider       User   @relation("BidProvider", fields: [providerUserId], references: [id], onDelete: Cascade)
+
+  status ServiceBidStatus @default(submitted)
+
+  /// Money is always nonnegative integer cents.
+  amountCents  Int
+  currency     String          @default("usd")
+  pricingBasis BidPricingBasis
+  /// Per-home price in cents when the basis needs a breakdown.
+  perHomeCents Int?
+
+  proposedStartDate      DateTime?
+  estimatedDurationLabel String?
+  scope                  String
+  exclusions             String?
+  cadenceLabel           String?
+  validUntil             DateTime?
+
+  version     Int       @default(1)
+  submittedAt DateTime  @default(now())
+  withdrawnAt DateTime?
+  decidedAt   DateTime?
+
+  agreement ServiceAgreement?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([requestId, providerUserId])
+  @@index([providerUserId, status])
+  @@index([requestId, status])
+}
+
+/// The accepted commercial terms, snapshotted at award time so later bid or
+/// profile edits cannot rewrite what was agreed. One per request, atomically.
+model ServiceAgreement {
+  id        String            @id @default(cuid())
+  requestId String            @unique
+  request   HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  bidId String     @unique
+  bid   ServiceBid @relation(fields: [bidId], references: [id], onDelete: Restrict)
+
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+
+  providerUserId String
+  provider       User   @relation("AgreementProvider", fields: [providerUserId], references: [id], onDelete: Restrict)
+
+  awardedByUserId String?
+  awardedBy       User?   @relation("AgreementAwarder", fields: [awardedByUserId], references: [id], onDelete: SetNull)
+
+  // ── Snapshot of the accepted terms ────────────────────────────────────
+  amountCents  Int
+  currency     String          @default("usd")
+  pricingBasis BidPricingBasis
+  perHomeCents Int?
+  scope        String
+  exclusions   String?
+  cadenceLabel String?
+  /// Number of participating homes locked at award time.
+  lockedHomeCount Int
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  status ServiceAgreementStatus @default(active)
+
+  occurrences ServiceOccurrence[]
+  reviews     Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerUserId, status])
+  @@index([communityId, status])
+}
+
+/// One recurring cycle (or the single date of a one-off service).
+model ServiceOccurrence {
+  id          String           @id @default(cuid())
+  agreementId String
+  agreement   ServiceAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  /// 1-based cycle number; unique per agreement so materialization retries
+  /// cannot duplicate a cycle.
+  sequence    Int
+  serviceDate DateTime
+
+  status   ServiceOccurrenceStatus @default(planned)
+  closedAt DateTime?
+
+  /// Set when the provider publishes the day plan for this occurrence.
+  schedulePublishedAt DateTime?
+
+  visits ServiceVisit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agreementId, sequence])
+  @@index([agreementId, serviceDate])
+}
+
+/// One provider stop at one unit for one occurrence.
+model ServiceVisit {
+  id           String            @id @default(cuid())
+  occurrenceId String
+  occurrence   ServiceOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  unitId String
+  unit   CommunityUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  /// Provider-chosen order of the day's stops. Authoritative once published.
+  stopRank Int?
+
+  scheduledDate    DateTime?
+  windowStart      String?
+  windowEnd        String?
+  estimatedMinutes Int?
+
+  status          ServiceVisitStatus @default(unscheduled)
+  statusChangedAt DateTime?
+  completionNote  String?
+  completedAt     DateTime?
+
+  reviews Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([occurrenceId, unitId])
+  @@index([unitId, status])
+  @@index([occurrenceId, stopRank])
+}
+
+/// One homeowner review per completed visit, or one manager review per
+/// completed agreement. Exactly one subject per row (CHECK-enforced).
+model Review {
+  id String @id @default(cuid())
+
+  reviewerUserId String
+  reviewer       User   @relation("ReviewAuthor", fields: [reviewerUserId], references: [id], onDelete: Cascade)
+
+  providerUserId String
+  provider       User   @relation("ReviewProvider", fields: [providerUserId], references: [id], onDelete: Cascade)
+
+  visitId String?
+  visit   ServiceVisit? @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  agreementId String?
+  agreement   ServiceAgreement? @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  /// 1..5, server validated and CHECK-bounded.
+  rating  Int
+  comment String
+
+  status ReviewStatus @default(published)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reviewerUserId, visitId])
+  @@unique([reviewerUserId, agreementId])
+  @@index([providerUserId, status, createdAt])
+}
+
+/// In-app notification record. `dedupeKey` makes creation idempotent so
+/// retries and concurrent mutations cannot duplicate an intended event.
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind     NotificationKind
+  title    String
+  body     String
+  linkPath String?
+
+  dedupeKey String @unique
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+/// Durable delivery queue. Database commits never depend on an email provider
+/// call succeeding; a worker delivers pending events idempotently and retries.
+model OutboxEvent {
+  id String @id @default(cuid())
+
+  kind      String
+  dedupeKey String @unique
+
+  /// Allow-listed payload only: ids and safe display fields, never resident
+  /// addresses, coordinates, tokens, or access notes.
+  payload Json
+
+  status        OutboxStatus @default(pending)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
+  deliveredAt   DateTime?
+  /// Delivery provider's message id, for support. Never a secret.
+  providerMessageId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+}
+
+/// One manager-authored resident survey for a calendar month. Options are
+/// stored as a bounded ordered list; each active resident may select one.
+model HoaSurvey {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  createdByUserId String
+  createdBy       User   @relation("HoaSurveyCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  monthKey String
+  question String
+  options  String[]
+  status   HoaSurveyStatus @default(draft)
+  closesAt DateTime?
+
+  votes HoaSurveyVote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([communityId, monthKey])
+  @@index([communityId, status, createdAt])
+}
+
+model HoaSurveyVote {
+  id          String    @id @default(cuid())
+  surveyId    String
+  survey      HoaSurvey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  optionIndex Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([surveyId, userId])
+  @@index([userId, createdAt])
 }
 
 /// Communities a provider is approved to serve.

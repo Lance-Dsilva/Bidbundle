@@ -127,5 +127,8 @@ describe("auditActionSummary", () => {
     expect(auditActionSummary("provider_license_verified")).toBe("verified a provider licence");
     expect(auditActionSummary("admin_access_granted")).toBe("granted admin portal access");
     expect(auditActionSummary("admin_access_revoked")).toBe("revoked admin portal access");
+    expect(auditActionSummary("community_invitation_sent")).toBe("sent a community invitation");
+    expect(auditActionSummary("hoa_request_created")).toBe("created an HOA service request");
+    expect(auditActionSummary("hoa_survey_created")).toBe("created an HOA resident survey");
   });
 });

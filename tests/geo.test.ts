@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  coordinateBoundsForRadius,
   distanceMiles,
   isWithinCommunity,
+  matchAvailableNeighborhood,
   matchNeighborhood,
   roundDistanceMiles,
   type NeighborhoodCandidate,
@@ -39,6 +41,35 @@ describe("distanceMiles", () => {
     const west = { latitude: 0, longitude: 179.5 };
     const east = { latitude: 0, longitude: -179.5 };
     expect(distanceMiles(west, east)).toBeCloseTo(69, 0);
+  });
+});
+
+describe("coordinateBoundsForRadius", () => {
+  it("contains every point accepted by the exact radius check", () => {
+    const bounds = coordinateBoundsForRadius(SAN_FRANCISCO, 4);
+    expect(bounds.minLatitude).toBeLessThan(SAN_FRANCISCO.latitude);
+    expect(bounds.maxLatitude).toBeGreaterThan(SAN_FRANCISCO.latitude);
+    expect(
+      bounds.longitudeRanges.some(
+        (range) =>
+          SAN_FRANCISCO.longitude >= range.min && SAN_FRANCISCO.longitude <= range.max,
+      ),
+    ).toBe(true);
+  });
+
+  it("splits the longitude range at the antimeridian", () => {
+    const bounds = coordinateBoundsForRadius({ latitude: 0, longitude: 179.99 }, 4);
+    expect(bounds.longitudeRanges).toHaveLength(2);
+    expect(bounds.longitudeRanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ min: -180 }),
+        expect.objectContaining({ max: 180 }),
+      ]),
+    );
+  });
+
+  it("rejects an invalid radius", () => {
+    expect(() => coordinateBoundsForRadius(SAN_FRANCISCO, -1)).toThrow(RangeError);
   });
 });
 
@@ -114,6 +145,37 @@ describe("matchNeighborhood", () => {
       radiusMiles: distanceMiles(SAN_FRANCISCO, OAKLAND),
     };
     expect(matchNeighborhood(OAKLAND, [exact])?.communityId).toBe("exact");
+  });
+});
+
+describe("matchAvailableNeighborhood", () => {
+  it("skips a full community even when it is the nearest", () => {
+    expect(
+      matchAvailableNeighborhood(
+        SAN_FRANCISCO,
+        [
+          {
+            id: "full",
+            centerLatitude: SAN_FRANCISCO.latitude,
+            centerLongitude: SAN_FRANCISCO.longitude,
+            radiusMiles: 4,
+            currentHomeowners: 50,
+          },
+          {
+            id: "open",
+            centerLatitude: SAN_FRANCISCO.latitude + 0.01,
+            centerLongitude: SAN_FRANCISCO.longitude,
+            radiusMiles: 4,
+            currentHomeowners: 49,
+          },
+        ],
+        50,
+      )?.communityId,
+    ).toBe("open");
+  });
+
+  it("fails closed for an invalid capacity", () => {
+    expect(matchAvailableNeighborhood(SAN_FRANCISCO, [], 0)).toBeNull();
   });
 });
 
