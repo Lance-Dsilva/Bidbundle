@@ -66,3 +66,6 @@ src/generated/
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Local Vercel project linkage and downloaded credentials
+/.vercel/
