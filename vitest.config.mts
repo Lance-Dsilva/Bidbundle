@@ -1,8 +1,13 @@
 import { resolve } from "node:path";
 
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // The project's tsconfig sets `"jsx": "preserve"` for Next's own SWC
+  // pipeline; component tests need their own JSX transform, which this
+  // plugin provides independently of that.
+  plugins: [react()],
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),
@@ -14,8 +19,12 @@ export default defineConfig({
     },
   },
   test: {
+    // Component tests (.test.tsx) opt into a DOM with a `// @vitest-environment
+    // jsdom` comment at the top of the file; everything else is server/pure
+    // logic and stays on this default.
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    setupFiles: ["tests/stubs/dom-setup.ts"],
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     // Integration suites hit a real database and a real Upstash quota, so they
     // are opt-in via `npm run test:integration`.
     exclude: ["tests/integration/**", "node_modules/**"],

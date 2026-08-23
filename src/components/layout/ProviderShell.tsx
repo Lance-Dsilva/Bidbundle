@@ -5,11 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { roleLine, ViewerIdentity } from "@/components/layout/ViewerIdentity";
+import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
 import { Icon } from "@/components/ui/Icon";
+import { NotificationBell } from "@/components/ui/NotificationBell";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewerContext } from "@/hooks/useViewerContext";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
-import { useProviderJobFeed } from "@/hooks/useProviderJobFeed";
 import { initialsFromName } from "@/lib/display-name";
 
 const providerNavigation = [
@@ -32,8 +33,7 @@ type ProviderShellProps = Readonly<{
 export function ProviderShell({ children, userName }: ProviderShellProps) {
   const pathname = usePathname();
   const { dashboard, profile } = useProviderDashboard();
-  const { jobs } = useProviderJobFeed();
-  const { notifications, markRead, dismiss } = useNotifications();
+  const { notifications, loading: notificationsLoading, markRead, dismiss } = useNotifications();
   // Account status is server-owned: a suspended provider is told so here, and
   // the provider write endpoints enforce it independently.
   const { context } = useViewerContext();
@@ -41,13 +41,6 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
   const providerInitials = initialsFromName(providerName, "SP");
   const accountName = userName || providerName;
   const accountInitials = initialsFromName(accountName, "SP");
-
-  const scrollToNotifications = () => {
-    document.querySelector<HTMLElement>("#provider-notifications")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
 
   return (
     <div className="dash-shell provider-shell">
@@ -99,10 +92,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
           <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
-          <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
-            <Icon name="bell" size={18} />
-            {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
-          </button>
+          <NotificationBell notifications={notifications} loading={notificationsLoading} markRead={markRead} dismiss={dismiss} />
           <Link className="dash-avatar" href="/app/provider/profile" aria-label={`Open ${accountName}'s profile`}>
             {accountInitials}
           </Link>
@@ -111,10 +101,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
 
       <div className="dash-content">
         <div className="dash-topbar-actions">
-          <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
-            <Icon name="bell" size={18} />
-            {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
-          </button>
+          <NotificationBell notifications={notifications} loading={notificationsLoading} markRead={markRead} dismiss={dismiss} />
           <div className="dash-topbar-identity">
             <ViewerIdentity context={context} fallbackName={accountName} compact />
           </div>
@@ -123,70 +110,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
           </Link>
         </div>
 
-        <div className="dash-workspace">
-          <main className="dash-content-inner provider-route-content">{children}</main>
-
-          <aside className="dash-right-rail" aria-label="Provider updates">
-            <section className="bb-card dash-rail-card" id="provider-notifications">
-              <div className="dash-rail-heading">
-                <div><span className="bb-eyebrow">Inbox</span><h2>Notifications</h2></div>
-                <span className="dash-rail-count">{notifications.length}</span>
-              </div>
-              <div className="dash-rail-list">
-                {notifications.length > 0 ? notifications.slice(0, 3).map((notification) => (
-                  <div className="dash-rail-item" key={notification.id}>
-                    <span className="dash-rail-icon"><Icon name="bell" size={15} /></span>
-                    <div>
-                      <strong>{notification.title}</strong><p>{notification.body}</p>
-                      <div className="dash-rail-item-actions">
-                        {notification.action_url ? <Link href={notification.action_url} onClick={() => void markRead(notification.id)}>View</Link> : null}
-                        <button type="button" onClick={() => void dismiss(notification.id)}>Dismiss</button>
-                      </div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="dash-rail-empty">
-                    <span className="dash-rail-icon"><Icon name="check-circle" size={17} /></span>
-                    <div><strong>You&rsquo;re all caught up</strong><p>New bid and job updates will appear here.</p></div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="bb-card dash-rail-card">
-              <div className="dash-rail-heading">
-                <div><span className="bb-eyebrow">Nearby</span><h2>Job opportunities</h2></div>
-                <Link href="/app/provider/job-feed">View all</Link>
-              </div>
-              <div className="dash-rail-list">
-                {jobs.length > 0 ? jobs.slice(0, 3).map((job) => (
-                  <Link className="dash-rail-item provider-opportunity-link" href="/app/provider/job-feed" key={job.id}>
-                    <span className="dash-rail-icon"><Icon name="tools" size={15} /></span>
-                    <div>
-                      <strong>{job.title}</strong>
-                      <p>{job.neighborhood}{job.distance_mi !== null ? ` · ${job.distance_mi.toFixed(1)} mi` : ""}</p>
-                      <time>${Math.round(job.budget_min / 100).toLocaleString()}–${Math.round(job.budget_max / 100).toLocaleString()}</time>
-                    </div>
-                  </Link>
-                )) : (
-                  <div className="dash-rail-empty">
-                    <span className="dash-rail-icon"><Icon name="search" size={17} /></span>
-                    <div><strong>No matching jobs yet</strong><p>New neighborhood opportunities will appear here.</p></div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="bb-card dash-rail-card dash-quick-card">
-              <span className="bb-eyebrow">Quick actions</span><h2>Manage your work</h2>
-              <div className="dash-quick-links">
-                <Link href="/app/provider/job-feed"><Icon name="search" size={16} /> Find a job</Link>
-                <Link href="/app/provider/bids"><Icon name="bids" size={16} /> Manage bids</Link>
-                <Link href="/app/provider/schedule"><Icon name="calendar" size={16} /> View schedule</Link>
-              </div>
-            </section>
-          </aside>
-        </div>
+        <main className="dash-content-inner provider-route-content">{children}</main>
       </div>
 
       <nav className="dash-mobile-bottom-nav" aria-label="Provider mobile navigation">
@@ -196,6 +120,8 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
         <Link className={pathname === "/app/provider/bids" ? "is-active" : ""} href="/app/provider/bids"><Icon name="bids" size={20} /><span>Bids</span></Link>
         <Link className={pathname === "/app/provider/messages" ? "is-active" : ""} href="/app/provider/messages"><Icon name="chat" size={20} /><span>Messages</span></Link>
       </nav>
+
+      <BundleenAiWidget />
     </div>
   );
 }

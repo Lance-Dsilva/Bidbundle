@@ -7,7 +7,10 @@ import { clerkClient } from "@clerk/nextjs/server";
 import type { HoaInvitationSummary, HoaSurveySummary } from "@/lib/hoa-types";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
-import { buildNotificationOps, contentHash } from "@/lib/server/notifications";
+import {
+  buildPreferenceAwareNotificationOps,
+  contentHash,
+} from "@/lib/server/notifications";
 import { normalizeEmail } from "@/lib/validation/auth";
 import type { HoaSurveyCreateInput, HoaSurveyStatusInput } from "@/lib/validation/hoa";
 
@@ -545,8 +548,9 @@ export async function acceptHoaInvitation(input: {
       unitId: true,
       expiresAt: true,
       invitedByUserId: true,
+      invitedBy: { select: { id: true, email: true } },
       acceptedBy: { select: { clerkUserId: true } },
-      community: { select: { id: true, type: true, status: true } },
+      community: { select: { id: true, name: true, type: true, status: true } },
     },
   });
 
@@ -641,6 +645,34 @@ export async function acceptHoaInvitation(input: {
   });
 
   const now = new Date();
+  const acceptanceNotificationOps = await buildPreferenceAwareNotificationOps([
+    {
+      userId: user.id,
+      email,
+      kind: "invitation",
+      title: `Welcome to ${invitation.community.name}`,
+      body:
+        invitation.role === "hoa_manager"
+          ? "Your HOA manager invitation was accepted. Your manager dashboard is ready."
+          : "Your HOA invitation was accepted. You can now view community services and updates.",
+      linkPath:
+        invitation.role === "hoa_manager" ? "/app/hoa/dashboard" : "/app/homeowner/community",
+      dedupeKey: `invitation-accepted:${invitation.id}:${user.id}`,
+    },
+    ...(invitation.invitedBy.id !== user.id
+      ? [
+          {
+            userId: invitation.invitedBy.id,
+            email: invitation.invitedBy.email,
+            kind: "invitation" as const,
+            title: `${input.fullName || email} joined ${invitation.community.name}`,
+            body: `The ${invitation.role === "hoa_manager" ? "HOA manager" : "homeowner"} invitation was accepted.`,
+            linkPath: invitation.role === "hoa_manager" ? "/app/admin/communities" : "/app/hoa/dashboard",
+            dedupeKey: `invitation-accepted-sender:${invitation.id}:${invitation.invitedBy.id}`,
+          },
+        ]
+      : []),
+  ]);
   if (invitation.role === "hoa_manager") {
     const currentManager = await db.communityStaffAssignment.findFirst({
       where: {
@@ -705,6 +737,7 @@ export async function acceptHoaInvitation(input: {
           metadata: { role: invitation.role, status: "accepted" },
         }),
       }),
+      ...acceptanceNotificationOps,
     ]);
     return "manager";
   }
@@ -759,6 +792,7 @@ export async function acceptHoaInvitation(input: {
           metadata: { role: invitation.role, status: "accepted" },
         }),
       }),
+      ...acceptanceNotificationOps,
     ]);
   } catch (error) {
     if ((error as { code?: string }).code === "P2002") {
@@ -814,7 +848,7 @@ export async function createHoaSurvey(
         metadata: { status: input.status },
       }),
     }),
-    ...buildNotificationOps(
+    ...(await buildPreferenceAwareNotificationOps(
       residents.map(({ user }) => ({
         userId: user.id,
         email: user.email,
@@ -824,7 +858,7 @@ export async function createHoaSurvey(
         linkPath: "/app/homeowner/community",
         dedupeKey: `survey-open:${surveyId}:${user.id}`,
       })),
-    ),
+    )),
   ]);
   return surveyId;
 }
@@ -869,7 +903,7 @@ export async function updateHoaSurveyStatus(
         metadata: { previousStatus: survey.status, nextStatus: input.status },
       }),
     }),
-    ...buildNotificationOps(
+    ...(await buildPreferenceAwareNotificationOps(
       residents.map(({ user }) => ({
         userId: user.id,
         email: user.email,
@@ -879,7 +913,7 @@ export async function updateHoaSurveyStatus(
         linkPath: "/app/homeowner/community",
         dedupeKey: `survey-open:${survey.id}:${user.id}`,
       })),
-    ),
+    )),
   ]);
 }
 

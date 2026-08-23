@@ -148,6 +148,26 @@ export async function guardHoaMutation(userId: string): Promise<GuardFailure | n
   }
 }
 
+/** Applies a per-account limiter to AI assistant messages. */
+export async function guardAiChat(userId: string): Promise<GuardFailure | null> {
+  if (!isRedisConfigured()) {
+    if (requiresRateLimiter()) return { kind: "unavailable" };
+    warnLimiterMissingOnce();
+    return null;
+  }
+
+  try {
+    const decision = await consumeRateLimit("aiChat", buildIdentifier(["ai-chat", userId]));
+    if (!decision.success) {
+      return { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+    }
+    return null;
+  } catch (error) {
+    if (error instanceof RateLimiterUnavailableError) return { kind: "unavailable" };
+    throw error;
+  }
+}
+
 /** Builds the JSON `429`/`503` response for an API route handler. */
 export function guardFailureResponse(failure: GuardFailure): NextResponse {
   if (failure.kind === "rate-limited") {

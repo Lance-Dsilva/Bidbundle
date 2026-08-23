@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { guardFailureResponse, guardRegistration } from "@/lib/server/auth-guard";
 import { syncNeighborhoodMembership } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
+import { enqueueNotifications } from "@/lib/server/notifications";
 import { providerProfileUpdateData } from "@/lib/server/profile";
 import { DASHBOARD_BY_ROLE, MAX_AUTH_BODY_BYTES, normalizeEmail } from "@/lib/validation/auth";
 import { onboardingProfileSchema } from "@/lib/validation/profile";
@@ -246,6 +247,29 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!user) throw lastError ?? new Error("Profile persistence did not return a user.");
 
     if (user.role === "homeowner") await placeInNeighborhood(user.id);
+
+    // Idempotent on every profile sync so a transient notification-store
+    // outage can recover on the next request without sending duplicates.
+    try {
+      await enqueueNotifications([
+        {
+          userId: user.id,
+          email,
+          kind: "account",
+          title: "Welcome to Bundleen",
+          body:
+            user.role === "provider"
+              ? "Your provider account is ready. Complete verification and service areas to start receiving eligible HOA requests."
+              : "Your Bundleen account is ready. You can now follow community services, bids, and schedules in one place.",
+          linkPath: DASHBOARD_BY_ROLE[user.role],
+          dedupeKey: `account-welcome:${user.id}`,
+        },
+      ]);
+    } catch (notificationError) {
+      console.error("[auth] welcome notification could not be queued", {
+        name: notificationError instanceof Error ? notificationError.name : "UnknownError",
+      });
+    }
 
     return NextResponse.json({
       profileReady: true,

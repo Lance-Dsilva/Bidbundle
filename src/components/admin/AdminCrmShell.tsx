@@ -5,7 +5,15 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
+import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
 import { Icon, type IconName } from "@/components/ui/Icon";
+
+const ADMIN_AI_SUGGESTIONS = [
+  "Summarize operations across all communities",
+  "How many providers are pending verification?",
+  "What's the status of open service requests?",
+  "Give me an overview of a specific HOA",
+];
 
 type AdminCrmShellProps = Readonly<{
   children: ReactNode;
@@ -243,6 +251,8 @@ export function AdminCrmShell(props: AdminCrmShellProps) {
 
         <main className="min-h-[calc(100vh-4rem)]">{props.children}</main>
       </div>
+
+      <BundleenAiWidget suggestions={ADMIN_AI_SUGGESTIONS} subtitle="Cross-community operational data" />
     </div>
   );
 }

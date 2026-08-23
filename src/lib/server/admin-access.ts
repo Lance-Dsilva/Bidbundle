@@ -7,6 +7,7 @@ import type { AdminAccessSummary } from "@/lib/admin-access";
 import { isPrimaryAdminEmail } from "@/lib/admin-access";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
+import { buildPreferenceAwareNotificationOps } from "@/lib/server/notifications";
 import { normalizeEmail } from "@/lib/validation/auth";
 
 export class AdminAccessError extends Error {
@@ -192,6 +193,18 @@ export async function grantAdminAccess(input: {
     target.role === "admin"
       ? existingGrant?.previousRole ?? "homeowner"
       : target.role;
+  const notificationOps = await buildPreferenceAwareNotificationOps([
+    {
+      userId: target.id,
+      email,
+      emailPolicy: "required",
+      kind: "security",
+      title: "Bundleen admin access granted",
+      body: "Your account can now access the internal Bundleen admin portal. If you did not expect this change, contact the primary owner immediately.",
+      linkPath: "/app/admin/dashboard",
+      dedupeKey: `admin-access-granted:${grantId}:${now.toISOString()}`,
+    },
+  ]);
 
   await db.$transaction([
     db.adminAccessGrant.upsert({
@@ -228,6 +241,7 @@ export async function grantAdminAccess(input: {
         metadata: { nextStatus: "active" },
       }),
     }),
+    ...notificationOps,
   ]);
 
   const created = await db.adminAccessGrant.findUnique({
@@ -264,6 +278,20 @@ export async function revokeAdminAccess(input: {
 
   const now = new Date();
   const nextRole: UserRole = grant.previousRole ?? "homeowner";
+  const notificationOps = grant.userId
+    ? await buildPreferenceAwareNotificationOps([
+        {
+          userId: grant.userId,
+          email: grant.email,
+          emailPolicy: "required",
+          kind: "security",
+          title: "Bundleen admin access removed",
+          body: "Your internal Bundleen admin access was removed. If you did not expect this change, contact the primary owner immediately.",
+          linkPath: "/",
+          dedupeKey: `admin-access-revoked:${grant.id}:${now.toISOString()}`,
+        },
+      ])
+    : [];
   const operations = [
     db.adminAccessGrant.update({
       where: { id: grant.id },
@@ -297,6 +325,7 @@ export async function revokeAdminAccess(input: {
         metadata: { previousStatus: "active", nextStatus: "revoked" },
       }),
     }),
+    ...notificationOps,
   ];
 
   await db.$transaction(operations);

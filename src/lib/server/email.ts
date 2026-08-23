@@ -13,6 +13,8 @@ export type EmailMessage = {
   to: string;
   subject: string;
   text: string;
+  /** Stable outbox identity, forwarded to Resend for provider-side deduping. */
+  idempotencyKey?: string;
 };
 
 export type EmailDeliveryResult = {
@@ -38,17 +40,21 @@ class ResendEmailProvider implements EmailProvider {
   ) {}
 
   async send(message: EmailMessage): Promise<EmailDeliveryResult> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      "Content-Type": "application/json",
+    };
+    if (message.idempotencyKey) headers["Idempotency-Key"] = message.idempotencyKey;
+
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify({
         from: this.fromAddress,
         to: [message.to],
         subject: message.subject,
         text: message.text,
+        ...(process.env.EMAIL_REPLY_TO ? { reply_to: process.env.EMAIL_REPLY_TO } : {}),
       }),
     });
 
@@ -78,12 +84,33 @@ class ConsoleEmailProvider implements EmailProvider {
 }
 
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM_ADDRESS);
+  return Boolean(process.env.RESEND_API_KEY && resolveFromAddress());
 }
 
 export function getEmailProvider(): EmailProvider {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const fromAddress = resolveFromAddress();
   if (apiKey && fromAddress) return new ResendEmailProvider(apiKey, fromAddress);
+  // A production outbox must never mark an email delivered merely because a
+  // sender variable was omitted. Throwing leaves the row retryable and makes
+  // the deployment problem visible in logs and the admin outbox.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Email delivery is not configured. Set RESEND_API_KEY and EMAIL_FROM_ADDRESS or RESEND_EMAIL_DOMAIN.",
+    );
+  }
   return new ConsoleEmailProvider();
+}
+
+function resolveFromAddress(): string | null {
+  const explicit = process.env.EMAIL_FROM_ADDRESS?.trim();
+  if (explicit) return explicit;
+
+  // The Vercel Resend integration supplies the verified domain. This default
+  // means the integration works without a second, redundant sender variable.
+  const domain = process.env.RESEND_EMAIL_DOMAIN?.trim().toLowerCase();
+  if (!domain || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) {
+    return null;
+  }
+  return `Bundleen <notifications@${domain}>`;
 }

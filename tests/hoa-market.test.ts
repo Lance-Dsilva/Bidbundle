@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   providerUser: null as Record<string, unknown> | null,
   losingBids: [] as Array<Record<string, unknown>>,
   residents: [] as Array<Record<string, unknown>>,
+  emailOptOutUserIds: [] as string[],
   batches: [] as Op[][],
 }));
 
@@ -73,6 +74,9 @@ vi.mock("@/lib/server/db", () => ({
     providerServiceArea: {
       findMany: async () => [],
     },
+    homeownerProfile: {
+      findMany: async () => state.emailOptOutUserIds.map((userId) => ({ userId })),
+    },
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;
@@ -82,7 +86,11 @@ vi.mock("@/lib/server/db", () => ({
 
 import { areaCoversLocation, awardBid } from "@/lib/server/hoa-market";
 import { HoaWorkflowError } from "@/lib/server/hoa";
-import { buildNotificationOps, contentHash } from "@/lib/server/notifications";
+import {
+  buildNotificationOps,
+  buildPreferenceAwareNotificationOps,
+  contentHash,
+} from "@/lib/server/notifications";
 
 const HOA_LOCATION = {
   latitude: 30.4021,
@@ -197,6 +205,7 @@ describe("awardBid", () => {
     state.residents = [
       { user: { id: "resident-1", email: "resident1@example.com" } },
     ];
+    state.emailOptOutUserIds = [];
   });
 
   it("performs the entire award as one transaction batch", async () => {
@@ -326,5 +335,42 @@ describe("notifications", () => {
 
   it("returns no operations for an empty intent list", () => {
     expect(buildNotificationOps([])).toHaveLength(0);
+  });
+
+  it("keeps opted-out homeowners in-app without creating an email", async () => {
+    state.emailOptOutUserIds = ["resident-1"];
+    const ops = (await buildPreferenceAwareNotificationOps([
+      {
+        userId: "resident-1",
+        email: "resident1@example.com",
+        kind: "schedule",
+        title: "Schedule updated",
+        body: "Your time changed.",
+        dedupeKey: "schedule:test:resident-1",
+      },
+    ])) as unknown as Op[];
+
+    expect(ops).toHaveLength(1);
+    expect(ops[0].model).toBe("notification");
+  });
+
+  it("still emails required account security notices", async () => {
+    state.emailOptOutUserIds = ["resident-1"];
+    const ops = (await buildPreferenceAwareNotificationOps([
+      {
+        userId: "resident-1",
+        email: "resident1@example.com",
+        emailPolicy: "required",
+        kind: "security",
+        title: "Access changed",
+        body: "Your access changed.",
+        dedupeKey: "security:test:resident-1",
+      },
+    ])) as unknown as Op[];
+
+    expect(ops.map((operation) => operation.model)).toEqual([
+      "notification",
+      "outboxEvent",
+    ]);
   });
 });

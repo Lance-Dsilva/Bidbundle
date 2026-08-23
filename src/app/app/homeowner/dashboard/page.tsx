@@ -6,15 +6,11 @@ import Link from "next/link";
 import { CategoryTile } from "@/components/ui/CategoryArt";
 import { Icon } from "@/components/ui/Icon";
 import { PageSkeleton } from "@/components/ui/Skeleton";
-import { ViewerIdentity, roleLine } from "@/components/layout/ViewerIdentity";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
 import { useHomeownerRequests } from "@/hooks/useHomeownerRequests";
 import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
-import { useNotifications } from "@/hooks/useNotifications";
-import { useViewerContext } from "@/hooks/useViewerContext";
-import { initialsFromName } from "@/lib/display-name";
 
 const POPULAR_SERVICES: { label: string; icon: "cleaning" | "plumbing" | "electrical" | "painting"; blurb: string }[] = [
   { label: "Cleaning", icon: "cleaning", blurb: "Home, office" },
@@ -27,9 +23,7 @@ export default function HomeownerDashboard() {
   const { dashboard, user, loading } = useHomeownerDashboard();
   const { requests, refresh: refreshRequests } = useHomeownerRequests();
   const { requests: nbRequests, loading: nbRequestsLoading } = useNeighbourhoodRequests();
-  const { notifications, markRead, dismiss } = useNotifications();
   const { otherMembers, neighbourhoodName, neighborCount } = useNeighbourhoodSummary();
-  const { context } = useViewerContext();
   const totalSaved = Math.round((dashboard?.total_saved_cents ?? 0) / 100);
   const animatedSavings = useCountUp(totalSaved);
   const groupCount = requests.filter((r) => r.status === "grouping").length;
@@ -103,140 +97,8 @@ export default function HomeownerDashboard() {
     return <PageSkeleton />;
   }
 
-  const displayName = user?.full_name ?? "Homeowner";
-  const initials = initialsFromName(user?.full_name);
-
-  const scrollToNotifications = () => {
-    const target = window.matchMedia("(min-width: 1280px)").matches
-      ? document.querySelector<HTMLElement>("#dashboard-notifications")
-      : document.querySelector<HTMLElement>(".dash-inline-notifications");
-    (target ?? document.querySelector<HTMLElement>(".dash-workspace"))?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
-
   return (
-    <div className="dash-shell">
-      <aside className="dash-sidebar" aria-label="Primary navigation">
-        <Link className="dash-sidebar-brand" href="/app/homeowner/dashboard" aria-label="Bundleen home">
-          <img src="/creative/icons/logo-house.svg" alt="" />
-          <span>Bundleen</span>
-        </Link>
-
-        <nav className="dash-sidebar-nav">
-          <Link className="dash-nav-item is-active" href="/app/homeowner/dashboard">
-            <Icon name="home" size={20} /> <span>Overview</span>
-          </Link>
-          <Link className="dash-nav-item" href="/app/homeowner/request">
-            <Icon name="clipboard" size={20} /> <span>My Requests</span>
-          </Link>
-          <Link className="dash-nav-item" href="/app/homeowner/bids">
-            <Icon name="bids" size={20} /> <span>My Bids</span>
-          </Link>
-          <Link className="dash-nav-item" href="/app/homeowner/chat">
-            <Icon name="chat" size={20} /> <span>Messages</span>
-            {(dashboard?.unread_messages ?? 0) > 0 && <b className="dash-nav-badge amber">{dashboard?.unread_messages}</b>}
-          </Link>
-          {context?.canManageCommunity && (
-            <Link className="dash-nav-item" href="/app/homeowner/community">
-              <Icon name="users" size={20} /> <span>My Community</span>
-              <b className="dash-nav-badge amber">{context.assignments.length}</b>
-            </Link>
-          )}
-          <span className="dash-nav-item is-disabled">
-            <Icon name="shield" size={20} /> <span>Saved Providers</span>
-            <b className="dash-nav-soon">Soon</b>
-          </span>
-          <span className="dash-nav-item is-disabled">
-            <Icon name="dollar" size={20} /> <span>Payments</span>
-            <b className="dash-nav-soon">Soon</b>
-          </span>
-          <Link className="dash-nav-item" href="/app/homeowner/profile">
-            <Icon name="sliders" size={20} /> <span>Settings</span>
-          </Link>
-        </nav>
-
-        <section className="dash-invite-card" aria-label="Invite neighbors">
-          <span>Grow your bundle</span>
-          <h3>Invite neighbors, unlock better deals!</h3>
-          <p>More people means stronger provider competition and better pricing.</p>
-          <Link href="/app/homeowner/request" className="bb-btn bb-btn-primary" style={{ height: 34, padding: "0 12px", fontSize: 12 }}>
-            <Icon name="users" size={14} /> Invite now
-          </Link>
-        </section>
-
-        <div className="dash-sidebar-profile">
-          <div className="dash-avatar">{initials}</div>
-          <div>
-            <strong>{displayName}</strong>
-            <span>{context ? roleLine(context) : "Homeowner"}</span>
-          </div>
-          <Link href="/app/homeowner/profile" className="dash-icon-btn" aria-label="Open profile">
-            <Icon name="chevron-right" size={16} />
-          </Link>
-        </div>
-      </aside>
-
-      <div className="dash-mobile-topbar">
-        <Link className="dash-mobile-topbar-brand" href="/app/homeowner/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
-        </Link>
-        <div className="dash-mobile-topbar-actions">
-          <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
-            <Icon name="bell" size={18} />
-            {notifications.length > 0 && <span className="dash-notif-dot" />}
-          </button>
-          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
-            {initials}
-          </Link>
-        </div>
-      </div>
-
-      <div className="dash-content" id="overview">
-        <div className="dash-topbar-actions">
-          <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
-            <Icon name="bell" size={18} />
-            {notifications.length > 0 && <span className="dash-notif-dot" />}
-          </button>
-          <div className="dash-topbar-identity">
-            <ViewerIdentity context={context} fallbackName={displayName} compact />
-          </div>
-          <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
-            {initials}
-          </Link>
-        </div>
-
-      <div className="dash-workspace">
-      <div className="dash-content-inner">
-        {notifications.length > 0 && (
-        <div className="dash-inline-notifications" style={{ flexDirection: "column", gap: 10, marginBottom: 18 }}>
-          {notifications.slice(0, 3).map((n) => (
-            <div
-              key={n.id}
-              className="flex flex-wrap items-center"
-              style={{ gap: 12, background: "var(--sage-50)", border: "1px solid var(--border-warm)", borderRadius: 14, padding: "14px 18px" }}
-            >
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--sage-100)", display: "grid", placeItems: "center", flexShrink: 0, color: "var(--teal-800)" }}>
-                <Icon name="bell" size={16} />
-              </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink-900)" }}>{n.title}</div>
-                <div style={{ fontSize: 13, color: "var(--ink-600)", marginTop: 2 }}>{n.body}</div>
-              </div>
-              {n.action_url && (
-                <Link href={n.action_url} onClick={() => void markRead(n.id)} className="bb-btn bb-btn-primary" style={{ height: 30, padding: "0 12px", fontSize: 13 }}>
-                  Join group →
-                </Link>
-              )}
-              <button onClick={() => void dismiss(n.id)} style={{ background: "transparent", border: 0, cursor: "pointer", fontSize: 18, color: "var(--ink-400)", lineHeight: 1, padding: 4 }} aria-label="Dismiss">
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
+    <>
       {/* Hero */}
       <article className="bb-card bb-card-pad" style={{ background: "linear-gradient(145deg, #fff 0%, #fffaf3 62%, var(--teal-50) 100%)", overflow: "hidden" }}>
         <span className="bb-eyebrow">
@@ -254,9 +116,6 @@ export default function HomeownerDashboard() {
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
           <Link href={liveRequest ? "/app/homeowner/bids" : "/app/homeowner/request"} className="bb-btn bb-btn-primary">
             <Icon name="plus" size={18} /> {liveRequest ? "Review bids" : "New request"}
-          </Link>
-          <Link href="/app/homeowner/chat" className="bb-btn bb-btn-secondary">
-            <Icon name="sparkle" size={18} /> Ask AI
           </Link>
         </div>
 
@@ -463,13 +322,6 @@ export default function HomeownerDashboard() {
             <Link href="/app/homeowner/request" className="bb-btn bb-btn-orange">
               Post a request <Icon name="arrow-right" size={18} />
             </Link>
-            <Link
-              href="/app/homeowner/chat"
-              className="bb-btn"
-              style={{ background: "rgba(255,255,255,0.1)", color: "#FAF6F0", border: "1px solid rgba(255,255,255,0.16)" }}
-            >
-              <Icon name="sparkle" size={18} /> Ask AI
-            </Link>
           </div>
         </article>
       )}
@@ -548,9 +400,6 @@ export default function HomeownerDashboard() {
                 <Link href="/app/homeowner/bids" className="bb-btn bb-btn-primary" style={{ height: 36, padding: "0 16px", fontSize: 13 }}>
                   Review bids
                 </Link>
-                <Link href="/app/homeowner/chat" className="bb-btn bb-btn-secondary" style={{ height: 36, padding: "0 16px", fontSize: 13 }}>
-                  Ask why
-                </Link>
               </div>
             </div>
           </div>
@@ -575,102 +424,6 @@ export default function HomeownerDashboard() {
           ))}
         </div>
       </article>
-      </div>
-
-      <aside className="dash-right-rail" aria-label="Dashboard updates">
-        <section className="bb-card dash-rail-card" id="dashboard-notifications">
-          <div className="dash-rail-heading">
-            <div>
-              <span className="bb-eyebrow">Inbox</span>
-              <h2>Notifications</h2>
-            </div>
-            <span className="dash-rail-count">{notifications.length}</span>
-          </div>
-          <div className="dash-rail-list">
-            {notifications.length > 0 ? notifications.slice(0, 3).map((notification) => (
-              <div className="dash-rail-item" key={notification.id}>
-                <span className="dash-rail-icon"><Icon name="bell" size={15} /></span>
-                <div>
-                  <strong>{notification.title}</strong>
-                  <p>{notification.body}</p>
-                  <div className="dash-rail-item-actions">
-                    {notification.action_url ? (
-                      <Link href={notification.action_url} onClick={() => void markRead(notification.id)}>View</Link>
-                    ) : null}
-                    <button type="button" onClick={() => void dismiss(notification.id)}>Dismiss</button>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="dash-rail-empty">
-                <span className="dash-rail-icon"><Icon name="check-circle" size={17} /></span>
-                <div><strong>You&rsquo;re all caught up</strong><p>New bid and group updates will appear here.</p></div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="bb-card dash-rail-card">
-          <div className="dash-rail-heading">
-            <div>
-              <span className="bb-eyebrow">Nearby</span>
-              <h2>Recent activity</h2>
-            </div>
-            <Link href="/app/homeowner/chat">View all</Link>
-          </div>
-          <div className="dash-rail-list">
-            {neighbourhoodPulse.length > 0 ? neighbourhoodPulse.map((activity) => (
-              <div className="dash-rail-item" key={activity.key}>
-                <span className="dash-activity-avatar">{activity.initials}</span>
-                <div>
-                  <strong>{activity.who}</strong>
-                  <p>{activity.what} <b>{activity.highlight}</b></p>
-                  <time>{activity.when}</time>
-                </div>
-              </div>
-            )) : (
-              <div className="dash-rail-empty">
-                <span className="dash-rail-icon"><Icon name="users" size={17} /></span>
-                <div><strong>Your neighborhood is quiet</strong><p>Post a request to start local activity.</p></div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="bb-card dash-rail-card dash-quick-card">
-          <span className="bb-eyebrow">Quick actions</span>
-          <h2>What do you need?</h2>
-          <div className="dash-quick-links">
-            <Link href="/app/homeowner/request"><Icon name="plus" size={16} /> New request</Link>
-            <Link href="/app/homeowner/bids"><Icon name="bids" size={16} /> Review bids</Link>
-            <Link href="/app/homeowner/chat"><Icon name="sparkle" size={16} /> Ask Bundleen AI</Link>
-          </div>
-        </section>
-      </aside>
-      </div>
-      </div>
-
-      <Link href="/app/homeowner/request" className="dash-floating-action" aria-label="Create a new request">
-        <Icon name="plus" size={24} />
-      </Link>
-
-      <nav className="dash-mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link className="is-active" href="/app/homeowner/dashboard">
-          <Icon name="home" size={20} /><span>Home</span>
-        </Link>
-        <Link href="/app/homeowner/request">
-          <Icon name="clipboard" size={20} /><span>Requests</span>
-        </Link>
-        <Link href="/app/homeowner/request" className="dash-mobile-create" aria-label="New request">
-          <Icon name="plus" size={22} />
-        </Link>
-        <Link href="/app/homeowner/bids">
-          <Icon name="bids" size={20} /><span>Bids</span>
-        </Link>
-        <Link href="/app/homeowner/chat">
-          <Icon name="chat" size={20} /><span>Activity</span>
-        </Link>
-      </nav>
-    </div>
+    </>
   );
 }

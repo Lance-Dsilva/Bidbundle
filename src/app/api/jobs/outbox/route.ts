@@ -2,7 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { deliverPendingOutbox } from "@/lib/server/notifications";
+import {
+  deliverPendingOutbox,
+  enqueueUpcomingServiceReminders,
+} from "@/lib/server/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,8 +34,9 @@ async function drain(request: Request): Promise<NextResponse> {
   }
 
   try {
-    const result = await deliverPendingOutbox();
-    return NextResponse.json(result);
+    const remindersQueued = await enqueueUpcomingServiceReminders();
+    const result = await deliverPendingOutbox(100);
+    return NextResponse.json({ ...result, remindersQueued });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

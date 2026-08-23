@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 
 export interface AppNotification {
-  id: number;
-  user_id: number;
+  id: string;
   type: string;
   title: string;
   body: string;
@@ -18,28 +16,46 @@ export function useNotifications() {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(() => {
-    const token = getToken();
-    if (!token) return;
     setLoading(true);
-    apiFetch<AppNotification[]>("/notifications", { token })
-      .then(setNotifications)
+    apiFetch<{
+      notifications: Array<{
+        id: string;
+        kind: string;
+        title: string;
+        body: string;
+        linkPath: string | null;
+        readAt: string | null;
+        createdAt: string;
+      }>;
+    }>("/me/notifications")
+      .then(({ notifications: rows }) =>
+        setNotifications(
+          rows
+            .filter((row) => row.readAt === null)
+            .map((row) => ({
+              id: row.id,
+              type: row.kind,
+              title: row.title,
+              body: row.body,
+              action_url: row.linkPath,
+              read: false,
+              created_at: row.createdAt,
+            })),
+        ),
+      )
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const markRead = async (id: number) => {
-    const token = getToken();
-    if (!token) return;
-    await apiFetch(`/notifications/${id}/read`, { method: "POST", token });
+  const markRead = async (id: string) => {
+    await apiFetch(`/me/notifications/${encodeURIComponent(id)}`, { method: "POST" });
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
-  const dismiss = async (id: number) => {
-    const token = getToken();
-    if (!token) return;
-    await apiFetch(`/notifications/${id}`, { method: "DELETE", token });
+  const dismiss = async (id: string) => {
+    await apiFetch(`/me/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 

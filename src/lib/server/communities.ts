@@ -32,6 +32,7 @@ import {
 } from "@/lib/geo";
 import { buildAuditEntry, serializeAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
+import { buildPreferenceAwareNotificationOps } from "@/lib/server/notifications";
 import { isAppRole } from "@/lib/validation/auth";
 import {
   STAFF_ROLE_LABELS,
@@ -947,6 +948,7 @@ export async function assignStaffRole(
     where: { id: input.userId },
     select: {
       id: true,
+      email: true,
       role: true,
       communityMemberships: { where: { communityId }, select: { status: true } },
     },
@@ -983,7 +985,7 @@ export async function assignStaffRole(
     input.role === "neighborhood_manager"
       ? await db.communityStaffAssignment.findFirst({
           where: { communityId, role: input.role, status: "active" },
-          select: { id: true, userId: true },
+          select: { id: true, userId: true, user: { select: { email: true } } },
         })
       : null;
 
@@ -1049,6 +1051,35 @@ export async function assignStaffRole(
     }),
   );
 
+  operations.push(
+    ...(await buildPreferenceAwareNotificationOps([
+      {
+        userId: assignee.id,
+        email: assignee.email,
+        emailPolicy: "required",
+        kind: "security",
+        title: `Community role assigned for ${community.name}`,
+        body: `You are now the ${STAFF_ROLE_LABELS[input.role] ?? input.role} for this community.`,
+        linkPath: "/app/homeowner/dashboard",
+        dedupeKey: `staff-assigned:${assignmentId}:${assignee.id}`,
+      },
+      ...(incumbent
+        ? [
+            {
+              userId: incumbent.userId,
+              email: incumbent.user.email,
+              emailPolicy: "required" as const,
+              kind: "security" as const,
+              title: `Community role changed for ${community.name}`,
+              body: `Your ${STAFF_ROLE_LABELS[input.role] ?? input.role} role was replaced by another community member.`,
+              linkPath: "/app/homeowner/dashboard",
+              dedupeKey: `staff-replaced:${incumbent.id}:${assignmentId}`,
+            },
+          ]
+        : []),
+    ])),
+  );
+
   try {
     await db.$transaction(operations);
   } catch (error) {
@@ -1075,7 +1106,14 @@ export async function revokeStaffAssignment(
 ): Promise<void> {
   const assignment = await db.communityStaffAssignment.findFirst({
     where: { id: assignmentId, communityId },
-    select: { id: true, userId: true, role: true, status: true },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      status: true,
+      user: { select: { email: true } },
+      community: { select: { name: true } },
+    },
   });
   if (!assignment) {
     throw new CommunityRuleError("not_found", "That role assignment no longer exists.");
@@ -1102,6 +1140,18 @@ export async function revokeStaffAssignment(
         metadata: { assigneeUserId: assignment.userId, role: assignment.role, note },
       }),
     }),
+    ...(await buildPreferenceAwareNotificationOps([
+      {
+        userId: assignment.userId,
+        email: assignment.user.email,
+        emailPolicy: "required",
+        kind: "security",
+        title: `Community role removed for ${assignment.community.name}`,
+        body: `Your ${STAFF_ROLE_LABELS[assignment.role as CommunityStaffRole] ?? assignment.role} role was removed.`,
+        linkPath: "/app/homeowner/dashboard",
+        dedupeKey: `staff-revoked:${assignment.id}`,
+      },
+    ])),
   ]);
 }
 

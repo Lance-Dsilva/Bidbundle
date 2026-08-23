@@ -27,7 +27,7 @@ import {
 } from "@/lib/server/hoa";
 import { getHoaProfile } from "@/lib/server/hoa-units";
 import {
-  buildNotificationOps,
+  buildPreferenceAwareNotificationOps,
   contentHash,
   type NotificationIntent,
 } from "@/lib/server/notifications";
@@ -358,6 +358,17 @@ export async function createHoaRequest(
         dedupeKey: `request-open:${requestId}:${user.id}`,
       }))
     : [];
+  const providerIntents =
+    input.publish && isCompulsory
+      ? await eligibleProviderIntentsForRequest({
+          requestId,
+          communityId,
+          communityName: community.name,
+          title: input.title,
+          category: input.category,
+          biddingClosesAt: input.biddingClosesAt ? new Date(input.biddingClosesAt) : null,
+        })
+      : [];
 
   await db.$transaction([
     db.hoaServiceRequest.create({
@@ -407,7 +418,7 @@ export async function createHoaRequest(
         metadata: { kind: input.kind, status, unitCount: audience.length },
       }),
     }),
-    ...buildNotificationOps(residentIntents),
+    ...(await buildPreferenceAwareNotificationOps([...residentIntents, ...providerIntents])),
   ]);
   return requestId;
 }
@@ -425,7 +436,7 @@ export async function transitionHoaRequest(
     where: { id: requestId },
     include: {
       participations: { select: { unitId: true, userId: true, response: true } },
-      agreement: { select: { id: true, status: true } },
+      agreement: { select: { id: true, status: true, providerUserId: true } },
     },
   });
   if (!request) throw new HoaWorkflowError("That HOA request does not exist.", 404);
@@ -471,6 +482,18 @@ export async function transitionHoaRequest(
         linkPath: "/app/homeowner/community",
         dedupeKey: `request-open:${request.id}:${user.id}`,
       }));
+      const providerIntents = isCompulsory
+        ? await eligibleProviderIntentsForRequest({
+            requestId: request.id,
+            communityId: request.communityId,
+            communityName: community.name,
+            title: request.title,
+            category: request.category,
+            biddingClosesAt: input.biddingClosesAt
+              ? new Date(input.biddingClosesAt)
+              : request.biddingClosesAt,
+          })
+        : [];
       await db.$transaction([
         db.hoaServiceRequest.update({
           where: { id: request.id },
@@ -496,7 +519,7 @@ export async function transitionHoaRequest(
             ]
           : []),
         audit(isCompulsory ? "open_for_bids" : "collecting_interest"),
-        ...buildNotificationOps(intents),
+        ...(await buildPreferenceAwareNotificationOps([...intents, ...providerIntents])),
       ]);
       return;
     }
@@ -522,6 +545,14 @@ export async function transitionHoaRequest(
           `Only ${joinedUnits.length} of the required ${request.minHomes} homes joined.`,
         );
       }
+      const providerIntents = await eligibleProviderIntentsForRequest({
+        requestId: request.id,
+        communityId: request.communityId,
+        communityName: community.name,
+        title: request.title,
+        category: request.category,
+        biddingClosesAt,
+      });
       // Locking the participant snapshot means providers quote against a
       // stable home count from this point on.
       await db.$transaction([
@@ -544,6 +575,7 @@ export async function transitionHoaRequest(
           }),
         }),
         audit("open_for_bids", { lockedHomeCount: joinedUnits.length }),
+        ...(await buildPreferenceAwareNotificationOps(providerIntents)),
       ]);
       return;
     }
@@ -580,6 +612,10 @@ export async function transitionHoaRequest(
           `${unresolved} service ${unresolved === 1 ? "cycle is" : "cycles are"} still open. Close each occurrence first.`,
         );
       }
+      const managerUser = await db.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       await db.$transaction([
         db.hoaServiceRequest.update({ where: { id: request.id }, data: { status: "completed" } }),
         db.serviceAgreement.update({
@@ -587,6 +623,17 @@ export async function transitionHoaRequest(
           data: { status: "completed" },
         }),
         audit("completed"),
+        ...(await buildPreferenceAwareNotificationOps([
+          {
+            userId,
+            email: managerUser?.email ?? null,
+            kind: "review",
+            title: `Review the completed service for ${community.name}`,
+            body: `“${request.title}” is complete. Share your HOA's review of the provider.`,
+            linkPath: "/app/hoa/dashboard",
+            dedupeKey: `agreement-review-request:${request.agreement.id}:${userId}`,
+          },
+        ])),
       ]);
       return;
     }
@@ -601,6 +648,33 @@ export async function transitionHoaRequest(
           "Awarded work cannot be cancelled here. Contact Bundleen support.",
         );
       }
+      const [residentIntents, submittedBids] = await Promise.all([
+        activeResidentIntents(request.communityId, userId, (user) => ({
+          userId: user.id,
+          email: user.email,
+          kind: "schedule",
+          title: `${community.name}: service request cancelled`,
+          body: `“${request.title}” has been cancelled. No service is currently scheduled for this request.`,
+          linkPath: "/app/homeowner/community",
+          dedupeKey: `request-cancelled:${request.id}:${user.id}`,
+        })),
+        db.serviceBid.findMany({
+          where: { requestId: request.id, status: "submitted" },
+          select: { provider: { select: { id: true, email: true } } },
+        }),
+      ]);
+      const cancellationIntents: NotificationIntent[] = [
+        ...residentIntents,
+        ...submittedBids.map(({ provider }) => ({
+          userId: provider.id,
+          email: provider.email,
+          kind: "schedule" as const,
+          title: `${community.name}: request cancelled`,
+          body: `“${request.title}” was cancelled, so bidding has ended.`,
+          linkPath: "/app/provider/hoa",
+          dedupeKey: `request-cancelled:${request.id}:${provider.id}`,
+        })),
+      ];
       await db.$transaction([
         db.hoaServiceRequest.update({ where: { id: request.id }, data: { status: "cancelled" } }),
         db.serviceBid.updateMany({
@@ -608,6 +682,7 @@ export async function transitionHoaRequest(
           data: { status: "expired", decidedAt: now },
         }),
         audit("cancelled"),
+        ...(await buildPreferenceAwareNotificationOps(cancellationIntents)),
       ]);
       return;
     }
@@ -896,6 +971,73 @@ async function hoaLocation(communityId: string): Promise<HoaLocation> {
   };
 }
 
+/** Resolves the same provider eligibility rules used by the marketplace feed. */
+async function eligibleProviderIntentsForRequest(input: {
+  requestId: string;
+  communityId: string;
+  communityName: string;
+  title: string;
+  category: string;
+  biddingClosesAt: Date | null;
+}): Promise<NotificationIntent[]> {
+  const [location, providers] = await Promise.all([
+    hoaLocation(input.communityId),
+    db.providerProfile.findMany({
+      where: {
+        accountStatus: "active",
+        licenseVerifiedAt: { not: null },
+        insuranceVerifiedAt: { not: null },
+      },
+      select: {
+        trades: true,
+        notifyNewJobs: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            providerServiceAreas: {
+              where: { status: "active" },
+              select: {
+                centerLatitude: true,
+                centerLongitude: true,
+                radiusMiles: true,
+                postalCodes: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+  const now = new Date();
+
+  return providers
+    .filter((profile) =>
+      providerCanSeeRequest({
+        gate: {
+          userId: profile.user.id,
+          trades: profile.trades.map((trade) => trade.toLowerCase()),
+          eligible: true,
+          ineligibleReason: null,
+        },
+        areas: profile.user.providerServiceAreas,
+        category: input.category,
+        location,
+        biddingClosesAt: input.biddingClosesAt,
+        now,
+      }),
+    )
+    .map((profile) => ({
+      userId: profile.user.id,
+      email: profile.notifyNewJobs ? profile.user.email : null,
+      kind: "request" as const,
+      title: `New ${input.category} request near your service area`,
+      body: `${input.communityName} opened “${input.title}” for provider bids.`,
+      linkPath: "/app/provider/hoa",
+      dedupeKey: `provider-request-open:${input.requestId}:${profile.user.id}`,
+    }));
+}
+
 export async function getProviderHoaWorkspace(userId: string): Promise<ProviderHoaWorkspace> {
   const gate = await requireProvider(userId, { allowPending: true });
   const now = new Date();
@@ -1094,7 +1236,7 @@ export async function submitBid(
       : db.serviceBid.create({
           data: { id: bidId, requestId, providerUserId, ...data },
         }),
-    ...buildNotificationOps(
+    ...(await buildPreferenceAwareNotificationOps(
       manager
         ? [
             {
@@ -1108,7 +1250,7 @@ export async function submitBid(
             },
           ]
         : [],
-    ),
+    )),
   ]);
 
   const row = await db.serviceBid.findUniqueOrThrow({
@@ -1349,7 +1491,7 @@ export async function awardBid(
           },
         }),
       }),
-      ...buildNotificationOps([
+      ...(await buildPreferenceAwareNotificationOps([
         {
           userId: bid.providerUserId,
           email: provider.email,
@@ -1369,7 +1511,7 @@ export async function awardBid(
           dedupeKey: `award-rejected:${request.id}:${losing.provider.id}`,
         })),
         ...residentIntents,
-      ]),
+      ])),
     ]);
   } catch (error) {
     if ((error as { code?: string }).code === "P2002") {
@@ -1497,6 +1639,7 @@ export async function saveDayPlan(
       select: { user: { select: { id: true, email: true } } },
     });
     const dayLabel = occurrence.serviceDate.toISOString().slice(0, 10);
+    const scheduleWasAlreadyPublished = occurrence.schedulePublishedAt !== null;
 
     const residentIntents: NotificationIntent[] = [];
     for (const stop of input.stops) {
@@ -1511,8 +1654,8 @@ export async function saveDayPlan(
         userId: resident.id,
         email: resident.email,
         kind: "schedule",
-        title: `${occurrence.agreement.community.name}: your service window`,
-        body: `“${occurrence.agreement.request.title}” visits ${visit.unit.label} on ${dayLabel} ${window}.`,
+        title: `${occurrence.agreement.community.name}: service schedule ${scheduleWasAlreadyPublished ? "updated" : "published"}`,
+        body: `“${occurrence.agreement.request.title}” ${scheduleWasAlreadyPublished ? "is now scheduled" : "visits"} for ${visit.unit.label} on ${dayLabel} ${window}.`,
         linkPath: "/app/homeowner/community",
         // A resend of the same plan is one event; a changed window is a new one.
         dedupeKey: `schedule:${visit.id}:${contentHash([
@@ -1544,7 +1687,7 @@ export async function saveDayPlan(
           metadata: { sequence: occurrence.sequence, stopCount: input.stops.length },
         }),
       }),
-      ...buildNotificationOps([
+      ...(await buildPreferenceAwareNotificationOps([
         ...residentIntents,
         ...(manager
           ? [
@@ -1552,16 +1695,19 @@ export async function saveDayPlan(
                 userId: manager.user.id,
                 email: manager.user.email,
                 kind: "schedule" as const,
-                title: `Schedule published for “${occurrence.agreement.request.title}”`,
-                body: `The provider planned ${input.stops.length} stops for ${dayLabel}.`,
+                title: `Schedule ${scheduleWasAlreadyPublished ? "updated" : "published"} for “${occurrence.agreement.request.title}”`,
+                body: `The provider ${scheduleWasAlreadyPublished ? "updated" : "planned"} ${input.stops.length} stops for ${dayLabel}.`,
                 linkPath: "/app/hoa/dashboard",
                 dedupeKey: `schedule-manager:${occurrenceId}:${contentHash(
-                  input.stops.map((stop) => `${stop.visitId}:${stop.stopRank}`),
+                  input.stops.map(
+                    (stop) =>
+                      `${stop.visitId}:${stop.stopRank}:${stop.windowStart ?? ""}:${stop.windowEnd ?? ""}`,
+                  ),
                 )}`,
               },
             ]
           : []),
-      ]),
+      ])),
     );
   }
 
@@ -1658,26 +1804,29 @@ export async function updateVisitStatus(
       where: { id: visit.occurrence.agreement.requestId, status: { in: ["awarded", "scheduled"] } },
       data: { status: "in_progress" },
     }),
-    ...buildNotificationOps(
+    ...(await buildPreferenceAwareNotificationOps(
       resident && (terminal || input.status === "en_route")
         ? [
             {
               userId: resident.id,
               email: resident.email,
-              kind: "visit" as const,
+              kind: (input.status === "completed" ? "review" : "visit") as "review" | "visit",
               title:
                 input.status === "completed"
-                  ? `Service completed at ${visit.unit.label}`
+                  ? `Service completed at ${visit.unit.label} — share your review`
                   : input.status === "en_route"
                     ? `Your provider is on the way`
                     : `Service ${input.status} at ${visit.unit.label}`,
-              body: `“${visit.occurrence.agreement.request.title}” — ${visit.unit.label} is now ${input.status.replace("_", " ")}.`,
+              body:
+                input.status === "completed"
+                  ? `“${visit.occurrence.agreement.request.title}” is complete at ${visit.unit.label}. Tell your HOA how the provider did.`
+                  : `“${visit.occurrence.agreement.request.title}” — ${visit.unit.label} is now ${input.status.replace("_", " ")}.`,
               linkPath: "/app/homeowner/community",
               dedupeKey: `visit-status:${visit.id}:${input.status}`,
             },
           ]
         : [],
-    ),
+    )),
   ]);
 }
 

@@ -4,7 +4,15 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
 import { Icon } from "@/components/ui/Icon";
+
+const HOA_AI_SUGGESTIONS = [
+  "What's the status of my open requests?",
+  "How many active residents do we have?",
+  "What's scheduled for this month?",
+  "How does awarding a bid work?",
+];
 
 export function HoaManagerShell({
   children,
@@ -46,6 +54,8 @@ export function HoaManagerShell({
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 lg:px-8">{children}</main>
       </div>
+
+      <BundleenAiWidget suggestions={HOA_AI_SUGGESTIONS} subtitle="Scoped to the HOAs you manage" />
     </div>
   );
 }

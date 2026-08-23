@@ -831,41 +831,30 @@ html[data-theme="dark"] .dash-nav-item { color: var(--ink-700); }
 .dash-content { min-height: 100vh; margin-left: 300px; padding: 22px 32px 40px; }
 .dash-content-inner {
   width: 100%;
-  max-width: 1040px;
-  margin-left: 0;
-  margin-right: auto;
+  max-width: 1180px;
+  margin: 0 auto;
 }
-.dash-workspace { display: grid; grid-template-columns: minmax(0, 1040px) minmax(260px, 310px); gap: 20px; align-items: start; }
 .homeowner-route-content > * { min-height: auto !important; }
 .homeowner-route-content > * > :first-child { padding-top: 0; }
 .provider-route-content > * { min-height: auto !important; }
 .provider-route-content > * > :first-child { padding-top: 0; }
 .provider-opportunity-link { color: inherit; text-decoration: none; }
 .provider-growth-card { background: linear-gradient(145deg, var(--teal-50), var(--paper) 62%, var(--amber-50)); }
-.dash-inline-notifications { display: none; }
-.dash-right-rail { position: sticky; top: 22px; display: grid; gap: 16px; min-width: 0; }
-.dash-rail-card { padding: 18px; border-radius: 20px; }
-.dash-rail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.dash-rail-heading h2, .dash-quick-card h2 { margin: 3px 0 0; color: var(--ink-900); font-size: 17px; letter-spacing: -.02em; }
-.dash-rail-heading > a { color: var(--teal-800); font-size: 12px; font-weight: 700; text-decoration: none; }
-.dash-rail-count { min-width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px; background: var(--teal-50); color: var(--teal-800); font-size: 12px; font-weight: 800; }
-.dash-rail-list { display: grid; gap: 2px; }
+
+/* Reused by the notification bell popover (dash-rail-* predates the removed
+   dashboard right rail; kept as the shared "list of updates" row styling). */
 .dash-rail-item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); }
 .dash-rail-item:first-child { border-top: 0; padding-top: 0; }
 .dash-rail-item:last-child { padding-bottom: 0; }
 .dash-rail-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: var(--teal-50); color: var(--teal-800); }
 .dash-rail-item strong, .dash-rail-empty strong { display: block; color: var(--ink-900); font-size: 12.5px; line-height: 1.35; }
 .dash-rail-item p, .dash-rail-empty p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
-.dash-rail-item p b { color: var(--orange-600); font-weight: 650; }
 .dash-rail-item time { display: block; margin-top: 4px; color: var(--ink-400); font-size: 10.5px; }
 .dash-rail-item-actions { display: flex; gap: 10px; margin-top: 7px; }
 .dash-rail-item-actions a, .dash-rail-item-actions button { padding: 0; border: 0; background: none; color: var(--teal-800); font: inherit; font-size: 11px; font-weight: 700; text-decoration: none; cursor: pointer; }
 .dash-rail-item-actions button { color: var(--ink-400); }
 .dash-rail-empty { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 4px 0; }
-.dash-quick-card { background: linear-gradient(145deg, var(--paper), var(--teal-50)); }
-.dash-quick-links { display: grid; gap: 8px; margin-top: 14px; }
-.dash-quick-links a { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid rgba(15,157,138,.14); border-radius: 12px; background: rgba(255,255,255,.72); color: var(--navy-700); font-size: 12px; font-weight: 700; text-decoration: none; transition: transform .2s ease, border-color .2s ease; }
-.dash-quick-links a:hover { transform: translateX(2px); border-color: rgba(15,157,138,.35); }
+.dash-rail-count { min-width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px; background: var(--teal-50); color: var(--teal-800); font-size: 12px; font-weight: 800; }
 
 /* ─── Homeowner messages ─────────────────────────────────────── */
 .homeowner-chat-layout {
@@ -911,6 +900,19 @@ html[data-theme="dark"] .dash-nav-item { color: var(--ink-700); }
 .dash-icon-btn { position: relative; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); cursor: pointer; }
 .dash-notif-dot { position: absolute; top: 8px; right: 9px; width: 7px; height: 7px; border: 2px solid var(--paper); border-radius: 50%; background: var(--teal-600); }
 
+/* ─── Notification bell popover ──────────────────────────────── */
+.bb-notif-bell { position: relative; }
+.bb-notif-popover {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 90;
+  width: 320px; max-width: calc(100vw - 32px); max-height: 420px; overflow-y: auto;
+  padding: 16px; border: 1px solid var(--line); border-radius: 18px;
+  background: var(--paper); box-shadow: var(--shadow-md);
+  animation: bb-ai-pop-in .16s ease both;
+}
+.bb-notif-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; color: var(--ink-900); font-size: 13px; font-weight: 700; }
+.bb-notif-popover-list { display: grid; gap: 2px; }
+.bb-notif-loading { padding: 10px 2px; color: var(--muted); font-size: 12.5px; }
+
 .dash-mobile-topbar { display: none; }
 .dash-floating-action {
   position: fixed; right: 26px; bottom: 24px; z-index: 60; width: 56px; height: 56px;
@@ -921,15 +923,67 @@ html[data-theme="dark"] .dash-nav-item { color: var(--ink-700); }
 .dash-floating-action:hover { transform: translateY(-3px) rotate(3deg); }
 .dash-mobile-bottom-nav { display: none; }
 
+/* ─── Global Bundleen AI widget ──────────────────────────────── */
+@keyframes bb-ai-pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bb-ai-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes bb-ai-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.bb-ai-launcher {
+  position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 85;
+  width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; border: 0;
+  color: #fff; background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
+  box-shadow: 0 16px 34px rgba(15,157,138,.32); cursor: pointer; transition: transform .2s ease;
+}
+.bb-ai-launcher:hover { transform: translateY(-3px); }
+.bb-ai-launcher:focus-visible { outline: 3px solid var(--teal-600); outline-offset: 3px; }
+
+/* The homeowner shell also shows a "new request" FAB in the same corner —
+   stack the AI launcher above it instead of overlapping. */
+.dash-shell .bb-ai-launcher { bottom: 92px; }
+
+.bb-ai-popover {
+  position: fixed; right: 20px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 85;
+  width: min(392px, calc(100vw - 32px)); height: min(600px, calc(100vh - 140px));
+  overflow: hidden; border: 1px solid var(--border-warm); border-radius: 22px;
+  background: var(--bg-card); box-shadow: var(--shadow-md, 0 24px 60px rgba(15,23,32,.22));
+  animation: bb-ai-pop-in .18s ease both;
+}
+.dash-shell .bb-ai-popover { bottom: 160px; }
+
+.bb-ai-backdrop { position: fixed; inset: 0; z-index: 84; background: rgba(31,26,20,.45); animation: bb-ai-backdrop-in .2s ease both; }
+.bb-ai-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 85;
+  height: min(88vh, 720px); overflow: hidden;
+  border-radius: 22px 22px 0 0; background: var(--bg-card);
+  box-shadow: 0 -16px 40px rgba(31,26,20,.2);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: bb-ai-sheet-up .32s cubic-bezier(.32,1,.32,1) both;
+}
+
+.bb-ai-panel-loading { display: flex; align-items: center; justify-content: center; height: 100%; padding: 40px; color: var(--ink-500); font-size: 13px; text-align: center; }
+
+@media (max-width: 900px) {
+  .dash-shell .bb-ai-launcher { bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 420px) {
+  .bb-ai-launcher { right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bb-notif-popover, .bb-ai-popover, .bb-ai-sheet, .bb-ai-backdrop, .bb-ai-launcher { animation: none; transition: none; }
+}
+
 @media (max-width: 1180px) {
   .dash-sidebar { width: 232px; }
   .dash-content { margin-left: 268px; }
-}
-
-@media (max-width: 1279px) {
-  .dash-workspace { display: block; }
-  .dash-right-rail { display: none; }
-  .dash-inline-notifications { display: flex; }
 }
 
 @media (max-width: 900px) {

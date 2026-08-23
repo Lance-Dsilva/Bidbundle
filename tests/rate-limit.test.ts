@@ -90,7 +90,7 @@ const {
   toRetryAfterSeconds,
 } = await import("@/lib/server/rate-limit");
 
-const { guardAvatarUpload, guardRegistration, guardFailureResponse, requiresRateLimiter } = await import(
+const { guardAiChat, guardAvatarUpload, guardRegistration, guardFailureResponse, requiresRateLimiter } = await import(
   "@/lib/server/auth-guard"
 );
 
@@ -320,6 +320,26 @@ describe("guardAvatarUpload", () => {
     vi.stubEnv("VERCEL_ENV", "production");
     redisDown = true;
     expect(await guardAvatarUpload("user_1")).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("guardAiChat", () => {
+  it("is the primary cost control: limits AI chat messages per signed-in user", async () => {
+    for (let attempt = 0; attempt < RATE_LIMITS.aiChat.attempts; attempt += 1) {
+      expect(await guardAiChat("user_1")).toBeNull();
+    }
+    expect(await guardAiChat("user_1")).toEqual({
+      kind: "rate-limited",
+      retryAfterSeconds: expect.any(Number),
+    });
+    // A different account is not caught in the same bucket.
+    expect(await guardAiChat("user_2")).toBeNull();
+  });
+
+  it("fails closed when Redis is unavailable in a deployment, rather than allowing unlimited AI spend", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    redisDown = true;
+    expect(await guardAiChat("user_1")).toEqual({ kind: "unavailable" });
   });
 });
 

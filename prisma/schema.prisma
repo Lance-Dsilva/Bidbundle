@@ -240,6 +240,9 @@ enum NotificationKind {
   schedule
   visit
   review
+  account
+  security
+  reminder
 }
 
 enum OutboxStatus {
@@ -333,6 +336,9 @@ model User {
   adminAccess        AdminAccessGrant?  @relation("AdminAccessUser")
   adminAccessGranted AdminAccessGrant[] @relation("AdminAccessGrantor")
   adminAccessRevoked AdminAccessGrant[] @relation("AdminAccessRevoker")
+
+  aiConversations AiConversation[]
+  aiUsageLogs     AiUsageLog[]
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -1085,4 +1091,67 @@ model ProviderProfile {
   updatedAt DateTime @updatedAt
 
   @@index([accountStatus])
+}
+
+/* ── Bundleen AI assistant ──────────────────────────────────────────────── */
+
+enum AiMessageRole {
+  user
+  assistant
+}
+
+/// One assistant thread per user. `contextKey` is fixed to `"general"` today
+/// but kept distinct from `userId` alone so a future surface (e.g. a
+/// per-request thread) can add a row without a schema change.
+model AiConversation {
+  id            String   @id @default(cuid())
+  userId        String
+  contextKey    String   @default("general")
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@unique([userId, contextKey])
+}
+
+/// Stores only the user's own text and the assistant's final answer text —
+/// never raw tool-call arguments or tool result JSON, so a row never holds
+/// more of another person's data than the answer already displayed to this
+/// user.
+model AiMessage {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           AiMessageRole
+  content        String
+  createdAt      DateTime      @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// Observability for the AI assistant: latency, model, which tools ran, and
+/// whether it succeeded. Deliberately has no content field — see
+/// `redactAuditMetadata` for the same principle applied to the admin audit
+/// log. `errorType` is a small closed set of coarse classes, never a raw
+/// error message, which can otherwise embed request data.
+model AiUsageLog {
+  id                String   @id @default(cuid())
+  userId            String?
+  role              UserRole
+  model             String
+  latencyMs         Int
+  toolNames         String[] @default([])
+  success           Boolean
+  errorType         String?
+  promptTokens      Int?
+  completionTokens  Int?
+  createdAt         DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }

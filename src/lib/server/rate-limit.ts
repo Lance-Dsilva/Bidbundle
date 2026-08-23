@@ -30,6 +30,12 @@ export const RATE_LIMITS = {
   adminMutation: { attempts: 120, window: "5 m" },
   /** HOA manager invitations, requests, and surveys, scoped per manager. */
   hoaMutation: { attempts: 60, window: "5 m" },
+  /**
+   * Per-account AI assistant messages. This is the primary cost control on
+   * the OpenAI bill, not just abuse prevention — bounded tighter than the
+   * write-mutation buckets above because each request pays for a model call.
+   */
+  aiChat: { attempts: 20, window: "5 m" },
 } as const;
 
 type LimiterName = keyof typeof RATE_LIMITS;

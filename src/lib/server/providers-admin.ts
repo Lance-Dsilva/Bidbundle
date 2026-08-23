@@ -11,6 +11,7 @@ import type {
 import { buildAuditEntry, serializeAuditEntry } from "@/lib/server/audit";
 import { auditSelect, toPersonSummary } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
+import { buildPreferenceAwareNotificationOps } from "@/lib/server/notifications";
 import type {
   ProviderAccountStatus,
   ProviderAdminUpdateInput,
@@ -236,6 +237,7 @@ export async function updateProviderAdministration(
       licenseVerifiedAt: true,
       insuranceProvider: true,
       insuranceVerifiedAt: true,
+      user: { select: { email: true } },
     },
   });
 
@@ -346,6 +348,31 @@ export async function updateProviderAdministration(
 
   if (auditEntries.length === 0) return { changed: false };
 
+  const notificationOps = statusChanging
+    ? await buildPreferenceAwareNotificationOps([
+        {
+          userId,
+          email: provider.user.email,
+          emailPolicy: "required",
+          kind: "account",
+          title:
+            input.accountStatus === "active"
+              ? "Your provider account is approved"
+              : input.accountStatus === "suspended"
+                ? "Your provider account is suspended"
+                : "Your provider account status changed",
+          body:
+            input.accountStatus === "active"
+              ? "You can now receive eligible HOA requests and submit bids from the provider portal."
+              : input.accountStatus === "suspended"
+                ? "New provider actions are paused. Contact Bundleen support if you need help reviewing this decision."
+                : "Your account is pending review. Existing work remains visible in your provider portal.",
+          linkPath: "/app/provider/dashboard",
+          dedupeKey: `provider-account-status:${userId}:${input.accountStatus}:${now.toISOString()}`,
+        },
+      ])
+    : [];
+
   await db.$transaction([
     db.providerProfile.update({
       where: {
@@ -357,6 +384,7 @@ export async function updateProviderAdministration(
       data,
     }),
     ...auditEntries.map((entry) => db.adminAuditLog.create({ data: entry })),
+    ...notificationOps,
   ]);
 
   return { changed: true };

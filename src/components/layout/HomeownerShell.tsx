@@ -5,11 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { roleLine, ViewerIdentity } from "@/components/layout/ViewerIdentity";
+import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
 import { Icon } from "@/components/ui/Icon";
+import { NotificationBell } from "@/components/ui/NotificationBell";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
 import { useViewerContext } from "@/hooks/useViewerContext";
-import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
-import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 import { useNotifications } from "@/hooks/useNotifications";
 import { initialsFromName } from "@/lib/display-name";
 
@@ -29,9 +29,7 @@ type HomeownerShellProps = Readonly<{
 export function HomeownerShell({ children, userName }: HomeownerShellProps) {
   const pathname = usePathname();
   const { dashboard, user } = useHomeownerDashboard();
-  const { requests: neighbourhoodRequests } = useNeighbourhoodRequests();
-  const { otherMembers, neighbourhoodName } = useNeighbourhoodSummary();
-  const { notifications, markRead, dismiss } = useNotifications();
+  const { notifications, loading: notificationsLoading, markRead, dismiss } = useNotifications();
   // Live scoped-role context. The "Community" link below appears from this,
   // but the page behind it re-derives the same assignments server-side — a
   // hidden link is a courtesy, not a permission.
@@ -40,37 +38,10 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
     (community) => community.communityType === "hoa" && community.status === "active",
   );
 
-  // The overview currently owns this exact shell; the other homeowner routes
-  // use the shared version below while the overview content is migrated.
-  if (pathname === "/app/homeowner/dashboard") return children;
-
   const displayName = userName || user?.full_name || "Homeowner";
   const initials = initialsFromName(displayName);
-  const recentActivity = [
-    ...otherMembers.slice(0, 2).map((member) => ({
-      key: `member-${member.user_id}`,
-      initials: member.full_name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
-      who: member.full_name,
-      description: `joined ${neighbourhoodName}`,
-      when: new Date(member.joined_at).toLocaleDateString([], { month: "short", day: "numeric" }),
-    })),
-    ...neighbourhoodRequests.filter((request) => !request.is_mine).slice(0, 2).map((request) => ({
-      key: `request-${request.id}`,
-      initials: request.owner_name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
-      who: request.owner_name,
-      description: `posted a ${request.category} request`,
-      when: "New",
-    })),
-  ].slice(0, 3);
 
   const isActive = (href: string) => pathname === href;
-
-  const scrollToNotifications = () => {
-    document.querySelector<HTMLElement>("#homeowner-notifications")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
 
   return (
     <div className="dash-shell">
@@ -140,10 +111,7 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
           <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
-          <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
-            <Icon name="bell" size={18} />
-            {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
-          </button>
+          <NotificationBell notifications={notifications} loading={notificationsLoading} markRead={markRead} dismiss={dismiss} />
           <Link className="dash-avatar" href="/app/homeowner/profile" aria-label={`Open ${displayName}'s profile`}>
             {initials}
           </Link>
@@ -152,10 +120,7 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
 
       <div className="dash-content">
         <div className="dash-topbar-actions">
-          <button className="dash-icon-btn" aria-label="Notifications" type="button" onClick={scrollToNotifications}>
-            <Icon name="bell" size={18} />
-            {notifications.length > 0 ? <span className="dash-notif-dot" /> : null}
-          </button>
+          <NotificationBell notifications={notifications} loading={notificationsLoading} markRead={markRead} dismiss={dismiss} />
           <div className="dash-topbar-identity">
             <ViewerIdentity context={context} fallbackName={displayName} compact />
           </div>
@@ -164,78 +129,21 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
           </Link>
         </div>
 
-        <div className="dash-workspace">
-          <main className="dash-content-inner homeowner-route-content">{children}</main>
-
-          <aside className="dash-right-rail" aria-label="Homeowner updates">
-            <section className="bb-card dash-rail-card" id="homeowner-notifications">
-              <div className="dash-rail-heading">
-                <div><span className="bb-eyebrow">Inbox</span><h2>Notifications</h2></div>
-                <span className="dash-rail-count">{notifications.length}</span>
-              </div>
-              <div className="dash-rail-list">
-                {notifications.length > 0 ? notifications.slice(0, 3).map((notification) => (
-                  <div className="dash-rail-item" key={notification.id}>
-                    <span className="dash-rail-icon"><Icon name="bell" size={15} /></span>
-                    <div>
-                      <strong>{notification.title}</strong><p>{notification.body}</p>
-                      <div className="dash-rail-item-actions">
-                        {notification.action_url ? <Link href={notification.action_url} onClick={() => void markRead(notification.id)}>View</Link> : null}
-                        <button type="button" onClick={() => void dismiss(notification.id)}>Dismiss</button>
-                      </div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="dash-rail-empty">
-                    <span className="dash-rail-icon"><Icon name="check-circle" size={17} /></span>
-                    <div><strong>You&rsquo;re all caught up</strong><p>New bid and group updates will appear here.</p></div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="bb-card dash-rail-card">
-              <div className="dash-rail-heading">
-                <div><span className="bb-eyebrow">Nearby</span><h2>Recent activity</h2></div>
-                <Link href="/app/homeowner/chat">View all</Link>
-              </div>
-              <div className="dash-rail-list">
-                {recentActivity.length > 0 ? recentActivity.map((activity) => (
-                  <div className="dash-rail-item" key={activity.key}>
-                    <span className="dash-activity-avatar">{activity.initials}</span>
-                    <div><strong>{activity.who}</strong><p>{activity.description}</p><time>{activity.when}</time></div>
-                  </div>
-                )) : (
-                  <div className="dash-rail-empty">
-                    <span className="dash-rail-icon"><Icon name="users" size={17} /></span>
-                    <div><strong>Your neighborhood is quiet</strong><p>Post a request to start local activity.</p></div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="bb-card dash-rail-card dash-quick-card">
-              <span className="bb-eyebrow">Quick actions</span><h2>What do you need?</h2>
-              <div className="dash-quick-links">
-                <Link href="/app/homeowner/request"><Icon name="plus" size={16} /> New request</Link>
-                <Link href="/app/homeowner/bids"><Icon name="bids" size={16} /> Review bids</Link>
-                <Link href="/app/homeowner/chat"><Icon name="sparkle" size={16} /> Ask Bundleen AI</Link>
-              </div>
-            </section>
-          </aside>
-        </div>
+        <main className="dash-content-inner homeowner-route-content">{children}</main>
       </div>
 
       <Link href="/app/homeowner/request" className="dash-floating-action" aria-label="Create a new request">
         <Icon name="plus" size={24} />
       </Link>
       <nav className="dash-mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link href="/app/homeowner/dashboard"><Icon name="home" size={20} /><span>Home</span></Link>
+        <Link className={pathname === "/app/homeowner/dashboard" ? "is-active" : ""} href="/app/homeowner/dashboard"><Icon name="home" size={20} /><span>Home</span></Link>
         <Link className={pathname === "/app/homeowner/request" ? "is-active" : ""} href="/app/homeowner/request"><Icon name="clipboard" size={20} /><span>Requests</span></Link>
         <Link href="/app/homeowner/request" className="dash-mobile-create" aria-label="New request"><Icon name="plus" size={22} /></Link>
         <Link className={pathname === "/app/homeowner/bids" ? "is-active" : ""} href="/app/homeowner/bids"><Icon name="bids" size={20} /><span>Bids</span></Link>
         <Link className={pathname === "/app/homeowner/chat" ? "is-active" : ""} href="/app/homeowner/chat"><Icon name="chat" size={20} /><span>Activity</span></Link>
       </nav>
+
+      <BundleenAiWidget />
     </div>
   );
 }

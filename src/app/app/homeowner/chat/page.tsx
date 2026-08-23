@@ -16,9 +16,6 @@ import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 function IconSearch() {
   return <Icon name="search" size={14} />;
 }
-function IconSpark() {
-  return <Icon name="sparkle" size={14} />;
-}
 function IconPaperclip() {
   return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12l-9 9a5 5 0 1 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 1 1-3-3l8-8"/></svg>;
 }
@@ -35,21 +32,6 @@ type UiMessage = {
   time: string;
   mine?: boolean;
   body: string;
-};
-
-type AiThread = {
-  type: "ai";
-  id: "ai";
-  name: string;
-  preview: string;
-  unread: number;
-  headerSubtitle: string;
-  onlineLabel?: string;
-  composerPlaceholder: string;
-  suggestions: string[];
-  messages: UiMessage[];
-  avatarBg: string;
-  avatarShape: "rounded";
 };
 
 type GroupThread = {
@@ -97,27 +79,7 @@ type NeighbourhoodThread = {
   raw: NeighbourhoodChannel;
 };
 
-type ActiveThread = AiThread | GroupThread | DmThread | NeighbourhoodThread;
-
-const aiThread: AiThread = {
-  type: "ai",
-  id: "ai",
-  name: "Bundleen AI",
-  preview: "Ask about bids, providers, savings, or your neighborhood",
-  unread: 0,
-  avatarBg: "linear-gradient(135deg, var(--orange-600), #ff8f36)",
-  avatarShape: "rounded",
-  headerSubtitle: "Bids · providers · savings · group decisions",
-  onlineLabel: "Online",
-  composerPlaceholder: "Ask Bundleen AI anything…",
-  suggestions: [
-    "Which bid is best value?",
-    "Compare ProFix vs AquaFlow",
-    "When should I confirm?",
-    "What's a fair price?",
-  ],
-  messages: [],
-};
+type ActiveThread = GroupThread | DmThread | NeighbourhoodThread;
 
 function threadAvatarStyle(thread: ActiveThread, compact = false) {
   const size = compact ? 36 : 40;
@@ -138,7 +100,7 @@ function threadAvatarStyle(thread: ActiveThread, compact = false) {
 function ThreadAvatar({ thread, compact = false }: { thread: ActiveThread; compact?: boolean }) {
   return (
     <div style={threadAvatarStyle(thread, compact)}>
-      {thread.type === "ai" ? <IconSpark /> : thread.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}
+      {thread.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}
     </div>
   );
 }
@@ -161,17 +123,15 @@ export default function HomeownerChat() {
     loading,
     getMessages,
     sendMessage,
-    askAi,
     getNeighbourhoodMessages,
     sendNeighbourhoodMessage,
   } = useHomeownerChat();
   const { memberCount, neighborCount } = useNeighbourhoodSummary();
 
-  const [activeThread, setActiveThread] = useState<ActiveThread>(aiThread);
+  const [manualThread, setManualThread] = useState<ActiveThread | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [composer, setComposer] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [aiThinking, setAiThinking] = useState(false);
   const [mobilePane, setMobilePane] = useState<"list" | "thread">("list");
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
@@ -243,15 +203,20 @@ export default function HomeownerChat() {
     channels.reduce((sum, channel) => sum + channel.unread_count, 0) +
     conversations.reduce((sum, conv) => sum + conv.unread_count, 0);
 
+  // Nothing picked yet: default to the neighbourhood channel, then the first
+  // group or provider thread, once that data has actually loaded in.
+  const activeThread: ActiveThread | null =
+    manualThread ?? neighbourhoodThread ?? groupThreads[0] ?? providerThreads[0] ?? null;
+
   useEffect(() => {
     const container = messagesRef.current;
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     }
-  }, [messages, aiThinking]);
+  }, [messages]);
 
   useEffect(() => {
-    if (activeThread.type === "ai") {
+    if (!activeThread) {
       setMessages([]);
       return;
     }
@@ -288,7 +253,7 @@ export default function HomeownerChat() {
   }, [activeThread, getMessages, getNeighbourhoodMessages]);
 
   const handleSelect = (thread: ActiveThread) => {
-    setActiveThread(thread);
+    setManualThread(thread);
     setComposer("");
     setMobilePane("thread");
   };
@@ -300,25 +265,7 @@ export default function HomeownerChat() {
 
   const handleSend = async () => {
     const text = composer.trim();
-    if (!text || aiThinking) return;
-
-    if (activeThread.type === "ai") {
-      setMessages((prev) => [
-        ...prev,
-        { id: `ai-user-${Date.now()}`, sender: "You", time: "Just now", mine: true, body: text },
-      ]);
-      setComposer("");
-      setAiThinking(true);
-      const reply = await askAi(text);
-      setAiThinking(false);
-      if (reply) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `ai-reply-${Date.now()}`, sender: "Bundleen AI", time: "Just now", body: reply },
-        ]);
-      }
-      return;
-    }
+    if (!text || !activeThread) return;
 
     if (activeThread.type === "neighbourhood") {
       const sent = await sendNeighbourhoodMessage(activeThread.id, text);
@@ -364,7 +311,7 @@ export default function HomeownerChat() {
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", color: "var(--ink-900)" }}>Messages</div>
-              <p style={{ margin: "3px 0 0", color: "var(--ink-500)", fontSize: 12 }}>Neighbors, groups, providers and AI</p>
+              <p style={{ margin: "3px 0 0", color: "var(--ink-500)", fontSize: 12 }}>Neighbors, groups, and providers</p>
             </div>
             <span
               style={{
@@ -418,11 +365,11 @@ export default function HomeownerChat() {
                   width: "100%",
                   padding: 12,
                   borderRadius: 12,
-                  background: activeThread.type === "neighbourhood"
+                  background: activeThread?.type === "neighbourhood"
                     ? "linear-gradient(135deg, white, var(--sage-50))"
                     : "linear-gradient(135deg, var(--sage-50), var(--cream-50))",
-                  border: activeThread.type === "neighbourhood" ? "1px solid var(--sage-100)" : "1px solid var(--sage-100)",
-                  boxShadow: activeThread.type === "neighbourhood" ? "0 0 0 3px rgba(122,154,126,0.08)" : "none",
+                  border: "1px solid var(--sage-100)",
+                  boxShadow: activeThread?.type === "neighbourhood" ? "0 0 0 3px rgba(122,154,126,0.08)" : "none",
                   display: "flex",
                   gap: 10,
                   alignItems: "flex-start",
@@ -445,37 +392,6 @@ export default function HomeownerChat() {
             </>
           )}
 
-          <div style={{ fontSize: 11, textTransform: "uppercase" as const, letterSpacing: "0.10em", color: "var(--ink-400)", fontWeight: 600, padding: "10px 8px 6px" }}>
-            AI assistant
-          </div>
-          <button
-            onClick={() => handleSelect(aiThread)}
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 12,
-              background: "linear-gradient(135deg, white, var(--terracotta-50))",
-              border: activeThread.type === "ai" ? "1px solid var(--terracotta-200)" : "1px solid var(--terracotta-100)",
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-start",
-              boxShadow: activeThread.type === "ai" ? "0 0 0 3px rgba(232,98,63,0.05)" : "none",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
-          >
-            <ThreadAvatar thread={aiThread} compact />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink-900)" }}>{aiThread.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-400)" }}>Live</div>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {aiThread.preview}
-              </div>
-            </div>
-          </button>
-
           <div style={{ fontSize: 11, textTransform: "uppercase" as const, letterSpacing: "0.10em", color: "var(--ink-400)", fontWeight: 600, padding: "18px 8px 6px" }}>
             Group conversations · {visibleGroupThreads.length}
           </div>
@@ -485,7 +401,7 @@ export default function HomeownerChat() {
               <div><strong>{normalizedSearch ? "No matching groups" : "No group chats yet"}</strong><p>Chats appear when a request starts grouping.</p></div>
             </div>
           ) : visibleGroupThreads.map((thread) => {
-            const isActive = activeThread.type === "group" && activeThread.id === thread.id;
+            const isActive = activeThread?.type === "group" && activeThread.id === thread.id;
             return (
               <button
                 key={`group-${thread.id}`}
@@ -531,7 +447,7 @@ export default function HomeownerChat() {
               <div><strong>{normalizedSearch ? "No matching providers" : "No provider chats yet"}</strong><p>Message a provider from one of their bids.</p></div>
             </div>
           ) : visibleProviderThreads.map((thread) => {
-            const isActive = activeThread.type === "dm" && activeThread.id === thread.id;
+            const isActive = activeThread?.type === "dm" && activeThread.id === thread.id;
             return (
               <button
                 key={`dm-${thread.id}`}
@@ -575,7 +491,27 @@ export default function HomeownerChat() {
         className={`${mobilePane === "thread" ? "flex" : "hidden"} flex-col md:flex`}
         style={{ overflow: "hidden", background: "var(--bg-card)" }}
       >
-        <style>{`@keyframes nbPulse{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}`}</style>
+        {!activeThread ? (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            <button
+              onClick={() => setMobilePane("list")}
+              aria-label="Back to conversations"
+              className="md:hidden"
+              style={{ position: "absolute", zIndex: 1, margin: 12, background: "var(--cream-100)", border: 0, borderRadius: 999, width: 34, height: 34, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-700)" }}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <div className="chat-welcome">
+              <div className="chat-welcome-mark">
+                <Icon name="chat" size={24} />
+              </div>
+              <span className="bb-eyebrow">Messages</span>
+              <h2>No conversations yet</h2>
+              <p>Post a request to start a group chat, or say hello once you join your neighbourhood channel.</p>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="px-4 py-3.5 md:px-7 md:py-5" style={{ borderBottom: "1px solid var(--border-warm)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
           <button
             onClick={() => setMobilePane("list")}
@@ -609,28 +545,6 @@ export default function HomeownerChat() {
         <div ref={messagesRef} className="p-4 md:px-7 md:py-6" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ textAlign: "center", fontSize: 11, color: "var(--ink-400)", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Today</div>
 
-          {messages.length === 0 && activeThread.type === "ai" ? (
-            <div className="chat-welcome">
-              <div className="chat-welcome-mark"><Icon name="sparkle" size={24} /></div>
-              <span className="bb-eyebrow">Your home-service copilot</span>
-              <h2>What can I help you decide?</h2>
-              <p>Get a plain-language answer using your requests, bids, neighborhood activity, and provider details.</p>
-              <div className="chat-welcome-actions">
-                {[
-                  { icon: "bids" as const, title: "Compare my bids", copy: "Find the best overall value", prompt: "Which of my current bids is the best value?" },
-                  { icon: "dollar" as const, title: "Check a fair price", copy: "Understand local price ranges", prompt: "What's a fair price for my service request?" },
-                  { icon: "check-circle" as const, title: "Plan the next step", copy: "Know when and how to confirm", prompt: "When should I confirm a bid?" },
-                ].map((action) => (
-                  <button type="button" key={action.title} onClick={() => handleSuggestionClick(action.prompt)}>
-                    <span><Icon name={action.icon} size={18} /></span>
-                    <strong>{action.title}</strong>
-                    <small>{action.copy}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {messages.map((message) => (
             <div key={message.id} style={{ display: "flex", justifyContent: message.mine ? "flex-end" : "flex-start" }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", maxWidth: 640, flexDirection: message.mine ? "row-reverse" : "row" }}>
@@ -638,22 +552,22 @@ export default function HomeownerChat() {
                   <div
                     title={message.sender}
                     aria-label={message.sender}
-                    style={{ width: 30, height: 30, borderRadius: activeThread.type === "ai" ? 9 : "50%", background: activeThread.avatarBg, display: "grid", placeItems: "center", color: "white", flexShrink: 0, fontSize: 11, fontWeight: 700 }}
+                    style={{ width: 30, height: 30, borderRadius: "50%", background: activeThread.avatarBg, display: "grid", placeItems: "center", color: "white", flexShrink: 0, fontSize: 11, fontWeight: 700 }}
                   >
-                    {activeThread.type === "ai" ? <IconSpark /> : message.sender.split(" ").map((part) => part[0]).slice(0, 2).join("")}
+                    {message.sender.split(" ").map((part) => part[0]).slice(0, 2).join("")}
                   </div>
                 )}
                 <div style={{ maxWidth: 480 }}>
                   <div
                     style={{
-                      background: message.mine ? "var(--terracotta-600)" : activeThread.type === "ai" ? "var(--cream-100)" : "white",
+                      background: message.mine ? "var(--terracotta-600)" : "white",
                       color: message.mine ? "white" : "var(--ink-900)",
                       borderRadius: message.mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                       padding: "12px 16px",
                       fontSize: 14,
                       lineHeight: 1.5,
-                      border: message.mine ? 0 : activeThread.type === "ai" ? 0 : "1px solid var(--border-warm)",
-                      boxShadow: message.mine || activeThread.type === "ai" ? "none" : "var(--shadow-warm-sm)",
+                      border: message.mine ? 0 : "1px solid var(--border-warm)",
+                      boxShadow: message.mine ? "none" : "var(--shadow-warm-sm)",
                     }}
                   >
                     {message.body}
@@ -663,19 +577,6 @@ export default function HomeownerChat() {
               </div>
             </div>
           ))}
-
-          {aiThinking && (
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg, var(--orange-600), #ff8f36)", display: "grid", placeItems: "center", color: "white", flexShrink: 0 }}>
-                <IconSpark />
-              </div>
-              <div style={{ background: "var(--cream-100)", borderRadius: "18px 18px 18px 4px", padding: "12px 16px", display: "flex", gap: 5, alignItems: "center" }}>
-                {[0, 1, 2].map((i) => (
-                  <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--terracotta-500)", display: "inline-block", animation: "nbPulse 1.2s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         <div
@@ -712,13 +613,15 @@ export default function HomeownerChat() {
             />
             <button
               onClick={() => void handleSend()}
-              disabled={!composer.trim() || aiThinking}
-              style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--terracotta-600)", color: "white", border: 0, cursor: aiThinking ? "not-allowed" : "pointer", opacity: (!composer.trim() || aiThinking) ? 0.5 : 1 }}
+              disabled={!composer.trim()}
+              style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--terracotta-600)", color: "white", border: 0, cursor: "pointer", opacity: !composer.trim() ? 0.5 : 1 }}
             >
               <IconSend />
             </button>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

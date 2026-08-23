@@ -70,6 +70,8 @@ vi.mock("@/lib/server/db", () => ({
     adminAuditLog: {
       create: op("adminAuditLog", "create"),
     },
+    notification: { createMany: op("notification", "createMany") },
+    outboxEvent: { createMany: op("outboxEvent", "createMany") },
     $queryRaw: async () =>
       state.nearbyHomeowners.map((homeowner) => ({
         id: homeowner.id,
@@ -104,6 +106,7 @@ beforeEach(() => {
   };
   state.user = {
     id: "u1",
+    email: "resident@example.com",
     role: "homeowner",
     isVerified: true,
     neighborhood: "Mission",
@@ -155,7 +158,11 @@ describe("assignStaffRole", () => {
   });
 
   it("refuses to replace a sitting manager without an explicit confirmation", async () => {
-    state.incumbentManager = { id: "old-assignment", userId: "u9" };
+    state.incumbentManager = {
+      id: "old-assignment",
+      userId: "u9",
+      user: { email: "old-manager@example.com" },
+    };
 
     await expect(
       assignStaffRole(ADMIN, "c1", { userId: "u1", role: "neighborhood_manager" }),
@@ -165,7 +172,11 @@ describe("assignStaffRole", () => {
   });
 
   it("revokes the incumbent and appoints the successor atomically", async () => {
-    state.incumbentManager = { id: "old-assignment", userId: "u9" };
+    state.incumbentManager = {
+      id: "old-assignment",
+      userId: "u9",
+      user: { email: "old-manager@example.com" },
+    };
 
     const result = await assignStaffRole(ADMIN, "c1", {
       userId: "u1",
@@ -218,7 +229,12 @@ describe("assignStaffRole", () => {
 
   it("assigns HOA staff who hold no membership at all", async () => {
     state.community = { ...state.community!, type: "hoa", radiusMiles: null };
-    state.user = { id: "u1", role: "homeowner", communityMemberships: [] };
+    state.user = {
+      id: "u1",
+      email: "resident@example.com",
+      role: "homeowner",
+      communityMemberships: [],
+    };
 
     await assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_team" });
     expect(opsOf("communityStaffAssignment", "create")).toHaveLength(1);
@@ -390,7 +406,14 @@ describe("addMember", () => {
 
 describe("revokeStaffAssignment", () => {
   it("revokes and audits in one transaction", async () => {
-    state.assignmentById = { id: "a1", userId: "u1", role: "hoa_team", status: "active" };
+    state.assignmentById = {
+      id: "a1",
+      userId: "u1",
+      role: "hoa_team",
+      status: "active",
+      user: { email: "resident@example.com" },
+      community: { name: "Maple Street" },
+    };
 
     await revokeStaffAssignment(ADMIN, "c1", "a1", "Stepped down");
 

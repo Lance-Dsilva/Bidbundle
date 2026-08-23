@@ -37,6 +37,8 @@ const state = vi.hoisted(() => ({
     insuranceProvider: string | null;
     insurancePolicyNumber: string | null;
   },
+  queuedNotifications: [] as Array<Record<string, unknown>>,
+  queuedEmails: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -99,6 +101,7 @@ const client = {
     },
   },
   homeownerProfile: {
+    findMany: async () => [],
     upsert: async (args: { create: Record<string, unknown> }) => {
       state.roleProfileUpserts.push({ model: "homeownerProfile", args });
       return { id: "homeowner_profile_1" };
@@ -111,7 +114,21 @@ const client = {
       return { id: "provider_profile_1" };
     },
   },
-  $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(client),
+  notification: {
+    createMany: async (args: { data: Array<Record<string, unknown>> }) => {
+      state.queuedNotifications.push(...args.data);
+      return { count: args.data.length };
+    },
+  },
+  outboxEvent: {
+    createMany: async (args: { data: Array<Record<string, unknown>> }) => {
+      state.queuedEmails.push(...args.data);
+      return { count: args.data.length };
+    },
+  },
+  $transaction: async (
+    run: ((tx: unknown) => Promise<unknown>) | Array<Promise<unknown>>,
+  ) => (typeof run === "function" ? run(client) : Promise.all(run)),
 };
 
 vi.mock("@/lib/server/db", () => ({ db: client }));
@@ -165,6 +182,8 @@ beforeEach(() => {
   state.upsertAttempts = 0;
   state.lastUpsertArgs = null;
   state.existingProviderClaims = null;
+  state.queuedNotifications = [];
+  state.queuedEmails = [];
   vi.stubEnv("NODE_ENV", "test");
 });
 
@@ -191,6 +210,10 @@ describe("Clerk profile synchronization", () => {
       role: "homeowner",
       isVerified: true,
     });
+    expect(state.queuedNotifications).toEqual([
+      expect.objectContaining({ userId: "user_db_1", kind: "account" }),
+    ]);
+    expect(state.queuedEmails).toHaveLength(1);
   });
 
   it("creates a provider and returns the provider dashboard", async () => {

@@ -27,6 +27,8 @@ vi.mock("@/lib/server/db", () => ({
       update: op("providerProfile", "update"),
     },
     adminAuditLog: { create: op("adminAuditLog", "create") },
+    notification: { createMany: op("notification", "createMany") },
+    outboxEvent: { createMany: op("outboxEvent", "createMany") },
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;
@@ -47,6 +49,7 @@ beforeEach(() => {
     licenseVerifiedAt: null,
     insuranceProvider: "Acme Mutual",
     insuranceVerifiedAt: null,
+    user: { email: "provider@example.com" },
     updatedAt: new Date("2026-08-12T12:00:00.000Z"),
   };
   state.batches = [];
