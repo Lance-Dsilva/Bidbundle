@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 import {
   CATEGORY_LABELS,
   CUSTOMER_STATUS_LABELS,
 } from "@/components/admin/support/supportPresentation";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   MAX_TICKET_MESSAGE_LENGTH,
   MAX_TICKET_SUBJECT_LENGTH,
@@ -44,6 +45,61 @@ const STATUS_STYLES: Record<SupportTicketStatusValue, string> = {
   resolved: "bg-emerald-50 text-emerald-700",
   closed: "bg-slate-100 text-slate-600",
 };
+
+const cardStyle: CSSProperties = {
+  background: "var(--bg-card)",
+  border: "1px solid var(--border-warm)",
+  borderRadius: 18,
+  boxShadow: "var(--shadow-warm-sm)",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  height: 38,
+  padding: "0 16px",
+  borderRadius: 999,
+  border: 0,
+  background: "var(--terracotta-600)",
+  color: "white",
+  fontFamily: "var(--font-body)",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: "0 1px 0 rgba(0,0,0,0.05) inset, 0 6px 14px -6px rgba(15,157,138,0.5)",
+};
+
+const fieldStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--border-warm-strong)",
+  borderRadius: 12,
+  background: "var(--bg-card)",
+  color: "var(--ink-900)",
+  fontFamily: "var(--font-body)",
+  fontSize: 14,
+  outline: "none",
+};
+
+function IconSupport() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="28"
+      height="28"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.6-4.8A8 8 0 1 1 21 15Z" />
+      <path d="M8.5 11.5h7M8.5 15h4" />
+    </svg>
+  );
+}
 
 function relative(iso: string): string {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -121,14 +177,22 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div style={{ background: "var(--bg-app)", minHeight: "100vh" }}>
+      <header className="flex flex-col gap-4 px-4 pb-4 pt-6 md:flex-row md:items-end md:justify-between md:px-9 md:pb-5 md:pt-7">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Support</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 500,
+              fontSize: "clamp(24px, 6vw, 30px)",
+              letterSpacing: "-0.02em",
+              margin: "0 0 4px",
+              color: "var(--ink-900)",
+            }}
+          >
             Get help from Bundleen
           </h1>
-          <p className="mt-1 max-w-prose text-[13px] leading-5 text-slate-500">
+          <p style={{ margin: 0, color: "var(--ink-500)", fontSize: 14 }}>
             Open a request and we will reply in this thread. You will get an email and an in-app
             notification when we respond.
           </p>
@@ -136,24 +200,30 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
         <button
           type="button"
           onClick={() => setComposerOpen((open) => !open)}
-          className="h-10 shrink-0 rounded-xl bg-teal-600 px-4 text-[13px] font-bold text-white transition hover:bg-teal-700"
+          style={primaryButtonStyle}
         >
           {composerOpen ? "Cancel" : "New request"}
         </button>
       </header>
 
+      <div className="space-y-5 px-4 pb-8 md:px-9 md:pb-9">
       {success ? (
-        <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-800">
+        <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-[13px] font-medium text-emerald-800" style={{ border: "1px solid var(--sage-100)" }}>
           {success}
         </p>
       ) : null}
 
       {composerOpen ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-[15px] font-bold text-slate-900">What do you need help with?</h2>
+        <section style={{ ...cardStyle, padding: 22 }}>
+          <h2 style={{ margin: 0, color: "var(--ink-900)", fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 500 }}>
+            What do you need help with?
+          </h2>
+          <p style={{ margin: "5px 0 0", color: "var(--ink-500)", fontSize: 13 }}>
+            Share the issue and our support team will keep every update in one thread.
+          </p>
 
           <label className="mt-4 block">
-            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--ink-500)" }}>
               Topic
             </span>
             <select
@@ -161,7 +231,8 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
               onChange={(event) =>
                 setCategory(event.target.value as SupportTicketCategoryValue)
               }
-              className="mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-[14px]"
+              className="mt-1.5 h-11 px-3"
+              style={fieldStyle}
             >
               {SUPPORT_TICKET_CATEGORIES.map((value) => (
                 <option key={value} value={value}>
@@ -172,7 +243,7 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
           </label>
 
           <label className="mt-3 block">
-            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--ink-500)" }}>
               Subject
             </span>
             <input
@@ -181,12 +252,13 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
               maxLength={MAX_TICKET_SUBJECT_LENGTH}
               onChange={(event) => setSubject(event.target.value)}
               placeholder="A one-line summary"
-              className="mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[14px]"
+              className="mt-1.5 h-11 px-3.5"
+              style={fieldStyle}
             />
           </label>
 
           <label className="mt-3 block">
-            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--ink-500)" }}>
               Details
             </span>
             <textarea
@@ -195,7 +267,8 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
               maxLength={MAX_TICKET_MESSAGE_LENGTH}
               onChange={(event) => setMessage(event.target.value)}
               placeholder="What happened, what you expected, and anything you already tried."
-              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-[14px] leading-6"
+              className="mt-1.5 px-3.5 py-3 leading-6"
+              style={fieldStyle}
             />
           </label>
 
@@ -209,7 +282,8 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
             type="button"
             disabled={busy || !subject.trim() || !message.trim()}
             onClick={() => void submit()}
-            className="mt-4 h-11 rounded-xl bg-teal-600 px-5 text-[13px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-40"
+            className="mt-4 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ ...primaryButtonStyle, height: 42, padding: "0 20px" }}
           >
             {busy ? "Sending…" : "Send request"}
           </button>
@@ -217,9 +291,23 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
       ) : null}
 
       <section>
-        <h2 className="px-1 text-[13px] font-bold text-slate-900">Your requests</h2>
+        <div className="flex items-end justify-between gap-3 px-1">
+          <div>
+            <h2 style={{ margin: 0, color: "var(--ink-900)", fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 500 }}>
+              Your requests
+            </h2>
+            <p style={{ margin: "3px 0 0", color: "var(--ink-500)", fontSize: 12.5 }}>
+              Track replies and keep the conversation together.
+            </p>
+          </div>
+          {!loading ? (
+            <span style={{ color: "var(--ink-400)", fontSize: 12 }}>
+              {tickets.length} ticket{tickets.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </div>
         {loading ? (
-          <p role="status" className="mt-3 px-1 text-[13px] text-slate-500">
+          <p role="status" className="mt-3 px-1 text-[13px]" style={{ color: "var(--ink-500)" }}>
             Loading…
           </p>
         ) : loadError ? (
@@ -234,11 +322,14 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
             </button>
           </div>
         ) : tickets.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-            <p className="text-[14px] font-bold text-slate-800">No requests yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-[12px] text-slate-500">
-              When you open a request it appears here with our replies.
-            </p>
+          <div className="mt-3 overflow-hidden" style={cardStyle}>
+            <EmptyState
+              icon={<IconSupport />}
+              title="No support requests yet"
+              hint="Open a request when you need help. Replies and status updates will appear here."
+              ctaLabel="Open your first request"
+              onCta={() => setComposerOpen(true)}
+            />
           </div>
         ) : (
           <ul className="mt-3 space-y-2">
@@ -246,7 +337,8 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
               <li key={ticket.id}>
                 <Link
                   href={`${basePath}/${ticket.id}`}
-                  className="block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm"
+                  className="block p-4 transition hover:-translate-y-0.5 md:px-[22px]"
+                  style={{ ...cardStyle, color: "inherit", textDecoration: "none" }}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span
@@ -259,10 +351,10 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
                       {relative(ticket.lastActivityAt)}
                     </span>
                   </div>
-                  <p className="mt-1.5 truncate text-[14px] font-bold text-slate-900">
+                  <p className="mt-1.5 truncate text-[14px] font-bold" style={{ color: "var(--ink-900)" }}>
                     {ticket.subject}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                  <p className="mt-0.5 text-[11px]" style={{ color: "var(--ink-500)" }}>
                     {CATEGORY_LABELS[ticket.category]} · {ticket.messageCount} message
                     {ticket.messageCount === 1 ? "" : "s"}
                   </p>
@@ -272,6 +364,7 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
           </ul>
         )}
       </section>
+      </div>
     </div>
   );
 }

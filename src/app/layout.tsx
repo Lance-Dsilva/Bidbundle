@@ -28,6 +28,11 @@ export const metadata: Metadata = {
     title: "Bundleen",
   },
   icons: {
+    icon: [
+      { url: "/favicon.ico", type: "image/x-icon" },
+      { url: "/creative/icons/logo-house.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/icons/apple-touch-icon.png",
   },
 };

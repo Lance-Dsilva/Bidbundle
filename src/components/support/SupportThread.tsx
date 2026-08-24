@@ -137,19 +137,25 @@ export function SupportThread({
 
   if (loading && !ticket) {
     return (
-      <p role="status" className="mx-auto max-w-3xl px-1 text-[13px] text-slate-500">
-        Loading your request…
-      </p>
+      <div style={{ background: "var(--bg-app)", minHeight: "100vh" }}>
+        <p role="status" className="px-4 pb-8 pt-6 text-[13px] md:px-9 md:pt-7" style={{ color: "var(--ink-500)" }}>
+          Loading your request…
+        </p>
+      </div>
     );
   }
 
   if (loadError) {
     return (
-      <div role="alert" className="mx-auto max-w-3xl rounded-2xl bg-red-50 px-5 py-4">
-        <p className="text-[14px] font-bold text-red-800">{loadError}</p>
-        <Link href={basePath} className="mt-2 inline-block text-[12px] font-bold text-red-700 underline">
-          Back to your requests
-        </Link>
+      <div style={{ background: "var(--bg-app)", minHeight: "100vh" }}>
+        <div className="px-4 pb-8 pt-6 md:px-9 md:pt-7">
+          <div role="alert" className="max-w-4xl rounded-2xl bg-red-50 px-5 py-4">
+            <p className="text-[14px] font-bold text-red-800">{loadError}</p>
+            <Link href={basePath} className="mt-2 inline-block text-[12px] font-bold text-red-700 underline">
+              Back to your requests
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -157,30 +163,39 @@ export function SupportThread({
   if (!ticket) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
+    <div style={{ background: "var(--bg-app)", minHeight: "100vh" }}>
+      <div className="px-4 pb-8 pt-6 md:px-9 md:pb-9 md:pt-7">
+      <div className="w-full max-w-4xl space-y-4">
       <Link
         href={basePath}
-        className="inline-flex items-center gap-1 text-[12px] font-bold text-slate-500 transition hover:text-slate-800"
+        className="inline-flex items-center gap-1 text-[12px] font-bold transition"
+        style={{ color: "var(--ink-500)" }}
       >
         <span aria-hidden="true">←</span> Your requests
       </Link>
 
-      <header className="rounded-2xl border border-slate-200 bg-white p-5">
+      <header
+        className="rounded-[18px] p-5"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border-warm)", boxShadow: "var(--shadow-warm-sm)" }}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
             {CUSTOMER_STATUS_LABELS[ticket.status]}
           </span>
           <span className="text-[11px] text-slate-500">{ticket.ticketNumber}</span>
         </div>
-        <h1 className="mt-2 text-xl font-bold tracking-tight text-slate-900">{ticket.subject}</h1>
-        <p className="mt-1 text-[12px] text-slate-500">
+        <h1 className="mt-2 text-xl tracking-tight" style={{ color: "var(--ink-900)", fontFamily: "var(--font-display)", fontWeight: 500 }}>
+          {ticket.subject}
+        </h1>
+        <p className="mt-1 text-[12px]" style={{ color: "var(--ink-500)" }}>
           {CATEGORY_LABELS[ticket.category]} · opened {timestamp(ticket.createdAt)}
         </p>
       </header>
 
       <div
         ref={threadRef}
-        className="max-h-[520px] space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4"
+        className="max-h-[520px] space-y-3 overflow-y-auto rounded-[18px] p-4"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border-warm)", boxShadow: "var(--shadow-warm-sm)" }}
       >
         {ticket.messages.map((message) => (
           <article
@@ -207,7 +222,7 @@ export function SupportThread({
       </div>
 
       {ticket.canReply ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="rounded-[18px] p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-warm)", boxShadow: "var(--shadow-warm-sm)" }}>
           <label className="block">
             <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
               Reply
@@ -230,13 +245,13 @@ export function SupportThread({
             type="button"
             disabled={busy || !reply.trim()}
             onClick={() => void send(`/api/support/tickets/${ticket.id}/messages`)}
-            className="mt-3 h-11 rounded-xl bg-teal-600 px-5 text-[13px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-40"
+            className="mt-3 h-10 rounded-full bg-teal-600 px-5 text-[13px] font-semibold text-white transition hover:bg-teal-700 disabled:opacity-40"
           >
             {busy ? "Sending…" : "Send reply"}
           </button>
         </section>
       ) : ticket.canReopen ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="rounded-[18px] p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-warm)", boxShadow: "var(--shadow-warm-sm)" }}>
           <p className="text-[13px] font-bold text-slate-900">Still not right?</p>
           <p className="mt-0.5 text-[12px] leading-5 text-slate-500">
             Tell us what is still wrong and we will pick this back up.
@@ -257,7 +272,7 @@ export function SupportThread({
             type="button"
             disabled={busy || !reply.trim()}
             onClick={() => void send(`/api/support/tickets/${ticket.id}/reopen`)}
-            className="mt-3 h-11 rounded-xl bg-teal-600 px-5 text-[13px] font-bold text-white disabled:opacity-40"
+            className="mt-3 h-10 rounded-full bg-teal-600 px-5 text-[13px] font-semibold text-white disabled:opacity-40"
           >
             {busy ? "Reopening…" : "Reopen this request"}
           </button>
@@ -273,6 +288,8 @@ export function SupportThread({
           </p>
         </section>
       )}
+      </div>
+      </div>
     </div>
   );
 }

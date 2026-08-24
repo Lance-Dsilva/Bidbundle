@@ -20,9 +20,5 @@ export default async function SupportTicketPage({ params }: PageProps) {
 
   const { ticketId } = await params;
 
-  return (
-    <div className="px-4 py-6 sm:px-6">
-      <SupportThread ticketId={ticketId} />
-    </div>
-  );
+  return <SupportThread ticketId={ticketId} />;
 }

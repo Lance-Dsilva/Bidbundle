@@ -12,9 +12,5 @@ export default async function SupportPage() {
   // Staff belong in the queue, not the customer form.
   if (user.role === "admin") redirect("/app/admin/support");
 
-  return (
-    <div className="px-4 py-6 sm:px-6">
-      <SupportCenter />
-    </div>
-  );
+  return <SupportCenter />;
 }
