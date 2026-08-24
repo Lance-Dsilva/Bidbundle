@@ -149,6 +149,15 @@ function profileRequest(body: unknown, headers: Record<string, string> = {}): Re
       requestBody = {
         address: "1 Main Street",
         neighborhood: "Austin",
+        // Provider onboarding now captures a coverage circle, so a body
+        // without one is genuinely invalid — supplied here as the default so
+        // each test still exercises the behaviour it is actually about.
+        providerCoverage: {
+          label: "North Austin",
+          centerLatitude: 30.4021,
+          centerLongitude: -97.7266,
+          radiusMiles: 15,
+        },
         ...supplied,
         providerBusiness: { companyName: "ProFix", trades: ["Plumbing"], ...business },
       };

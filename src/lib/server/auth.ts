@@ -4,6 +4,10 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 
+import {
+  normalizeAdminPermissions,
+  type AdminPermission,
+} from "@/lib/admin-permissions";
 import { db } from "@/lib/server/db";
 import { isHoaManager } from "@/lib/server/hoa";
 import { DASHBOARD_BY_ROLE, isAppRole, type AppRole } from "@/lib/validation/auth";
@@ -29,6 +33,12 @@ export type SessionUser = {
   isVerified: boolean;
   /** Present only for an active, database-backed admin allow-list entry. */
   adminAccessLevel: "owner" | "admin" | null;
+  /**
+   * Named capabilities beyond portal access, from the same active grant.
+   * Empty for everyone else — including an ordinary admin who has been granted
+   * none, which is the default. See `lib/admin-permissions.ts`.
+   */
+  adminPermissions: AdminPermission[];
 };
 
 async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null> {
@@ -42,20 +52,26 @@ async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null
       role: true,
       isVerified: true,
       adminAccess: {
-        select: { email: true, level: true, status: true },
+        select: { email: true, level: true, status: true, permissions: true },
       },
     },
   });
 
   if (!currentUser || !isAppRole(currentUser.role)) return null;
 
-  const adminAccess =
+  const activeGrant =
     currentUser.role === "admin" &&
     currentUser.isVerified &&
     currentUser.adminAccess?.status === "active" &&
     currentUser.adminAccess.email === currentUser.email.toLowerCase()
-      ? currentUser.adminAccess.level
+      ? currentUser.adminAccess
       : null;
+  const adminAccess = activeGrant?.level ?? null;
+  // Permissions ride on the same active grant, so revoking access removes
+  // every capability in one step rather than leaving orphaned powers behind.
+  const adminPermissions = activeGrant
+    ? normalizeAdminPermissions(activeGrant.permissions ?? [])
+    : [];
 
   return {
     id: currentUser.id,
@@ -65,6 +81,7 @@ async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null
     role: currentUser.role,
     isVerified: currentUser.isVerified,
     adminAccessLevel: adminAccess,
+    adminPermissions,
   };
 }
 

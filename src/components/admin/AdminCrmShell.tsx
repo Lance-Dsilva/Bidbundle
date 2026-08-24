@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
+import { hasAdminPermission, type AdminPermission } from "@/lib/admin-permissions";
 import { Icon, type IconName } from "@/components/ui/Icon";
 
 const ADMIN_AI_SUGGESTIONS = [
@@ -20,6 +21,10 @@ type AdminCrmShellProps = Readonly<{
   userName: string | null;
   userEmail: string;
   accessLevel: "owner" | "admin" | null;
+  /** Named capabilities from the signed-in admin's active grant. */
+  permissions: AdminPermission[];
+  /** Open tickets needing attention, for the Support badge. */
+  openTicketCount?: number;
 }>;
 
 type NavItem = {
@@ -28,32 +33,71 @@ type NavItem = {
   icon: IconName;
   match: (pathname: string, search: string) => boolean;
   ownerOnly?: boolean;
+  /** Hidden unless the signed-in admin holds this named capability. */
+  permission?: AdminPermission;
 };
 
-const workspaceItems: NavItem[] = [
-  {
-    label: "Overview",
-    href: "/app/admin/dashboard",
-    icon: "home",
-    match: (pathname) => pathname === "/app/admin/dashboard",
-  },
+/**
+ * The portal's modules.
+ *
+ * Grouped by what an operator is doing rather than by which table backs it:
+ * Customers, Service providers, Support, Communications, Governance. Adding a
+ * feature means adding an entry to one of these arrays and a page under the
+ * matching route — the shell itself stays navigation-only.
+ */
+const customerItems: NavItem[] = [
   {
     label: "HOA accounts",
     href: "/app/admin/communities?type=hoa",
     icon: "house",
-    match: (pathname, search) => pathname.startsWith("/app/admin/communities") && !search.includes("type=neighborhood"),
+    match: (pathname, search) =>
+      pathname.startsWith("/app/admin/communities") && !search.includes("type=neighborhood"),
   },
   {
     label: "Neighborhoods",
     href: "/app/admin/communities?type=neighborhood",
     icon: "map-pin",
-    match: (pathname, search) => pathname.startsWith("/app/admin/communities") && search.includes("type=neighborhood"),
+    match: (pathname, search) =>
+      pathname.startsWith("/app/admin/communities") && search.includes("type=neighborhood"),
   },
+];
+
+const networkItems: NavItem[] = [
   {
     label: "Service providers",
     href: "/app/admin/providers",
     icon: "tools",
     match: (pathname) => pathname.startsWith("/app/admin/providers"),
+  },
+];
+
+const supportItems: NavItem[] = [
+  {
+    label: "Ticket queue",
+    href: "/app/admin/support",
+    icon: "chat",
+    match: (pathname) => pathname.startsWith("/app/admin/support"),
+  },
+];
+
+const communicationItems: NavItem[] = [
+  {
+    label: "Broadcasts",
+    href: "/app/admin/communications",
+    icon: "bell",
+    match: (pathname) => pathname.startsWith("/app/admin/communications"),
+    // Drafting is a granted capability, not a side effect of portal access, so
+    // an admin without it never sees a link that would 403.
+    permission: "communications:draft",
+  },
+];
+
+const overviewItems: NavItem[] = [
+  {
+    label: "Overview",
+    href: "/app/admin/dashboard",
+    icon: "home",
+    match: (pathname) => pathname === "/app/admin/dashboard",
   },
 ];
 
@@ -79,6 +123,8 @@ function NavGroup({
   pathname,
   search,
   accessLevel,
+  permissions,
+  badges,
   onNavigate,
 }: Readonly<{
   title: string;
@@ -86,17 +132,30 @@ function NavGroup({
   pathname: string;
   search: string;
   accessLevel: "owner" | "admin" | null;
+  permissions: AdminPermission[];
+  badges?: Partial<Record<string, number>>;
   onNavigate?: () => void;
 }>) {
+  // A module the signed-in admin cannot use is absent, not disabled: an
+  // unusable link in a nav is a support ticket waiting to happen.
+  const visible = items.filter((item) => {
+    if (item.ownerOnly && accessLevel !== "owner") return false;
+    if (item.permission && !hasAdminPermission({ level: accessLevel, permissions }, item.permission)) {
+      return false;
+    }
+    return true;
+  });
+  if (visible.length === 0) return null;
+
   return (
     <div>
       <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
         {title}
       </p>
       <nav className="space-y-1" aria-label={title}>
-        {items.map((item) => {
-          if (item.ownerOnly && accessLevel !== "owner") return null;
+        {visible.map((item) => {
           const active = item.match(pathname, search);
+          const badge = badges?.[item.label];
           return (
             <Link
               key={item.label}
@@ -110,7 +169,13 @@ function NavGroup({
             >
               <Icon name={item.icon} size={18} className={active ? "text-emerald-400" : "text-slate-500 group-hover:text-slate-300"} />
               <span>{item.label}</span>
-              {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+              {badge ? (
+                <span className="ml-auto rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              ) : active ? (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              ) : null}
             </Link>
           );
         })}
@@ -145,7 +210,16 @@ function SidebarContent(props: Readonly<AdminCrmShellProps & { pathname: string;
       </div>
 
       <div className="mt-7 space-y-7">
-        <NavGroup title="Customer operations" items={workspaceItems} {...props} />
+        <NavGroup title="Workspace" items={overviewItems} {...props} />
+        <NavGroup title="Customers" items={customerItems} {...props} />
+        <NavGroup title="Service providers" items={networkItems} {...props} />
+        <NavGroup
+          title="Support"
+          items={supportItems}
+          {...props}
+          badges={{ "Ticket queue": props.openTicketCount ?? 0 }}
+        />
+        <NavGroup title="Communications" items={communicationItems} {...props} />
         <NavGroup title="Governance" items={governanceItems} {...props} />
       </div>
 
@@ -177,7 +251,9 @@ function SidebarContent(props: Readonly<AdminCrmShellProps & { pathname: string;
 
 function pageContext(pathname: string) {
   if (pathname.startsWith("/app/admin/communities")) return { section: "Customers", title: "Community accounts" };
-  if (pathname.startsWith("/app/admin/providers")) return { section: "Network", title: "Service providers" };
+  if (pathname.startsWith("/app/admin/providers")) return { section: "Service providers", title: "Provider network" };
+  if (pathname.startsWith("/app/admin/support")) return { section: "Support", title: "Ticket queue" };
+  if (pathname.startsWith("/app/admin/communications")) return { section: "Communications", title: "Operational broadcasts" };
   if (pathname.startsWith("/app/admin/audit")) return { section: "Governance", title: "Audit trail" };
   if (pathname.startsWith("/app/admin/access")) return { section: "Governance", title: "Admin access" };
   if (pathname.startsWith("/app/admin/profile")) return { section: "Account", title: "Your profile" };

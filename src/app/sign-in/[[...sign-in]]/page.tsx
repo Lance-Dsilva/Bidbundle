@@ -1,6 +1,7 @@
 import { SignIn } from "@clerk/nextjs";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
+import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
 
 export default function SignInPage() {
   return (
@@ -26,25 +27,31 @@ export default function SignInPage() {
               "radial-gradient(circle, rgba(224,135,88,0.16) 0%, transparent 68%)",
           }}
         />
-        <SignIn
-          path="/sign-in"
-          routing="path"
-          signUpUrl="/get-started"
-          fallbackRedirectUrl="/auth/continue"
-          appearance={{
-            variables: {
-              colorPrimary: "#0f8f83",
-              colorForeground: "#1f2937",
-              colorBackground: "#ffffff",
-              borderRadius: "1rem",
-            },
-            elements: {
-              rootBox: "relative w-full max-w-md",
-              cardBox: "w-full shadow-none",
-              card: "border border-[#e4e7ec] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
-            },
-          }}
-        />
+        {/* The Clerk card and the loader share this column, so the swap is a
+            crossfade rather than a layout jump. */}
+        <div className="relative w-full max-w-md">
+          <ClerkFormGate context="sign-in">
+            <SignIn
+              path="/sign-in"
+              routing="path"
+              signUpUrl="/get-started"
+              fallbackRedirectUrl="/auth/continue"
+              appearance={{
+                variables: {
+                  colorPrimary: "#0f8f83",
+                  colorForeground: "#1f2937",
+                  colorBackground: "#ffffff",
+                  borderRadius: "1rem",
+                },
+                elements: {
+                  rootBox: "relative w-full",
+                  cardBox: "w-full shadow-none",
+                  card: "border border-[#e4e7ec] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
+                },
+              }}
+            />
+          </ClerkFormGate>
+        </div>
       </main>
     </div>
   );

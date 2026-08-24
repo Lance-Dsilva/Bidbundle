@@ -6,6 +6,7 @@ import type { UserRole } from "@/generated/prisma/enums";
 import type { AdminAccessSummary } from "@/lib/admin-access";
 import { isPrimaryAdminEmail } from "@/lib/admin-access";
 import { buildAuditEntry } from "@/lib/server/audit";
+import { normalizeAdminPermissions } from "@/lib/admin-permissions";
 import { db } from "@/lib/server/db";
 import { buildPreferenceAwareNotificationOps } from "@/lib/server/notifications";
 import { normalizeEmail } from "@/lib/validation/auth";
@@ -25,6 +26,7 @@ const accessSelect = {
   email: true,
   level: true,
   status: true,
+  permissions: true,
   grantedAt: true,
   acceptedAt: true,
   revokedAt: true,
@@ -37,6 +39,7 @@ type AccessRow = {
   email: string;
   level: "owner" | "admin";
   status: "pending" | "active" | "revoked";
+  permissions: string[];
   grantedAt: Date;
   acceptedAt: Date | null;
   revokedAt: Date | null;
@@ -55,7 +58,56 @@ function serializeAccess(row: AccessRow): AdminAccessSummary {
     grantedAt: row.grantedAt.toISOString(),
     acceptedAt: row.acceptedAt?.toISOString() ?? null,
     revokedAt: row.revokedAt?.toISOString() ?? null,
+    // Unknown strings are dropped rather than shown: a permission the code no
+    // longer recognizes grants nothing, so displaying it would be a lie.
+    permissions: normalizeAdminPermissions(row.permissions),
   };
+}
+
+/**
+ * Replaces the named capabilities on one grant.
+ *
+ * Owner-only (enforced by the route) and deliberately absolute rather than
+ * additive, so the screen an owner is looking at is the complete truth about
+ * what that admin can do. The owner's own row is refused: `owner` already
+ * implies every permission, and allowing an edit would let the bootstrap
+ * account accidentally restrict itself.
+ */
+export async function setAdminPermissions(input: {
+  actorUserId: string;
+  grantId: string;
+  permissions: readonly string[];
+}): Promise<AdminAccessSummary> {
+  const grant = await db.adminAccessGrant.findUnique({
+    where: { id: input.grantId },
+    select: { id: true, level: true, status: true },
+  });
+  if (!grant) throw new AdminAccessError("That admin access record does not exist.", 404);
+  if (grant.level === "owner") {
+    throw new AdminAccessError("The Bundleen owner already holds every permission.", 400);
+  }
+  if (grant.status === "revoked") {
+    throw new AdminAccessError("Restore this admin's access before changing permissions.", 409);
+  }
+
+  const permissions = normalizeAdminPermissions(input.permissions);
+  const [updated] = await db.$transaction([
+    db.adminAccessGrant.update({
+      where: { id: input.grantId },
+      data: { permissions },
+      select: accessSelect,
+    }),
+    db.adminAuditLog.create({
+      data: buildAuditEntry({
+        actorUserId: input.actorUserId,
+        action: "admin_permissions_changed",
+        targetType: "admin_access",
+        targetId: input.grantId,
+        metadata: { changedFields: permissions.length > 0 ? permissions : ["none"] },
+      }),
+    }),
+  ]);
+  return serializeAccess(updated);
 }
 
 export async function listAdminAccess(): Promise<AdminAccessSummary[]> {

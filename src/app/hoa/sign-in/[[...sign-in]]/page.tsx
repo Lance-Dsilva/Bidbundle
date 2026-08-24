@@ -3,6 +3,7 @@ import { SignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
+import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
 
 export default async function HoaManagerSignInPage() {
   const { userId } = await auth();
@@ -26,28 +27,30 @@ export default async function HoaManagerSignInPage() {
           <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[#0f8f83]">
             HOA manager portal
           </p>
-          <SignIn
-            path="/hoa/sign-in"
-            routing="path"
-            withSignUp={false}
-            transferable={false}
-            forceRedirectUrl="/auth/continue"
-            fallbackRedirectUrl="/auth/continue"
-            appearance={{
-              variables: {
-                colorPrimary: "#0f8f83",
-                colorForeground: "#1f2937",
-                colorBackground: "#ffffff",
-                borderRadius: "1rem",
-              },
-              elements: {
-                rootBox: "relative w-full",
-                cardBox: "w-full shadow-none",
-                card: "border border-[#d8e7e3] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
-                footerAction: "hidden",
-              },
-            }}
-          />
+          <ClerkFormGate context="sign-in">
+            <SignIn
+              path="/hoa/sign-in"
+              routing="path"
+              withSignUp={false}
+              transferable={false}
+              forceRedirectUrl="/auth/continue"
+              fallbackRedirectUrl="/auth/continue"
+              appearance={{
+                variables: {
+                  colorPrimary: "#0f8f83",
+                  colorForeground: "#1f2937",
+                  colorBackground: "#ffffff",
+                  borderRadius: "1rem",
+                },
+                elements: {
+                  rootBox: "relative w-full",
+                  cardBox: "w-full shadow-none",
+                  card: "border border-[#d8e7e3] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
+                  footerAction: "hidden",
+                },
+              }}
+            />
+          </ClerkFormGate>
           <p className="mt-4 text-center text-xs leading-5 text-[#64748b]">
             HOA manager accounts are invitation-only. Residents use the link emailed by their manager.
           </p>

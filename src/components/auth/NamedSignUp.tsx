@@ -5,8 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
+import { BundleenAuthLoader } from "@/components/auth/BundleenAuthLoader";
+import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
 import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessStep";
+import { ProviderCoverageStep } from "@/components/onboarding/ProviderCoverageStep";
 import { RoleStep } from "@/components/onboarding/RoleStep";
+import {
+  isServiceAreaDraftValid,
+  type ServiceAreaDraft,
+} from "@/components/provider/ProviderServiceAreaEditor";
 import { StepProgress } from "@/components/onboarding/StepProgress";
 import {
   VerifyAreaStep,
@@ -28,10 +35,18 @@ import {
   type OnboardingDraft,
   type ProviderBusinessDraft,
 } from "@/lib/onboarding-draft";
+import { SERVICE_RADIUS_DEFAULT_MILES } from "@/lib/provider-coverage";
 import { MAX_NAME_LENGTH, type PublicRole } from "@/lib/validation/auth";
 
 type NameErrors = Partial<Record<keyof SignUpName, string>>;
-type SignUpStage = "session" | "name" | "role" | "location" | "provider" | "account";
+type SignUpStage =
+  | "session"
+  | "name"
+  | "role"
+  | "location"
+  | "provider"
+  | "coverage"
+  | "account";
 
 const EMPTY_BUSINESS: ProviderBusinessDraft = {
   companyName: "",
@@ -42,26 +57,19 @@ const EMPTY_BUSINESS: ProviderBusinessDraft = {
   insuranceProvider: "",
 };
 
+/**
+ * The wait state for the account step and for the pre-hydration render.
+ *
+ * Was a grey skeleton; now the same branded house every other Clerk handoff
+ * shows, so a user moving between `/sign-in` and `/get-started` sees one
+ * consistent transition rather than two unrelated placeholders.
+ */
 function AccountStepLoading() {
-  return (
-    <section
-      aria-label="Loading secure account form"
-      aria-live="polite"
-      className="w-full rounded-2xl border border-[#e4e7ec] bg-white px-7 py-8 shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9"
-    >
-      <div className="mx-auto h-6 w-44 animate-pulse rounded-full bg-[#e7eeec]" />
-      <div className="mx-auto mt-3 h-4 w-60 max-w-full animate-pulse rounded-full bg-[#eef2f1]" />
-      <div className="mt-8 space-y-4">
-        <div className="h-11 animate-pulse rounded-xl bg-[#eef2f1]" />
-        <div className="h-11 animate-pulse rounded-xl bg-[#eef2f1]" />
-        <div className="h-11 animate-pulse rounded-xl bg-[#d9efeb]" />
-      </div>
-      <p className="mt-6 text-center text-xs font-medium text-[#64748b]">
-        Loading secure account setup…
-      </p>
-    </section>
-  );
+  return <BundleenAuthLoader context="sign-up" className={LOADER_CARD_CLASS} />;
 }
+
+const LOADER_CARD_CLASS =
+  "auth-step-enter w-full rounded-2xl border border-[#e4e7ec] bg-white px-7 py-10 text-center shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9";
 
 export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boolean }) {
   const router = useRouter();
@@ -78,12 +86,15 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [providerBusiness, setProviderBusiness] =
     useState<ProviderBusinessDraft>(EMPTY_BUSINESS);
+  const [providerCoverage, setProviderCoverage] = useState<ServiceAreaDraft | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [sessionAccepted, setSessionAccepted] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [switchAccountError, setSwitchAccountError] = useState<string | null>(null);
 
-  const stepCount = role === "provider" ? 5 : 4;
+  // Providers gained a coverage step between business details and the Clerk
+  // account step, so their flow is one screen longer than a homeowner's.
+  const stepCount = role === "provider" ? 6 : 4;
 
   useEffect(() => {
     router.prefetch("/get-started/profile");
@@ -100,6 +111,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
       setNeighborhood(draft.neighborhood);
       setCoords({ lat: draft.latitude, lng: draft.longitude });
       setProviderBusiness(draft.providerBusiness);
+      setProviderCoverage(draft.providerCoverage ?? null);
       setStage(alreadyVerified ? "session" : "account");
     } else if (alreadyVerified) {
       setStage("session");
@@ -154,8 +166,25 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
     setAddress(location.address);
     setNeighborhood(location.neighborhood);
     setCoords({ lat: location.latitude, lng: location.longitude });
-    if (role === "provider") setStage("provider");
-    else continueToAccount(location);
+    if (role === "provider") {
+      // Seed the coverage circle from the base address they just verified, so
+      // the map opens on somewhere real instead of a blank world view.
+      setProviderCoverage(
+        (current) =>
+          current ?? {
+            label: location.neighborhood || "My service area",
+            centerLatitude: location.latitude,
+            centerLongitude: location.longitude,
+            radiusMiles: SERVICE_RADIUS_DEFAULT_MILES,
+            formattedAddress: location.address,
+            locality: location.neighborhood || null,
+            region: null,
+            postalCode: null,
+            countryCode: null,
+          },
+      );
+      setStage("provider");
+    } else continueToAccount(location);
   };
 
   const continueToAccount = (location?: VerifiedLocation) => {
@@ -166,6 +195,13 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
     const finalAddress = location?.address ?? address;
     const finalNeighborhood = location?.neighborhood ?? neighborhood;
     if (!finalCoords || !finalAddress.trim()) return;
+    // A provider cannot reach Clerk's account step without a coverage circle;
+    // the step's own Continue button is already disabled without one, and this
+    // is the second gate for a resumed draft that predates the step.
+    if (role === "provider" && !isServiceAreaDraftValid(providerCoverage)) {
+      setStage("coverage");
+      return;
+    }
 
     const draft: OnboardingDraft = {
       name,
@@ -175,6 +211,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
       latitude: finalCoords.lat,
       longitude: finalCoords.lng,
       providerBusiness,
+      providerCoverage: role === "provider" ? providerCoverage : null,
       completionAuthorized: !alreadyVerified || sessionAccepted,
     };
     saveOnboardingDraft(draft);
@@ -363,8 +400,24 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
           address={address}
           onBack={() => setStage("location")}
           onChange={handleBusinessChange}
-          onContinue={() => continueToAccount()}
+          onContinue={() => setStage("coverage")}
           stepNumber={4}
+          stepCount={stepCount}
+          confirmLabel="Continue to your service area"
+        />
+      </div>
+    );
+  }
+
+  if (stage === "coverage") {
+    return (
+      <div className="auth-step-enter w-full max-w-2xl rounded-[22px] border border-[#e4e7ec] bg-white px-6 sm:px-9">
+        <ProviderCoverageStep
+          value={providerCoverage}
+          onChange={setProviderCoverage}
+          onBack={() => setStage("provider")}
+          onContinue={() => continueToAccount()}
+          stepNumber={5}
           stepCount={stepCount}
           confirmLabel="Continue to email verification"
         />
@@ -404,28 +457,32 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
           Your role and location are ready. Verify your email to securely save them.
         </p>
       </div>
-      <SignUp
-        path="/get-started"
-        routing="path"
-        signInUrl="/sign-in"
-        forceRedirectUrl="/get-started/profile"
-        fallbackRedirectUrl="/get-started/profile"
-        fallback={<AccountStepLoading />}
-        initialValues={{ firstName: name.firstName, lastName: name.lastName }}
-        appearance={{
-          variables: {
-            colorPrimary: "#0f8f83",
-            colorForeground: "#1f2937",
-            colorBackground: "#ffffff",
-            borderRadius: "1rem",
-          },
-          elements: {
-            rootBox: "relative w-full",
-            cardBox: "w-full shadow-none",
-            card: "border border-[#e4e7ec] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
-          },
-        }}
-      />
+      {/* `fallback` covers Clerk's own mount, `ClerkFormGate` covers the SDK
+          not having loaded at all. Only one ever renders at a time. */}
+      <ClerkFormGate context="sign-up" loaderClassName={LOADER_CARD_CLASS}>
+        <SignUp
+          path="/get-started"
+          routing="path"
+          signInUrl="/sign-in"
+          forceRedirectUrl="/get-started/profile"
+          fallbackRedirectUrl="/get-started/profile"
+          fallback={<AccountStepLoading />}
+          initialValues={{ firstName: name.firstName, lastName: name.lastName }}
+          appearance={{
+            variables: {
+              colorPrimary: "#0f8f83",
+              colorForeground: "#1f2937",
+              colorBackground: "#ffffff",
+              borderRadius: "1rem",
+            },
+            elements: {
+              rootBox: "relative w-full",
+              cardBox: "w-full shadow-none",
+              card: "border border-[#e4e7ec] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
+            },
+          }}
+        />
+      </ClerkFormGate>
     </div>
   );
 }

@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
       email: string;
       level: "owner" | "admin";
       status: "pending" | "active" | "revoked";
+      permissions: string[];
     };
   },
 }));
@@ -54,7 +55,12 @@ function signedInAs(role: AppRole) {
     isVerified: true,
     adminAccess:
       role === "admin"
-        ? { email: "ada@example.com", level: "owner", status: "active" }
+        ? {
+            email: "ada@example.com",
+            level: "owner",
+            status: "active",
+            permissions: [],
+          }
         : null,
   };
 }
@@ -77,6 +83,7 @@ describe("getSessionUser", () => {
       role: "homeowner",
       isVerified: true,
       adminAccessLevel: null,
+      adminPermissions: [],
     });
   });
 

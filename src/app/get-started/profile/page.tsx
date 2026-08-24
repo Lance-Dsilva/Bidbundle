@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
+import { BundleenAuthLoader } from "@/components/auth/BundleenAuthLoader";
 import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessStep";
+import { ProviderCoverageStep } from "@/components/onboarding/ProviderCoverageStep";
 import { RoleStep } from "@/components/onboarding/RoleStep";
+import type { ServiceAreaDraft } from "@/components/provider/ProviderServiceAreaEditor";
 import {
   VerifyAreaStep,
   type VerifiedLocation,
@@ -19,10 +22,11 @@ import {
   type OnboardingDraft,
   type ProviderBusinessDraft,
 } from "@/lib/onboarding-draft";
+import { SERVICE_RADIUS_DEFAULT_MILES } from "@/lib/provider-coverage";
 import type { PublicRole } from "@/lib/validation/auth";
 import { saveRole } from "@/utils/onboardingState";
 
-type OnboardingStep = 1 | 2 | 3;
+type OnboardingStep = 1 | 2 | 3 | 4;
 
 type ProfileResponse = {
   profileReady?: boolean;
@@ -63,37 +67,48 @@ function OnboardingHandoff({
         className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto px-5 py-8"
         style={{ background: "linear-gradient(180deg, #FAF6F0 0%, #F1ECE2 100%)" }}
       >
-        <div
-          aria-live="polite"
-          className="auth-step-enter w-full max-w-xl rounded-[22px] border bg-white p-8 text-center sm:p-10"
-          style={{ borderColor: "#E4E7EC", boxShadow: "0 20px 60px rgba(16,42,67,.08)" }}
-        >
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--sage-50)] text-xl text-[var(--sage-700)]">
-            {working ? "…" : "!"}
-          </span>
-          <h1 className="mt-5 text-2xl font-bold tracking-tight text-[var(--ink-900)]">
-            {working ? "Securing your account" : "Your details are still safe"}
-          </h1>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[var(--ink-500)]">
-            {working
-              ? "Email verified. We’re saving your role and location, then taking you to your dashboard."
-              : error ?? "We could not finish your profile."}
-          </p>
-          {working ? (
-            <div className="mx-auto mt-6 h-2 w-48 max-w-full animate-pulse rounded-full bg-[#d9efeb]" />
-          ) : onRetry ? (
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Button className="h-11 rounded-full px-8 text-sm" onClick={onRetry} variant="warm">
-                Try again
-              </Button>
-              {onEdit ? (
-                <Button className="h-11 rounded-full px-8 text-sm" onClick={onEdit} variant="secondary">
-                  Review details
+        {working ? (
+          // Same branded house as every other Clerk handoff. `timeoutMs={0}`
+          // because this wait is our own API call, not Clerk initialization —
+          // its failure arrives as `error` below rather than as a timeout.
+          <BundleenAuthLoader
+            context="profile"
+            timeoutMs={0}
+            className="auth-step-enter w-full max-w-xl rounded-[22px] border border-[#E4E7EC] bg-white p-8 text-center shadow-[0_20px_60px_rgba(16,42,67,.08)] sm:p-10"
+          />
+        ) : (
+          <div
+            role="alert"
+            className="auth-step-enter w-full max-w-xl rounded-[22px] border bg-white p-8 text-center sm:p-10"
+            style={{ borderColor: "#E4E7EC", boxShadow: "0 20px 60px rgba(16,42,67,.08)" }}
+          >
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--sage-50)] text-xl text-[var(--sage-700)]">
+              !
+            </span>
+            <h1 className="mt-5 text-2xl font-bold tracking-tight text-[var(--ink-900)]">
+              Your details are still safe
+            </h1>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[var(--ink-500)]">
+              {error ?? "We could not finish your profile."}
+            </p>
+            {onRetry ? (
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <Button className="h-11 rounded-full px-8 text-sm" onClick={onRetry} variant="warm">
+                  Try again
                 </Button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+                {onEdit ? (
+                  <Button
+                    className="h-11 rounded-full px-8 text-sm"
+                    onClick={onEdit}
+                    variant="secondary"
+                  >
+                    Review details
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        )}
       </main>
     </div>
   );
@@ -119,11 +134,12 @@ export default function CompleteProfilePage() {
     licenseNumber: "",
     insuranceProvider: "",
   });
+  const [providerCoverage, setProviderCoverage] = useState<ServiceAreaDraft | null>(null);
   const [draftChecked, setDraftChecked] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<OnboardingDraft | null>(null);
   const automaticCompletionStarted = useRef(false);
 
-  const stepCount = role === "provider" ? 3 : 2;
+  const stepCount = role === "provider" ? 4 : 2;
 
   const handleProviderBusinessChange = <K extends keyof ProviderBusinessDraft>(
     field: K,
@@ -148,6 +164,7 @@ export default function CompleteProfilePage() {
       const completionLatitude = draft?.latitude ?? location?.latitude ?? coords?.lat ?? null;
       const completionLongitude = draft?.longitude ?? location?.longitude ?? coords?.lng ?? null;
       const completionBusiness = draft?.providerBusiness ?? providerBusiness;
+      const completionCoverage = draft?.providerCoverage ?? providerCoverage;
 
       // `initialValues` normally gives Clerk these fields during sign-up. Some
       // Clerk configurations do not allow the browser SDK to update names,
@@ -189,6 +206,10 @@ export default function CompleteProfilePage() {
                   insuranceProvider: completionBusiness.insuranceProvider,
                 }
               : undefined,
+          // Saved as the provider's primary active service area. Revalidated
+          // server-side; nothing here decides what the circle actually covers.
+          providerCoverage:
+            completionRole === "provider" ? (completionCoverage ?? undefined) : undefined,
         }),
       });
       const result = (await response.json().catch(() => null)) as ProfileResponse | null;
@@ -306,8 +327,23 @@ export default function CompleteProfilePage() {
                 setAddress(location.address);
                 setNeighborhood(location.neighborhood);
                 setCoords({ lat: location.latitude, lng: location.longitude });
-                if (role === "provider") setStep(3);
-                else void finishProfile({ location });
+                if (role === "provider") {
+                  setProviderCoverage(
+                    (current) =>
+                      current ?? {
+                        label: location.neighborhood || "My service area",
+                        centerLatitude: location.latitude,
+                        centerLongitude: location.longitude,
+                        radiusMiles: SERVICE_RADIUS_DEFAULT_MILES,
+                        formattedAddress: location.address,
+                        locality: location.neighborhood || null,
+                        region: null,
+                        postalCode: null,
+                        countryCode: null,
+                      },
+                  );
+                  setStep(3);
+                } else void finishProfile({ location });
               }}
               onCoordsDetected={(lat, lng) =>
                 setCoords(lat === null || lng === null ? null : { lat, lng })
@@ -326,10 +362,24 @@ export default function CompleteProfilePage() {
               address={address}
               onBack={() => setStep(2)}
               onChange={handleProviderBusinessChange}
-              onContinue={() => void finishProfile()}
+              onContinue={() => setStep(4)}
               submitting={submitting}
               stepNumber={3}
               stepCount={stepCount}
+              confirmLabel="Continue to your service area"
+            />
+          ) : null}
+
+          {step === 4 && role === "provider" ? (
+            <ProviderCoverageStep
+              value={providerCoverage}
+              onChange={setProviderCoverage}
+              onBack={() => setStep(3)}
+              onContinue={() => void finishProfile()}
+              submitting={submitting}
+              stepNumber={4}
+              stepCount={stepCount}
+              confirmLabel="Finish provider setup"
             />
           ) : null}
 

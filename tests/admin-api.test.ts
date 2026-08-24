@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   guardFailure: null as { kind: "rate-limited"; retryAfterSeconds: number } | { kind: "unavailable" } | null,
   guardCalls: 0,
   accessLevel: "owner" as "owner" | "admin" | null,
+  permissions: [] as string[],
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -42,6 +43,7 @@ vi.mock("@/lib/server/db", () => ({
                       email: "ops@bundleen.test",
                       level: state.accessLevel,
                       status: "active",
+                      permissions: state.permissions ?? [],
                     }
                   : null,
             }

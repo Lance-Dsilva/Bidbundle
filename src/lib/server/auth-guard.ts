@@ -168,6 +168,56 @@ export async function guardAiChat(userId: string): Promise<GuardFailure | null> 
   }
 }
 
+/** Applies a per-account limiter to support ticket reads/writes. */
+export async function guardSupportMutation(userId: string): Promise<GuardFailure | null> {
+  return applyLimiter("supportMutation", ["support-mutation", userId]);
+}
+
+/**
+ * Applies a per-admin, per-ticket limiter to AI generation.
+ *
+ * Keyed on both so one noisy ticket cannot exhaust an admin's whole allowance,
+ * and so repeated clicks on `Generate` for the same ticket are what gets
+ * throttled — which is the duplicate-request case this is really for.
+ */
+export async function guardSupportAi(
+  adminUserId: string,
+  ticketId: string,
+): Promise<GuardFailure | null> {
+  return applyLimiter("supportAi", ["support-ai", adminUserId, ticketId]);
+}
+
+/** Applies a per-admin limiter to broadcast composition and delivery. */
+export async function guardBroadcastMutation(userId: string): Promise<GuardFailure | null> {
+  return applyLimiter("broadcastMutation", ["broadcast-mutation", userId]);
+}
+
+/**
+ * The shared body every guard above repeats: no limiter configured is fatal in
+ * production and a loud warning locally, and an unreachable limiter is never
+ * silently treated as an allow.
+ */
+async function applyLimiter(
+  name: Parameters<typeof consumeRateLimit>[0],
+  identifierParts: readonly string[],
+): Promise<GuardFailure | null> {
+  if (!isRedisConfigured()) {
+    if (requiresRateLimiter()) return { kind: "unavailable" };
+    warnLimiterMissingOnce();
+    return null;
+  }
+
+  try {
+    const decision = await consumeRateLimit(name, buildIdentifier(identifierParts));
+    return decision.success
+      ? null
+      : { kind: "rate-limited", retryAfterSeconds: decision.retryAfterSeconds };
+  } catch (error) {
+    if (error instanceof RateLimiterUnavailableError) return { kind: "unavailable" };
+    throw error;
+  }
+}
+
 /** Builds the JSON `429`/`503` response for an API route handler. */
 export function guardFailureResponse(failure: GuardFailure): NextResponse {
   if (failure.kind === "rate-limited") {

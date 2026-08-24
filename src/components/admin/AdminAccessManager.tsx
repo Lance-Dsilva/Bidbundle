@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 
 import { StatusPill } from "@/components/admin/AdminPrimitives";
 import type { AdminAccessSummary } from "@/lib/admin-access";
+import {
+  ADMIN_PERMISSIONS,
+  ADMIN_PERMISSION_DESCRIPTIONS,
+  ADMIN_PERMISSION_LABELS,
+  type AdminPermission,
+} from "@/lib/admin-permissions";
 
 type ErrorBody = { error?: string; fields?: Record<string, string> };
 
@@ -79,6 +85,49 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
     }
   }
 
+  /**
+   * Replaces the whole permission set for one grant.
+   *
+   * Absolute rather than a delta, matching the server: the checkboxes on screen
+   * are the complete statement of what that admin may do, so submitting them
+   * should mean exactly that.
+   */
+  async function togglePermission(item: AdminAccessSummary, permission: AdminPermission) {
+    const next = item.permissions.includes(permission)
+      ? item.permissions.filter((value) => value !== permission)
+      : [...item.permissions, permission];
+
+    setBusy(item.id);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/access/${encodeURIComponent(item.id)}/permissions`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ permissions: next }),
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as ErrorBody & {
+        access?: AdminAccessSummary;
+      };
+      if (!response.ok || !body.access) {
+        throw new Error(body.error ?? "Could not update permissions.");
+      }
+      setAccess((current) =>
+        current.map((row) => (row.id === body.access!.id ? body.access! : row)),
+      );
+      setNotice(`Permissions updated for ${item.email}.`);
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update permissions.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <form onSubmit={grant} className="space-y-3">
@@ -119,29 +168,69 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
 
       <ul className="divide-y" style={{ borderColor: "var(--line)" }}>
         {access.map((item) => (
-          <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold" style={{ color: "var(--ink-900)" }}>
-                {item.fullName || item.email}
-              </p>
-              <p className="truncate text-[11px]" style={{ color: "var(--muted)" }}>
-                {item.email}{item.grantedByName ? ` · granted by ${item.grantedByName}` : ""}
-              </p>
+          <li key={item.id} className="py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold" style={{ color: "var(--ink-900)" }}>
+                  {item.fullName || item.email}
+                </p>
+                <p className="truncate text-[11px]" style={{ color: "var(--muted)" }}>
+                  {item.email}{item.grantedByName ? ` · granted by ${item.grantedByName}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusPill label={item.level === "owner" ? "Primary owner" : item.status[0].toUpperCase() + item.status.slice(1)} tone={item.status === "active" ? "positive" : item.status === "revoked" ? "danger" : "warning"} />
+                {item.level !== "owner" && item.status === "active" && (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => revoke(item)}
+                    className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
+                    style={{ borderColor: "var(--line)", color: "var(--danger-600)" }}
+                  >
+                    {busy === item.id ? "Removing…" : "Remove"}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <StatusPill label={item.level === "owner" ? "Primary owner" : item.status[0].toUpperCase() + item.status.slice(1)} tone={item.status === "active" ? "positive" : item.status === "revoked" ? "danger" : "warning"} />
-              {item.level !== "owner" && item.status === "active" && (
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => revoke(item)}
-                  className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
-                  style={{ borderColor: "var(--line)", color: "var(--danger-600)" }}
-                >
-                  {busy === item.id ? "Removing…" : "Remove"}
-                </button>
-              )}
-            </div>
+
+            {/* High-impact capabilities are opt-in per admin. The owner holds
+                them implicitly, so their row shows the fact rather than a
+                checkbox that could be unticked. */}
+            {item.status === "active" ? (
+              <div className="mt-2.5 rounded-xl px-3 py-2.5" style={{ background: "var(--cream-50)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--muted)" }}>
+                  Extra permissions
+                </p>
+                {item.level === "owner" ? (
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+                    The primary owner holds every permission, including global email delivery.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {ADMIN_PERMISSIONS.map((permission) => (
+                      <label key={permission} className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4"
+                          disabled={busy !== null}
+                          checked={item.permissions.includes(permission)}
+                          onChange={() => void togglePermission(item, permission)}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
+                            {ADMIN_PERMISSION_LABELS[permission]}
+                          </span>
+                          <span className="block text-[11px] leading-4" style={{ color: "var(--muted)" }}>
+                            {ADMIN_PERMISSION_DESCRIPTIONS[permission]}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>

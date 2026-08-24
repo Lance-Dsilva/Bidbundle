@@ -1,3 +1,8 @@
+import type { ServiceAreaDraft } from "@/components/provider/ProviderServiceAreaEditor";
+import {
+  SERVICE_RADIUS_MAX_MILES,
+  SERVICE_RADIUS_MIN_MILES,
+} from "@/lib/provider-coverage";
 import type { PublicRole } from "@/lib/validation/auth";
 import type { SignUpName } from "@/lib/display-name";
 
@@ -10,6 +15,8 @@ export type ProviderBusinessDraft = {
   insuranceProvider: string;
 };
 
+export type ProviderCoverageDraft = ServiceAreaDraft;
+
 export type OnboardingDraft = {
   name: SignUpName;
   role: PublicRole;
@@ -18,6 +25,12 @@ export type OnboardingDraft = {
   latitude: number;
   longitude: number;
   providerBusiness: ProviderBusinessDraft;
+  /**
+   * The provider's primary coverage circle, captured before Clerk's account
+   * step. Optional so a draft written by an older build still validates and
+   * the provider is simply asked for it again rather than being stranded.
+   */
+  providerCoverage?: ProviderCoverageDraft | null;
   /**
    * True only after the user deliberately entered Clerk's account step or
    * confirmed an already-active Clerk session. Older drafts intentionally
@@ -30,6 +43,41 @@ const ONBOARDING_DRAFT_STORAGE_KEY = "bundleen.onboarding-draft";
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isNullableString(value: unknown): boolean {
+  return value === null || value === undefined || typeof value === "string";
+}
+
+/**
+ * A stored coverage circle is trusted only as far as its shape. The server
+ * revalidates it with `providerServiceAreaSchema` before anything is written,
+ * so this check exists to stop a corrupt draft from crashing the editor, not
+ * to authorize the values.
+ */
+export function isProviderCoverageDraft(value: unknown): value is ProviderCoverageDraft {
+  if (typeof value !== "object" || value === null) return false;
+  const draft = value as Partial<ProviderCoverageDraft>;
+  return (
+    isString(draft.label) &&
+    typeof draft.centerLatitude === "number" &&
+    Number.isFinite(draft.centerLatitude) &&
+    draft.centerLatitude >= -90 &&
+    draft.centerLatitude <= 90 &&
+    typeof draft.centerLongitude === "number" &&
+    Number.isFinite(draft.centerLongitude) &&
+    draft.centerLongitude >= -180 &&
+    draft.centerLongitude <= 180 &&
+    typeof draft.radiusMiles === "number" &&
+    Number.isFinite(draft.radiusMiles) &&
+    draft.radiusMiles >= SERVICE_RADIUS_MIN_MILES &&
+    draft.radiusMiles <= SERVICE_RADIUS_MAX_MILES &&
+    isNullableString(draft.formattedAddress) &&
+    isNullableString(draft.locality) &&
+    isNullableString(draft.region) &&
+    isNullableString(draft.postalCode) &&
+    isNullableString(draft.countryCode)
+  );
 }
 
 export function isOnboardingDraft(value: unknown): value is OnboardingDraft {
@@ -58,6 +106,9 @@ export function isOnboardingDraft(value: unknown): value is OnboardingDraft {
     draft.longitude <= 180 &&
     (draft.completionAuthorized === undefined ||
       typeof draft.completionAuthorized === "boolean") &&
+    (draft.providerCoverage === undefined ||
+      draft.providerCoverage === null ||
+      isProviderCoverageDraft(draft.providerCoverage)) &&
     typeof business === "object" &&
     business !== null &&
     isString(business.companyName) &&

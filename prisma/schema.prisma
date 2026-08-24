@@ -106,6 +106,17 @@ enum AdminAuditAction {
   hoa_visit_corrected
   review_moderated
   provider_service_area_changed
+  support_ticket_assigned
+  support_ticket_status_changed
+  support_ticket_priority_changed
+  support_ticket_replied
+  support_ticket_ai_draft_approved
+  broadcast_created
+  broadcast_updated
+  broadcast_test_sent
+  broadcast_sent
+  broadcast_discarded
+  admin_permissions_changed
 }
 
 enum AdminAuditTargetType {
@@ -124,6 +135,8 @@ enum AdminAuditTargetType {
   service_visit
   review
   provider_service_area
+  support_ticket
+  broadcast
 }
 
 enum CommunityInvitationRole {
@@ -339,6 +352,19 @@ model User {
 
   aiConversations AiConversation[]
   aiUsageLogs     AiUsageLog[]
+
+  // ── Support ───────────────────────────────────────────────────────────
+  supportTicketsRaised    SupportTicket[]        @relation("SupportTicketRequester")
+  supportTicketsAssigned  SupportTicket[]        @relation("SupportTicketAssignee")
+  supportTicketMessages   SupportTicketMessage[] @relation("SupportTicketMessageAuthor")
+  supportTicketEvents     SupportTicketEvent[]   @relation("SupportTicketEventActor")
+  supportAiDraftsCreated  SupportTicketAiDraft[] @relation("SupportTicketAiDraftAuthor")
+  supportAiDraftsApproved SupportTicketAiDraft[] @relation("SupportTicketAiDraftApprover")
+
+  // ── Communications ────────────────────────────────────────────────────
+  broadcastsCreated   Broadcast[]          @relation("BroadcastAuthor")
+  broadcastsApproved  Broadcast[]          @relation("BroadcastApprover")
+  broadcastDeliveries BroadcastRecipient[] @relation("BroadcastRecipientUser")
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -354,6 +380,15 @@ model AdminAccessGrant {
 
   userId String? @unique
   user   User?   @relation("AdminAccessUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Extra capabilities beyond ordinary portal access, granted one at a time by
+  /// the owner. Deliberately additive and empty by default: holding `admin`
+  /// must never imply the power to email every customer. The owner needs no
+  /// entry here — `owner` implies every permission.
+  ///
+  /// Values come from the closed `ADMIN_PERMISSIONS` list in
+  /// `lib/admin-permissions.ts`; an unrecognized string grants nothing.
+  permissions String[] @default([])
 
   previousRole UserRole?
 
@@ -407,6 +442,7 @@ model Community {
   hoaProfile        HoaProfile?
   units             CommunityUnit[]
   serviceAgreements ServiceAgreement[]
+  supportTickets    SupportTicket[]
 
   @@index([type, status])
   @@index([status, name])
@@ -676,6 +712,11 @@ model HoaRequestParticipation {
 
 /// Structured provider coverage: a center-plus-radius circle and/or a set of
 /// postal codes. A provider with no active area is eligible nowhere.
+///
+/// The circle columns stay nullable because the original model also allowed a
+/// postal-code-only area, and existing rows must keep working. Everything the
+/// map editor writes supplies all three together — `providerServiceAreaSchema`
+/// requires them — so a coverage circle is never half-defined.
 model ProviderServiceArea {
   id             String @id @default(cuid())
   providerUserId String
@@ -688,6 +729,21 @@ model ProviderServiceArea {
   radiusMiles     Float?
 
   postalCodes String[] @default([])
+
+  /// The area onboarding created. A partial unique index in the migration
+  /// allows at most one active primary area per provider.
+  isPrimary Boolean @default(false)
+
+  // ── Saved address context ─────────────────────────────────────────────
+  // Enough of the geocoder's answer to redraw the provider's own selection
+  // later without a second lookup, and to write the plain-language summary.
+  // Private operational data: `serializeServiceArea` returns it only to the
+  // owning provider, never to customers or another provider.
+  formattedAddress String?
+  locality         String?
+  region           String?
+  postalCode       String?
+  countryCode      String?
 
   status ProviderServiceAreaStatus @default(active)
 
@@ -1091,6 +1147,332 @@ model ProviderProfile {
   updatedAt DateTime @updatedAt
 
   @@index([accountStatus])
+}
+
+/* ── Customer support ───────────────────────────────────────────────────── */
+
+/// Where a ticket sits in the queue. `new` is "nobody has looked yet";
+/// `pending_customer` stops the SLA clock because Bundleen is not the blocker.
+enum SupportTicketStatus {
+  new
+  open
+  pending_customer
+  pending_internal
+  resolved
+  closed
+}
+
+enum SupportTicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum SupportTicketCategory {
+  account
+  billing
+  service_request
+  bidding
+  scheduling
+  provider_issue
+  community
+  technical
+  other
+}
+
+/// `internal_note` is never returned by a customer-facing API or included in an
+/// email — see `customerVisibleMessages` in `lib/server/support.ts`.
+enum SupportTicketMessageKind {
+  customer_reply
+  admin_reply
+  internal_note
+}
+
+enum SupportTicketEventType {
+  created
+  status_changed
+  priority_changed
+  assigned
+  unassigned
+  customer_replied
+  admin_replied
+  internal_note_added
+  reopened
+  ai_draft_generated
+  ai_draft_approved
+  ai_draft_discarded
+  ai_explanation_generated
+}
+
+enum SupportTicketAiDraftKind {
+  reply
+  explanation
+}
+
+/// A draft is inert until an admin approves it. `approved` is only ever set by
+/// the endpoint that also creates the outgoing message, in the same
+/// transaction, so an approved draft always corresponds to text a human sent.
+enum SupportTicketAiDraftStatus {
+  generated
+  discarded
+  approved
+}
+
+/// One customer support conversation.
+///
+/// `ticketNumber` is the immutable human-facing identity (quoted in email and
+/// read out on a call); `id` is what every relation uses, so renaming schemes
+/// later cannot break foreign keys.
+model SupportTicket {
+  id           String @id @default(cuid())
+  ticketNumber String @unique
+
+  requesterUserId String
+  requester       User   @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  /// The requester's global role at creation time, kept so the queue can still
+  /// filter by "provider tickets" after an account changes role.
+  requesterRole   UserRole
+
+  /// Set when the ticket is about a specific community. `SetNull` rather than
+  /// cascade: support history must outlive an archived community.
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+
+  subject  String
+  category SupportTicketCategory
+  status   SupportTicketStatus   @default(new)
+  priority SupportTicketPriority @default(normal)
+
+  /// Plain ids, not relations: they point at optional context records whose
+  /// deletion must never cascade into support history, and nothing joins on
+  /// them in a hot path.
+  relatedRequestId String?
+  relatedBidId     String?
+  relatedVisitId   String?
+
+  /// The admin currently responsible. `SetNull` keeps the ticket when an admin
+  /// account is removed — the audit log holds who did what.
+  assignedAdminUserId String?
+  assignedAdmin       User?   @relation("SupportTicketAssignee", fields: [assignedAdminUserId], references: [id], onDelete: SetNull)
+
+  /// SLA timestamps. `firstAdminReplyAt` is write-once.
+  firstAdminReplyAt     DateTime?
+  lastCustomerMessageAt DateTime?
+  lastAdminMessageAt    DateTime?
+  lastActivityAt        DateTime  @default(now())
+
+  resolvedAt DateTime?
+  closedAt   DateTime?
+
+  /// A follow-up created from a ticket that could no longer be reopened.
+  reopenedFromTicketId String?
+
+  messages  SupportTicketMessage[]
+  events    SupportTicketEvent[]
+  aiDrafts  SupportTicketAiDraft[]
+
+  createdAt DateTime @default(now())
+  /// Also the optimistic-concurrency token: admin mutations pass the value they
+  /// read, and a stale write matches no row (P2025) instead of silently
+  /// overwriting a colleague's reply.
+  updatedAt DateTime @updatedAt
+
+  @@index([status, priority, lastActivityAt])
+  @@index([requesterUserId, createdAt])
+  @@index([assignedAdminUserId, status])
+  @@index([communityId, createdAt])
+  @@index([category, status])
+}
+
+/// One entry in the ticket conversation.
+///
+/// `body` is stored and rendered as plain text. Nothing in this table is ever
+/// treated as markup, so a customer cannot inject HTML into an admin's screen
+/// or into an outgoing email.
+model SupportTicketMessage {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  /// Null only for a system-authored line. `SetNull` so a deleted account does
+  /// not erase the conversation the other party still needs.
+  authorUserId String?
+  author       User?   @relation("SupportTicketMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  kind SupportTicketMessageKind
+  body String
+
+  /// Set when this message was sent from an approved AI draft. Audit metadata
+  /// only — the text in `body` is what the admin actually approved.
+  fromAiDraftId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+/// Append-only activity timeline: assignment, status, priority, replies.
+model SupportTicketEvent {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  actorUserId String?
+  actor       User?   @relation("SupportTicketEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  type      SupportTicketEventType
+  fromValue String?
+  toValue   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+/// An AI-prepared customer reply or internal explanation.
+///
+/// Deliberately holds only the final generated text — never hidden reasoning,
+/// never raw tool arguments or results — matching the principle already applied
+/// to `AiMessage` and `AiUsageLog`.
+model SupportTicketAiDraft {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  kind   SupportTicketAiDraftKind
+  status SupportTicketAiDraftStatus @default(generated)
+
+  generatedByAdminUserId String
+  generatedByAdmin       User   @relation("SupportTicketAiDraftAuthor", fields: [generatedByAdminUserId], references: [id], onDelete: Cascade)
+
+  /// The model's output. For `explanation` this is internal-only forever and is
+  /// excluded from every customer-facing serializer.
+  content String
+  model   String
+
+  /// Which retrieval tools ran, for audit. Names only, never their arguments.
+  toolNames String[] @default([])
+
+  /// Set together when an admin approves a `reply` draft. `sentText` is the
+  /// exact text that went out, which may differ from `content` after editing.
+  approvedByAdminUserId String?
+  approvedByAdmin       User?     @relation("SupportTicketAiDraftApprover", fields: [approvedByAdminUserId], references: [id], onDelete: SetNull)
+  approvedAt            DateTime?
+  sentText              String?
+  sentMessageId         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, kind, createdAt])
+}
+
+/* ── Operational broadcasts ─────────────────────────────────────────────── */
+
+/// How serious the message is. Only the three operational classes may override
+/// a recipient's general email preference, and only with explicit admin
+/// confirmation — see `broadcastBypassesPreference`.
+enum BroadcastSeverity {
+  announcement
+  maintenance
+  degraded
+  outage
+  security
+}
+
+enum BroadcastStatus {
+  draft
+  queued
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum BroadcastRecipientStatus {
+  pending
+  sent
+  failed
+  suppressed
+}
+
+/// One platform-wide operational message.
+///
+/// Sending is a two-phase action: a draft is composed and previewed, then a
+/// separate authorized call materializes recipients and enqueues delivery.
+/// Nothing here sends mail inline — `BroadcastRecipient` rows feed the existing
+/// `OutboxEvent` queue.
+model Broadcast {
+  id String @id @default(cuid())
+
+  subject  String
+  body     String
+  severity BroadcastSeverity @default(announcement)
+  status   BroadcastStatus   @default(draft)
+
+  /// Optional in-app copy. Absent means email only.
+  inAppTitle String?
+  inAppBody  String?
+  linkPath   String?
+
+  /// Empty means every active account. Otherwise a subset of
+  /// `homeowner`/`hoa_manager`/`provider`, resolved server-side.
+  audienceSegments String[] @default([])
+
+  /// True only for a clearly classified urgent operational/security message
+  /// that the sending admin explicitly confirmed may reach accounts which have
+  /// turned general announcement email off. Always audited.
+  overridesEmailPreference Boolean @default(false)
+
+  createdByUserId String
+  createdBy       User   @relation("BroadcastAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  approvedByUserId String?
+  approvedBy       User?     @relation("BroadcastApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  approvedAt       DateTime?
+
+  /// Server-calculated at send time, not a client-supplied estimate.
+  recipientCount Int @default(0)
+
+  queuedAt    DateTime?
+  completedAt DateTime?
+
+  recipients BroadcastRecipient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([severity, createdAt])
+}
+
+/// One intended delivery. The `(broadcastId, userId)` and
+/// `(broadcastId, email)` unique constraints are what make a retry idempotent:
+/// re-running send cannot create a second row, so it cannot create a second
+/// email.
+model BroadcastRecipient {
+  id          String    @id @default(cuid())
+  broadcastId String
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("BroadcastRecipientUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  email String
+
+  status BroadcastRecipientStatus @default(pending)
+  /// Coarse reason a recipient was skipped (`preference_opt_out`,
+  /// `invalid_email`). Never a provider error body.
+  suppressedReason String?
+
+  sentAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([broadcastId, userId])
+  @@unique([broadcastId, email])
+  @@index([broadcastId, status])
 }
 
 /* ── Bundleen AI assistant ──────────────────────────────────────────────── */

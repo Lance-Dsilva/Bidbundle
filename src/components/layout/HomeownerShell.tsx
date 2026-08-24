@@ -79,6 +79,11 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
           <span className="dash-nav-item is-disabled">
             <Icon name="dollar" size={20} /><span>Payments</span><b className="dash-nav-soon">Soon</b>
           </span>
+          {/* One cross-role support surface. Same route for homeowners, HOA
+              managers, and providers; the layout picks the shell. */}
+          <Link className={`dash-nav-item${pathname.startsWith("/app/support") ? " is-active" : ""}`} href="/app/support">
+            <Icon name="chat" size={20} /><span>Support</span>
+          </Link>
           <Link className={`dash-nav-item${pathname === "/app/homeowner/profile" ? " is-active" : ""}`} href="/app/homeowner/profile">
             <Icon name="sliders" size={20} /><span>Settings</span>
           </Link>

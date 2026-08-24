@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
@@ -38,7 +39,6 @@ function dateLabel(iso: string | null): string {
 
 export function ProviderHoaWorkspaceView({ workspace }: { workspace: ProviderHoaWorkspace }) {
   const router = useRouter();
-  const [areaState, setAreaState] = useState(IDLE);
   const [bidState, setBidState] = useState(IDLE);
   const [planState, setPlanState] = useState(IDLE);
 
@@ -59,29 +59,6 @@ export function ProviderHoaWorkspaceView({ workspace }: { workspace: ProviderHoa
         success: null,
       });
     }
-  };
-
-  const submitArea = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const lat = String(data.get("centerLatitude") ?? "").trim();
-    const lng = String(data.get("centerLongitude") ?? "").trim();
-    const radius = String(data.get("radiusMiles") ?? "").trim();
-    const postal = String(data.get("postalCodes") ?? "")
-      .split(",")
-      .map((code) => code.trim())
-      .filter(Boolean);
-    void run(setAreaState, "Service area saved.", async () => {
-      await sendJson("POST", "/api/provider/hoa/service-areas", {
-        label: data.get("label"),
-        centerLatitude: lat ? Number(lat) : null,
-        centerLongitude: lng ? Number(lng) : null,
-        radiusMiles: radius ? Number(radius) : null,
-        postalCodes: postal,
-      });
-      form.reset();
-    });
   };
 
   return (
@@ -115,57 +92,39 @@ export function ProviderHoaWorkspaceView({ workspace }: { workspace: ProviderHoa
           )}{" "}
           and fall inside an active service area.
         </p>
-        <div className="mt-4 grid gap-6 lg:grid-cols-2">
-          <form className="space-y-3" onSubmit={submitArea}>
-            <Field name="label" label="Area name" placeholder="North Austin" />
-            <div className="grid grid-cols-3 gap-2">
-              <Field name="centerLatitude" label="Latitude" placeholder="30.40" required={false} />
-              <Field name="centerLongitude" label="Longitude" placeholder="-97.72" required={false} />
-              <Field name="radiusMiles" label="Radius (mi)" placeholder="15" required={false} />
-            </div>
-            <Field
-              name="postalCodes"
-              label="Postal codes (comma separated, optional)"
-              placeholder="78758, 78727"
-              required={false}
-            />
-            <button className={primaryButton} disabled={areaState.busy} type="submit">
-              {areaState.busy ? "Saving…" : "Add service area"}
-            </button>
-            <ActionMessage state={areaState} />
-          </form>
-          <div className="rounded-xl bg-[#f6faf9] p-4">
+        <div className="mt-4 rounded-xl bg-[#f6faf9] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <h3 className="text-sm font-semibold text-[#102a43]">Active areas</h3>
-            {workspace.serviceAreas.length === 0 ? (
-              <p className="mt-2 text-sm text-[#64748b]">
-                No service areas yet — add one to see eligible HOA requests.
-              </p>
-            ) : (
-              <ul className="mt-2 space-y-2 text-sm">
-                {workspace.serviceAreas.map((area) => (
-                  <li className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2" key={area.id}>
-                    <span className="min-w-0 truncate text-[#334e68]">
-                      <strong>{area.label}</strong>
-                      {area.radiusMiles ? ` · ${area.radiusMiles} mi circle` : ""}
-                      {area.postalCodes.length > 0 ? ` · ${area.postalCodes.join(", ")}` : ""}
-                    </span>
-                    <button
-                      className="text-[11px] font-semibold text-red-600"
-                      disabled={areaState.busy}
-                      onClick={() =>
-                        void run(setAreaState, "Service area removed.", () =>
-                          sendJson("DELETE", `/api/provider/hoa/service-areas/${area.id}`),
-                        )
-                      }
-                      type="button"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* Editing lives in profile settings so there is exactly one map
+                editor and one place a provider learns to look for it. */}
+            <Link
+              className="text-[12px] font-bold text-[#0f8f83] hover:underline"
+              href="/app/provider/profile#service-areas"
+            >
+              Manage service areas →
+            </Link>
           </div>
+          {workspace.serviceAreas.length === 0 ? (
+            <p className="mt-2 text-sm text-[#64748b]">
+              No service areas yet —{" "}
+              <Link className="font-semibold text-[#0f8f83] hover:underline" href="/app/provider/profile#service-areas">
+                add one in your profile
+              </Link>{" "}
+              to see eligible HOA requests.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-2 text-sm">
+              {workspace.serviceAreas.map((area) => (
+                <li className="rounded-lg bg-white px-3 py-2 text-[#334e68]" key={area.id}>
+                  <span className="min-w-0 truncate">
+                    <strong>{area.label}</strong>
+                    {area.radiusMiles ? ` · ${area.radiusMiles} mi circle` : ""}
+                    {area.postalCodes.length > 0 ? ` · ${area.postalCodes.join(", ")}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 

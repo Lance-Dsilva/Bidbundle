@@ -32,6 +32,7 @@ const ALLOWED_METADATA_KEYS = new Set([
   "memberUserId",
   "status",
   "isAdminOverride",
+  "isPrimary",
   "distanceMi",
   "isWithinRadius",
   "revokedRoles",
@@ -175,6 +176,17 @@ const ACTION_SUMMARIES: Record<AdminAuditAction, string> = {
   hoa_visit_corrected: "corrected a service visit",
   review_moderated: "moderated a review",
   provider_service_area_changed: "changed a provider service area",
+  support_ticket_assigned: "assigned a support ticket",
+  support_ticket_status_changed: "changed a support ticket's status",
+  support_ticket_priority_changed: "changed a support ticket's priority",
+  support_ticket_replied: "replied to a support ticket",
+  support_ticket_ai_draft_approved: "approved and sent an AI-assisted support reply",
+  broadcast_created: "created an operational broadcast",
+  broadcast_updated: "edited an operational broadcast draft",
+  broadcast_test_sent: "sent themselves a broadcast test",
+  broadcast_sent: "sent a global operational broadcast",
+  broadcast_discarded: "discarded a broadcast draft",
+  admin_permissions_changed: "changed an admin's permissions",
 };
 
 export function auditActionSummary(action: AdminAuditAction): string {

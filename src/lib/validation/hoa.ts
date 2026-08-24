@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  SERVICE_RADIUS_MAX_MILES,
+  SERVICE_RADIUS_MIN_MILES,
+} from "@/lib/provider-coverage";
 import { normalizeEmail } from "@/lib/validation/auth";
 
 export const MAX_HOA_BODY_BYTES = 64 * 1024;
@@ -308,7 +312,14 @@ export const serviceAreaSchema = z
     label: z.string().trim().min(1, "Name this service area.").max(120),
     centerLatitude: z.union([latitudeField, z.null()]).optional(),
     centerLongitude: z.union([longitudeField, z.null()]).optional(),
-    radiusMiles: z.union([z.number().positive().max(200), z.null()]).optional(),
+    // Range comes from the single encoded product limit rather than a literal
+    // repeated here — see `lib/provider-coverage.ts`.
+    radiusMiles: z
+      .union([
+        z.number().min(SERVICE_RADIUS_MIN_MILES).max(SERVICE_RADIUS_MAX_MILES),
+        z.null(),
+      ])
+      .optional(),
     postalCodes: z
       .array(z.string().trim().min(3).max(12))
       .max(50)

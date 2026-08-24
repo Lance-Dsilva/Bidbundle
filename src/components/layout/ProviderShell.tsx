@@ -64,6 +64,11 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
               ) : null}
             </Link>
           ))}
+          {/* One cross-role support surface. Same route for homeowners, HOA
+              managers, and providers; the layout picks the shell. */}
+          <Link className={`dash-nav-item${pathname.startsWith("/app/support") ? " is-active" : ""}`} href="/app/support">
+            <Icon name="chat" size={20} /><span>Support</span>
+          </Link>
           <Link className={`dash-nav-item${pathname === "/app/provider/profile" ? " is-active" : ""}`} href="/app/provider/profile">
             <Icon name="sliders" size={20} /><span>Settings</span>
           </Link>

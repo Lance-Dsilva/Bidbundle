@@ -30,6 +30,8 @@ export function HoaManagerShell({
           <ManagerLink href="/app/hoa/dashboard#residents" icon="users" label="Residents" />
           <ManagerLink href="/app/hoa/dashboard#requests" icon="clipboard" label="Service requests" />
           <ManagerLink href="/app/hoa/dashboard#surveys" icon="bids" label="Monthly surveys" />
+          {/* Same cross-role support surface every other customer uses. */}
+          <ManagerLink href="/app/support" icon="chat" label="Support" />
         </nav>
         <div className="mt-8 hidden rounded-2xl border border-[#dce7e4] bg-[#f1faf7] p-4 lg:block">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f8f83]">Manager account</p>
@@ -60,7 +62,15 @@ export function HoaManagerShell({
   );
 }
 
-function ManagerLink({ href, icon, label }: { href: string; icon: "home" | "users" | "clipboard" | "bids"; label: string }) {
+function ManagerLink({
+  href,
+  icon,
+  label,
+}: {
+  href: string;
+  icon: "home" | "users" | "clipboard" | "bids" | "chat";
+  label: string;
+}) {
   return (
     <Link className="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#334e68] transition hover:bg-[#edf8f5] hover:text-[#0f8f83]" href={href}>
       <Icon name={icon} size={18} />

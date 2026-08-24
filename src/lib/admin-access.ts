@@ -1,3 +1,4 @@
+import type { AdminPermission } from "@/lib/admin-permissions";
 import { normalizeEmail } from "@/lib/validation/auth";
 
 /**
@@ -24,6 +25,8 @@ export type AdminAccessSummary = {
   grantedAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
+  /** Named capabilities on this grant. Empty for a plain admin by default. */
+  permissions: AdminPermission[];
 };
 
 export function isPrimaryAdminEmail(email: string): boolean {

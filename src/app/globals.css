@@ -684,6 +684,19 @@ section,
   .auth-step-enter { animation: none; }
 }
 
+/* The Clerk form replacing BundleenAuthLoader. Opacity only — the loader and
+   the form occupy the same column, so a translate would read as a jump. */
+@keyframes auth-crossfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.auth-crossfade {
+  animation: auth-crossfade 0.24s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-crossfade { animation: none; }
+}
+
 .auth-headline {
   font-size: clamp(1.75rem, 5vw, 2.25rem);
   line-height: 1.15;

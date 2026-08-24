@@ -6,6 +6,7 @@ import { syncNeighborhoodMembership } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
 import { enqueueNotifications } from "@/lib/server/notifications";
 import { providerProfileUpdateData } from "@/lib/server/profile";
+import { createProviderServiceArea } from "@/lib/server/provider-coverage";
 import { DASHBOARD_BY_ROLE, MAX_AUTH_BODY_BYTES, normalizeEmail } from "@/lib/validation/auth";
 import { onboardingProfileSchema } from "@/lib/validation/profile";
 
@@ -247,6 +248,27 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!user) throw lastError ?? new Error("Profile persistence did not return a user.");
 
     if (user.role === "homeowner") await placeInNeighborhood(user.id);
+
+    // The provider's onboarding circle becomes their primary active area, but
+    // only after the profile itself committed and only through the same
+    // ownership-checked service the profile editor uses. Best-effort for the
+    // same reason as neighborhood placement: the account exists and is usable,
+    // and the provider can redraw the area from profile settings. The failure
+    // is logged loudly because a provider with no area sees no opportunities.
+    if (user.role === "provider" && parsed.data.providerCoverage) {
+      try {
+        const existingAreas = await db.providerServiceArea.count({
+          where: { providerUserId: user.id, status: "active" },
+        });
+        if (existingAreas === 0) {
+          await createProviderServiceArea(user.id, parsed.data.providerCoverage);
+        }
+      } catch (coverageError) {
+        console.error("[auth] provider service area could not be saved", {
+          name: coverageError instanceof Error ? coverageError.name : "UnknownError",
+        });
+      }
+    }
 
     // Idempotent on every profile sync so a transient notification-store
     // outage can recover on the next request without sending duplicates.

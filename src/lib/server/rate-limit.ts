@@ -36,6 +36,23 @@ export const RATE_LIMITS = {
    * write-mutation buckets above because each request pays for a model call.
    */
   aiChat: { attempts: 20, window: "5 m" },
+  /**
+   * Per-account support writes: creating a ticket, replying, and admin queue
+   * actions. Generous enough for a real back-and-forth conversation, tight
+   * enough that a stolen session cannot flood the queue.
+   */
+  supportMutation: { attempts: 40, window: "5 m" },
+  /**
+   * Per-admin, per-ticket AI generation. The tightest bucket in the file:
+   * every call is a paid model request, and repeated clicks on `Generate`
+   * must not each become one.
+   */
+  supportAi: { attempts: 8, window: "5 m" },
+  /**
+   * Broadcast composition and sending. Deliberately small — a global send is
+   * a once-in-an-incident action, never a loop.
+   */
+  broadcastMutation: { attempts: 20, window: "10 m" },
 } as const;
 
 type LimiterName = keyof typeof RATE_LIMITS;

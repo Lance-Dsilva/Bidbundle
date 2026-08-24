@@ -2,9 +2,15 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
+import {
+  ADMIN_PERMISSION_LABELS,
+  hasAdminPermission,
+  type AdminPermission,
+} from "@/lib/admin-permissions";
 import { CommunityRuleError } from "@/lib/community-rules";
 import { AdminAccessError } from "@/lib/server/admin-access";
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
+import { BroadcastError } from "@/lib/server/communications";
 import { HoaWorkflowError } from "@/lib/server/hoa";
 import { guardAdminMutation, guardFailureResponse } from "@/lib/server/auth-guard";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
@@ -65,6 +71,48 @@ export async function requireAdminOwnerMutation(): Promise<AdminGate> {
   return gate;
 }
 
+/**
+ * Requires one named capability in addition to portal access.
+ *
+ * The owner implicitly holds every permission; an ordinary admin must have the
+ * exact string on their active grant. Failing closed here is the difference
+ * between "an admin" and "an admin who may email every customer".
+ */
+export async function requireAdminPermission(
+  permission: AdminPermission,
+): Promise<AdminGate> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return gate;
+  if (
+    !hasAdminPermission(
+      { level: gate.user.adminAccessLevel, permissions: gate.user.adminPermissions },
+      permission,
+    )
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: `This action needs the “${ADMIN_PERMISSION_LABELS[permission]}” permission. Ask the Bundleen owner to grant it.`,
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  return gate;
+}
+
+/** {@link requireAdminPermission} plus the per-admin write limiter. */
+export async function requireAdminPermissionMutation(
+  permission: AdminPermission,
+): Promise<AdminGate> {
+  const gate = await requireAdminPermission(permission);
+  if (!gate.ok) return gate;
+  const failure = await guardAdminMutation(gate.user.id);
+  if (failure) return { ok: false, response: guardFailureResponse(failure) };
+  return gate;
+}
+
 /** Reads and parses an admin JSON body under the admin size ceiling. */
 export function readAdminBody(request: Request, maxBytes: number = MAX_ADMIN_BODY_BYTES) {
   return readJsonBody(request, maxBytes);
@@ -85,6 +133,9 @@ export function notFoundResponse(message = "Not found."): NextResponse {
  * client gets one fixed sentence with no database detail in it.
  */
 export function adminErrorResponse(scope: string, error: unknown): NextResponse {
+  if (error instanceof BroadcastError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
   if (error instanceof AdminAccessError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

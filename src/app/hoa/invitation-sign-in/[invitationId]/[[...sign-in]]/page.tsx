@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
+import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
 import { db } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
@@ -44,28 +45,30 @@ export default async function HoaInvitationSignInPage({ params }: PageProps) {
             <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[#0f8f83]">
               Continue your HOA invitation
             </p>
-            <SignIn
-              path={`/hoa/invitation-sign-in/${invitationId}`}
-              routing="path"
-              withSignUp={false}
-              transferable={false}
-              forceRedirectUrl={`/hoa/accept/${invitationId}`}
-              fallbackRedirectUrl={`/hoa/accept/${invitationId}`}
-              appearance={{
-                variables: {
-                  colorPrimary: "#0f8f83",
-                  colorForeground: "#1f2937",
-                  colorBackground: "#ffffff",
-                  borderRadius: "1rem",
-                },
-                elements: {
-                  rootBox: "relative w-full",
-                  cardBox: "w-full shadow-none",
-                  card: "border border-[#d8e7e3] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
-                  footerAction: "hidden",
-                },
-              }}
-            />
+            <ClerkFormGate context="invitation">
+              <SignIn
+                path={`/hoa/invitation-sign-in/${invitationId}`}
+                routing="path"
+                withSignUp={false}
+                transferable={false}
+                forceRedirectUrl={`/hoa/accept/${invitationId}`}
+                fallbackRedirectUrl={`/hoa/accept/${invitationId}`}
+                appearance={{
+                  variables: {
+                    colorPrimary: "#0f8f83",
+                    colorForeground: "#1f2937",
+                    colorBackground: "#ffffff",
+                    borderRadius: "1rem",
+                  },
+                  elements: {
+                    rootBox: "relative w-full",
+                    cardBox: "w-full shadow-none",
+                    card: "border border-[#d8e7e3] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
+                    footerAction: "hidden",
+                  },
+                }}
+              />
+            </ClerkFormGate>
           </div>
         ) : (
           <section className="w-full max-w-md rounded-2xl border border-[#e4e7ec] bg-white p-8 text-center shadow-xl">

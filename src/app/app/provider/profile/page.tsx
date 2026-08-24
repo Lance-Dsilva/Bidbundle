@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 
 import { AvatarField } from "@/components/profile/AvatarField";
+import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
 import { useProviderBids } from "@/hooks/useProviderBids";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderEarnings } from "@/hooks/useProviderEarnings";
@@ -446,6 +447,10 @@ export default function ProviderProfilePage() {
                 credentials.
               </p>
             </div>
+
+            {/* The canonical long-term home for coverage management. The HOA
+                workspace links here rather than duplicating the editor. */}
+            <ProviderServiceAreasPanel />
 
             <div style={cardPadStyle}>
               <div style={eyebrowStyle}>Trades offered</div>

@@ -61,7 +61,12 @@ vi.mock("@/lib/server/db", () => ({
               isVerified: true,
               adminAccess:
                 state.accessLevel && state.role === "admin"
-                  ? { email: "person@bundleen.test", level: state.accessLevel, status: "active" }
+                  ? {
+                      email: "person@bundleen.test",
+                      level: state.accessLevel,
+                      status: "active",
+                      permissions: [],
+                    }
                   : null,
             }
           : null,

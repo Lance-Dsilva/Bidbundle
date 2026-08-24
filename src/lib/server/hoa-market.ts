@@ -15,9 +15,9 @@ import type {
   ServiceAreaSummary,
   VisitSummary,
 } from "@/lib/hoa-types";
-import { distanceMiles } from "@/lib/geo";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
+import { circleCoversLocation } from "@/lib/server/provider-coverage";
 import {
   HoaWorkflowError,
   requireActiveResident,
@@ -899,6 +899,15 @@ type HoaLocation = {
   region: string | null;
 };
 
+/**
+ * Whether one provider area covers one HOA location.
+ *
+ * Delegates the geometry to {@link circleCoversLocation} so the matcher, the
+ * profile editor, and the onboarding preview cannot disagree about where a
+ * circle ends. That function distinguishes "outside" from "cannot tell"; for
+ * eligibility, unknown is not coverage — a request with no verified
+ * coordinates is never treated as being at distance zero.
+ */
 export function areaCoversLocation(
   area: {
     centerLatitude: number | null;
@@ -908,27 +917,13 @@ export function areaCoversLocation(
   },
   location: HoaLocation,
 ): boolean {
-  if (
-    location.postalCode &&
-    area.postalCodes.some((code) => code.toUpperCase() === location.postalCode?.toUpperCase())
-  ) {
-    return true;
-  }
-  if (
-    area.centerLatitude != null &&
-    area.centerLongitude != null &&
-    area.radiusMiles != null &&
-    location.latitude != null &&
-    location.longitude != null
-  ) {
-    return (
-      distanceMiles(
-        { latitude: area.centerLatitude, longitude: area.centerLongitude },
-        { latitude: location.latitude, longitude: location.longitude },
-      ) <= area.radiusMiles
-    );
-  }
-  return false;
+  return (
+    circleCoversLocation(area, {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      postalCode: location.postalCode,
+    }).covered === true
+  );
 }
 
 /** All checks the spec requires before a provider may even see a request. */

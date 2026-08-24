@@ -3,6 +3,7 @@ import { SignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
+import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
 
 export default async function AdminSignInPage() {
   const { userId } = await auth();
@@ -26,28 +27,30 @@ export default async function AdminSignInPage() {
           <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--teal-800)" }}>
             Authorized staff only
           </p>
-          <SignIn
-            path="/admin/sign-in"
-            routing="path"
-            withSignUp={false}
-            transferable={false}
-            forceRedirectUrl="/auth/continue"
-            fallbackRedirectUrl="/auth/continue"
-            appearance={{
-              variables: {
-                colorPrimary: "#0f8f83",
-                colorForeground: "#1f2937",
-                colorBackground: "#ffffff",
-                borderRadius: "1rem",
-              },
-              elements: {
-                rootBox: "relative w-full",
-                cardBox: "w-full shadow-none",
-                card: "border border-[#e4e7ec] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
-                footerAction: "hidden",
-              },
-            }}
-          />
+          <ClerkFormGate context="sign-in">
+            <SignIn
+              path="/admin/sign-in"
+              routing="path"
+              withSignUp={false}
+              transferable={false}
+              forceRedirectUrl="/auth/continue"
+              fallbackRedirectUrl="/auth/continue"
+              appearance={{
+                variables: {
+                  colorPrimary: "#0f8f83",
+                  colorForeground: "#1f2937",
+                  colorBackground: "#ffffff",
+                  borderRadius: "1rem",
+                },
+                elements: {
+                  rootBox: "relative w-full",
+                  cardBox: "w-full shadow-none",
+                  card: "border border-[#e4e7ec] shadow-[0_24px_60px_rgba(31,26,20,0.10)]",
+                  footerAction: "hidden",
+                },
+              }}
+            />
+          </ClerkFormGate>
           <p className="mt-4 text-center text-[11px]" style={{ color: "var(--muted)" }}>
             There is no public admin registration. Access is granted by the Bundleen primary owner.
           </p>

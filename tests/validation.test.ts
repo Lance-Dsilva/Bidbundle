@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DASHBOARD_BY_ROLE, isAppRole, normalizeEmail } from "@/lib/validation/auth";
-import { onboardingProfileSchema } from "@/lib/validation/profile";
+import { fieldErrors, onboardingProfileSchema } from "@/lib/validation/profile";
 
 describe("onboardingProfileSchema", () => {
   it("accepts a homeowner with a confirmed address", () => {
@@ -11,15 +11,62 @@ describe("onboardingProfileSchema", () => {
     ).toBe(true);
   });
 
-  it("accepts a provider with the required business fields", () => {
+  const PROVIDER_COVERAGE = {
+    label: "North Austin",
+    centerLatitude: 30.4021,
+    centerLongitude: -97.7266,
+    radiusMiles: 15,
+  };
+
+  it("accepts a provider with the required business fields and a coverage circle", () => {
     expect(
       onboardingProfileSchema.safeParse({
         role: "provider",
         address: "1 Main Street",
         neighborhood: "Austin",
         providerBusiness: { companyName: "ProFix", trades: ["Plumbing"] },
+        providerCoverage: PROVIDER_COVERAGE,
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects provider onboarding that never set a coverage area", () => {
+    const result = onboardingProfileSchema.safeParse({
+      role: "provider",
+      address: "1 Main Street",
+      neighborhood: "Austin",
+      providerBusiness: { companyName: "ProFix", trades: ["Plumbing"] },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result.error).providerCoverage).toBe(
+        "Set the area you cover before finishing setup.",
+      );
+    }
+  });
+
+  it("rejects a coverage radius outside the product range", () => {
+    for (const radiusMiles of [0, 0.5, 101, 250]) {
+      expect(
+        onboardingProfileSchema.safeParse({
+          role: "provider",
+          address: "1 Main Street",
+          neighborhood: "Austin",
+          providerBusiness: { companyName: "ProFix", trades: ["Plumbing"] },
+          providerCoverage: { ...PROVIDER_COVERAGE, radiusMiles },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("refuses a coverage circle on a homeowner body", () => {
+    expect(
+      onboardingProfileSchema.safeParse({
+        role: "homeowner",
+        address: "742 Evergreen Terrace",
+        providerCoverage: PROVIDER_COVERAGE,
+      }).success,
+    ).toBe(false);
   });
 
   it("normalizes optional profile fields", () => {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { MAX_NAME_LENGTH, MAX_PHONE_LENGTH, PUBLIC_ROLES } from "@/lib/validation/auth";
+import { onboardingCoverageSchema } from "@/lib/validation/provider-coverage";
 
 /**
  * Profile validation.
@@ -291,6 +292,13 @@ export const onboardingProfileSchema = z.object({
     .partial()
     .strict()
     .optional(),
+  /**
+   * The coverage circle drawn during provider onboarding. Optional at the
+   * schema level and required for providers by the cross-field check below, so
+   * a homeowner body that carries it is rejected as unknown rather than
+   * silently creating a provider service area.
+   */
+  providerCoverage: onboardingCoverageSchema.optional(),
 }).superRefine((value, context) => {
   if (!value.address) {
     context.addIssue({
@@ -332,6 +340,21 @@ export const onboardingProfileSchema = z.object({
         path: ["providerBusiness", "trades"],
       });
     }
+    if (!value.providerCoverage) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Set the area you cover before finishing setup.",
+        path: ["providerCoverage"],
+      });
+    }
+  } else if (value.providerCoverage) {
+    // Coverage circles belong to providers. A homeowner body carrying one is
+    // a client bug at best, so it fails rather than being quietly dropped.
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Only provider accounts have service areas.",
+      path: ["providerCoverage"],
+    });
   }
 });
 
