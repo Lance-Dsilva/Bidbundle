@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
+import { Receiver } from "@upstash/qstash";
 import { NextResponse } from "next/server";
 
 import { deliverPendingOutbox } from "@/lib/server/notifications";
@@ -23,12 +24,11 @@ export const maxDuration = 60;
  *
  * ── Deployment note ──────────────────────────────────────────────────────
  *
- * `vercel.json` schedules this every five minutes, which is the tightest
- * cadence Vercel Cron offers on the Hobby/Pro plans and is inside the promised
- * window: a reminder due at T-30 goes out between T-30 and T-25. If a tighter
- * window is ever promised, point an external scheduler (QStash, EventBridge,
- * or a container cron) at this same URL with `OUTBOX_WORKER_SECRET` — nothing
- * in the code needs to change.
+ * QStash schedules this every five minutes, which is inside the promised
+ * window: a reminder due at T-30 goes out between T-30 and T-25. QStash signs
+ * the raw request body; both the current and next signing keys are retained so
+ * key rotation does not interrupt delivery. `OUTBOX_WORKER_SECRET` remains a
+ * manual recovery credential rather than the primary scheduler identity.
  */
 function matches(secret: string | undefined, header: string): boolean {
   if (!secret) return false;
@@ -37,7 +37,7 @@ function matches(secret: string | undefined, header: string): boolean {
   return expected.length === provided.length && timingSafeEqual(expected, provided);
 }
 
-function isAuthorizedWorker(request: Request): boolean {
+function isAuthorizedSharedSecretWorker(request: Request): boolean {
   const header =
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
     request.headers.get("x-outbox-secret") ??
@@ -48,11 +48,32 @@ function isAuthorizedWorker(request: Request): boolean {
   );
 }
 
-async function drain(request: Request): Promise<NextResponse> {
-  if (!isAuthorizedWorker(request)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+async function hasValidQStashSignature(request: Request): Promise<boolean> {
+  const signature = request.headers.get("upstash-signature");
+  const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
+  const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY;
+
+  if (!signature || !currentSigningKey || !nextSigningKey) {
+    return false;
   }
 
+  try {
+    const receiver = new Receiver({ currentSigningKey, nextSigningKey });
+    return await receiver.verify({
+      signature,
+      body: await request.clone().text(),
+      clockTolerance: 5,
+      upstashRegion: request.headers.get("upstash-region") ?? undefined,
+    });
+  } catch (error) {
+    console.warn("[reminders] rejected QStash signature", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
+    return false;
+  }
+}
+
+async function drain(): Promise<NextResponse> {
   try {
     const result = await deliverPendingOutbox(100);
     return NextResponse.json(result);
@@ -64,10 +85,21 @@ async function drain(request: Request): Promise<NextResponse> {
   }
 }
 
-export function GET(request: Request): Promise<NextResponse> {
-  return drain(request);
+export async function GET(request: Request): Promise<NextResponse> {
+  if (!isAuthorizedSharedSecretWorker(request)) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  return drain();
 }
 
-export function POST(request: Request): Promise<NextResponse> {
-  return drain(request);
+export async function POST(request: Request): Promise<NextResponse> {
+  const hasQStashSignature = request.headers.has("upstash-signature");
+  const authorized = hasQStashSignature
+    ? await hasValidQStashSignature(request)
+    : isAuthorizedSharedSecretWorker(request);
+
+  if (!authorized) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  return drain();
 }

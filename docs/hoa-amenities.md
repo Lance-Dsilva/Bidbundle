@@ -126,11 +126,13 @@ path, but a delete that races the worker's claim would still deliver. So
 is not `confirmed`, if its `startsAt` no longer matches the queued value, if it
 has already started, or if it is a manager's maintenance block.
 
-**Cadence.** `vercel.json` runs `/api/jobs/reminders` every five minutes — the
-tightest Vercel Cron offers on Hobby/Pro — so a reminder due at T-30 goes out
-between T-30 and T-25, inside the promised window. The daily `/api/jobs/outbox`
-job is kept as recovery. For a tighter guarantee, point an external scheduler at
-the same URL with `OUTBOX_WORKER_SECRET`; no code change is needed.
+**Cadence.** QStash runs `/api/jobs/reminders` every five minutes, so a reminder
+due at T-30 goes out between T-30 and T-25, inside the promised window. QStash
+signs every request and the worker verifies that signature with the current and
+next signing keys. The daily Vercel `/api/jobs/outbox` job remains as recovery.
+Run `npm run qstash:configure-reminders -- https://<production-host>` after a
+new environment is connected to QStash; the command creates or updates the
+single `bundleen-reminder-worker` schedule.
 
 **Payloads carry ids only.** `{ bookingId, startsAt }` — no address, access
 note, resident note, or personal data ever enters the queue.

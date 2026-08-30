@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "typecheck": "tsc --noEmit --incremental false",
+    "qstash:configure-reminders": "node scripts/configure-qstash-reminders.mjs",
     "seed:demo-communities": "prisma db execute --file prisma/demo-communities.sql",
     "seed:demo-hoa": "prisma db execute --file prisma/demo-hoa.sql",
     "postinstall": "prisma generate"
@@ -18,6 +19,7 @@
     "@clerk/nextjs": "^7.7.1",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@upstash/qstash": "^2.11.3",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.2",
     "@vercel/blob": "^2.7.0",
