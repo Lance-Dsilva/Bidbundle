@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
 import { guardFailureResponse, guardHoaMutation } from "@/lib/server/auth-guard";
 import { HoaWorkflowError } from "@/lib/server/hoa";
+import { MissingParticipantAddressError } from "@/lib/server/hoa-market";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
 import { MAX_HOA_BODY_BYTES } from "@/lib/validation/hoa";
 
@@ -49,6 +50,23 @@ export function readHoaBody(request: Request) {
 export { validationErrorResponse };
 
 export function hoaErrorResponse(scope: string, error: unknown): NextResponse {
+  // An award blocked by unrouteable homes is actionable, not a failure: the
+  // manager is told which neighbours to chase. Nothing was written, so there
+  // is no partial award to explain away.
+  if (error instanceof MissingParticipantAddressError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        missingAddresses: {
+          count: error.missing.length,
+          // Display names only. Telling a manager *which* homes are missing an
+          // address does not require telling them anybody's address.
+          names: error.missing.map((entry) => entry.displayName),
+        },
+      },
+      { status: error.status },
+    );
+  }
   if (error instanceof HoaWorkflowError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

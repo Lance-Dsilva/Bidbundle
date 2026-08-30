@@ -17,6 +17,7 @@ const navigation = [
   { label: "Overview", href: "/app/homeowner/dashboard", icon: "home" as const },
   { label: "My Requests", href: "/app/homeowner/request", icon: "clipboard" as const },
   { label: "My Bids", href: "/app/homeowner/bids", icon: "bids" as const },
+  { label: "Neighbourhood", href: "/app/homeowner/neighbourhood", icon: "users" as const },
   { label: "Messages", href: "/app/homeowner/chat", icon: "chat" as const },
 ];
 
@@ -71,6 +72,17 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
               {context && context.assignments.length > 0 ? (
                 <b className="dash-nav-badge amber">{context.assignments.length}</b>
               ) : null}
+            </Link>
+          ) : null}
+          {/* Amenities are an official-HOA feature only. The page re-derives
+              the same membership server-side; this link is a courtesy. */}
+          {hasHoaCommunity ? (
+            <Link
+              className={`dash-nav-item${pathname.startsWith("/app/homeowner/amenities") ? " is-active" : ""}`}
+              href="/app/homeowner/amenities"
+            >
+              <Icon name="calendar" size={20} />
+              <span>Amenities</span>
             </Link>
           ) : null}
           <span className="dash-nav-item is-disabled">

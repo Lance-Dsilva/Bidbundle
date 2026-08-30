@@ -22,6 +22,7 @@ const visitSelect = {
   windowEnd: true,
   status: true,
   unit: { select: { label: true } },
+  serviceLabel: true,
 } as const;
 
 function serializeVisit(visit: {
@@ -30,11 +31,13 @@ function serializeVisit(visit: {
   windowStart: string | null;
   windowEnd: string | null;
   status: string;
-  unit: { label: string };
+  unit: { label: string } | null;
+  serviceLabel?: string | null;
 }) {
   return {
     id: visit.id,
-    unitLabel: visit.unit.label,
+    // A stop is an HOA unit or a neighbourhood home; both have a label.
+    stopLabel: visit.unit?.label ?? visit.serviceLabel ?? "Home",
     scheduledDate: visit.scheduledDate?.toISOString() ?? null,
     windowStart: visit.windowStart,
     windowEnd: visit.windowEnd,
@@ -82,15 +85,33 @@ export const getServiceSchedule: ToolDefinition<Input> = {
     }
 
     const access = await resolveCommunityAccess(scope, input.communityId);
-    const unitFilter = access.isManagerOrAdmin
-      ? { communityId: access.communityId }
+    // Two kinds of stop live in this table. A manager sees the community's
+    // whole schedule; a resident sees only their own home, whether that home
+    // is an HOA unit or their own neighbourhood address.
+    const scopeFilter = access.isManagerOrAdmin
+      ? {
+          OR: [
+            { unit: { communityId: access.communityId } },
+            { occurrence: { agreement: { communityId: access.communityId } } },
+          ],
+        }
       : {
-          communityId: access.communityId,
-          id: { in: await residentUnitIds(scope.userId, access.communityId) },
+          OR: [
+            {
+              unit: {
+                communityId: access.communityId,
+                id: { in: await residentUnitIds(scope.userId, access.communityId) },
+              },
+            },
+            {
+              homeownerUserId: scope.userId,
+              occurrence: { agreement: { communityId: access.communityId } },
+            },
+          ],
         };
 
     const visits = await db.serviceVisit.findMany({
-      where: { unit: unitFilter, scheduledDate: { gte: now } },
+      where: { ...scopeFilter, scheduledDate: { gte: now } },
       orderBy: { scheduledDate: "asc" },
       take: input.limit,
       select: visitSelect,

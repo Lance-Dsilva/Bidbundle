@@ -53,6 +53,23 @@ export const RATE_LIMITS = {
    * a once-in-an-incident action, never a loop.
    */
   broadcastMutation: { attempts: 20, window: "10 m" },
+  /**
+   * Per-resident amenity writes: booking, cancelling, reporting an issue,
+   * replying on a thread. Sized for a person using the app, not a script
+   * hammering the last free slot.
+   */
+  amenityMutation: { attempts: 40, window: "5 m" },
+  /**
+   * Per-account amenity photo uploads. Tighter than the write bucket: every
+   * upload decodes and re-encodes an image, so it costs real CPU.
+   */
+  amenityMediaUpload: { attempts: 20, window: "1 h" },
+  /**
+   * Per-manager HOA amenity messages. A closure notice is a rare, deliberate
+   * action; this bucket exists so a stolen manager session cannot spam a
+   * neighbourhood.
+   */
+  amenityBroadcast: { attempts: 10, window: "10 m" },
 } as const;
 
 type LimiterName = keyof typeof RATE_LIMITS;

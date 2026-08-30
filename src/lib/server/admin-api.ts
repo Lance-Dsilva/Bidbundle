@@ -11,6 +11,10 @@ import { CommunityRuleError } from "@/lib/community-rules";
 import { AdminAccessError } from "@/lib/server/admin-access";
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
 import { BroadcastError } from "@/lib/server/communications";
+import {
+  AddressAmbiguousError,
+  AddressUnresolvedError,
+} from "@/lib/server/address-verification";
 import { HoaWorkflowError } from "@/lib/server/hoa";
 import { guardAdminMutation, guardFailureResponse } from "@/lib/server/auth-guard";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
@@ -133,6 +137,23 @@ export function notFoundResponse(message = "Not found."): NextResponse {
  * client gets one fixed sentence with no database detail in it.
  */
 export function adminErrorResponse(scope: string, error: unknown): NextResponse {
+  // An ambiguous address is a question, not a failure: the save wrote nothing
+  // and the admin must pick which place they meant. The candidates travel in
+  // the body so the form can offer them without a second round trip.
+  if (error instanceof AddressAmbiguousError) {
+    return NextResponse.json(
+      { error: error.message, candidates: error.candidates },
+      { status: error.status },
+    );
+  }
+  // Timeout, quota, rate limit, or provider outage. `retryAfter` lets the UI
+  // say when rather than "try again" forever; nothing was written either way.
+  if (error instanceof AddressUnresolvedError) {
+    return NextResponse.json(
+      { error: error.message, retryable: error.retryable },
+      { status: error.status },
+    );
+  }
   if (error instanceof BroadcastError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

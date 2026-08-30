@@ -2,13 +2,34 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
-import type { HoaProfileSummary, UnitImportResult, UnitSummary } from "@/lib/hoa-types";
+import type {
+  AddressCandidate,
+  HoaProfileSummary,
+  UnitImportResult,
+  UnitSummary,
+} from "@/lib/hoa-types";
+import { AmenitiesOnboardingStep } from "@/components/admin/AmenitiesOnboardingStep";
 
 /**
  * Bundleen admin HOA onboarding: legal profile, onboarding pipeline stage,
  * unit inventory with small-batch creation, and idempotent CSV import with a
  * dry-run preview.
+ *
+ * There is no latitude or longitude anywhere on this screen, by design. An
+ * admin onboarding an HOA has the association's postal address, not its
+ * coordinates; asking for numbers invited transcription errors that then
+ * routed crews to the wrong place. Bundleen resolves the address on the server
+ * and reports a verification *status* instead — the numbers exist, they are
+ * simply not a human's job.
  */
+
+/** Raised for a save that returned candidates instead of storing anything. */
+class AmbiguousAddress extends Error {
+  constructor(readonly candidates: AddressCandidate[]) {
+    super("That address matched more than one place. Choose the correct one.");
+    this.name = "AmbiguousAddress";
+  }
+}
 
 async function requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
@@ -19,12 +40,55 @@ async function requestJson<T>(method: string, path: string, body?: unknown): Pro
       : {}),
   });
   const result = (await response.json().catch(() => null)) as
-    | (Record<string, unknown> & { error?: string })
+    | (Record<string, unknown> & { error?: string; candidates?: AddressCandidate[] })
     | null;
   if (!response.ok) {
+    if (response.status === 409 && Array.isArray(result?.candidates)) {
+      throw new AmbiguousAddress(result.candidates);
+    }
     throw new Error(result?.error ?? "Something went wrong. Please try again.");
   }
   return (result ?? {}) as T;
+}
+
+const VERIFICATION_LABELS: Record<HoaProfileSummary["addressVerificationStatus"], string> = {
+  verified: "Address verified",
+  pending: "Verification pending",
+  needs_correction: "Needs correction",
+};
+
+const VERIFICATION_TONES: Record<
+  HoaProfileSummary["addressVerificationStatus"],
+  { background: string; color: string }
+> = {
+  verified: { background: "#dcfce7", color: "#15803d" },
+  pending: { background: "#fef3c7", color: "#b45309" },
+  needs_correction: { background: "#fee2e2", color: "#b91c1c" },
+};
+
+function AddressStatusBadge({ profile }: { profile: HoaProfileSummary }) {
+  const tone = VERIFICATION_TONES[profile.addressVerificationStatus];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span
+        className="rounded-full px-3 py-1 text-xs font-semibold"
+        style={tone}
+        role="status"
+      >
+        {VERIFICATION_LABELS[profile.addressVerificationStatus]}
+      </span>
+      {profile.formattedAddress ? (
+        <span className="text-xs" style={{ color: "var(--ink-700)" }}>
+          {profile.formattedAddress}
+        </span>
+      ) : null}
+      {profile.addressVerifiedAt ? (
+        <span className="text-xs" style={{ color: "var(--muted)" }}>
+          checked {new Date(profile.addressVerifiedAt).toLocaleDateString()}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 const ONBOARDING_STAGES = [
@@ -45,6 +109,13 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
   const [success, setSuccess] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<UnitImportResult | null>(null);
   const [csv, setCsv] = useState("");
+  /**
+   * Candidates from an ambiguous save. While these are on screen the form
+   * keeps everything the admin typed — the save wrote nothing, so retrying
+   * after picking one is the only thing left to do.
+   */
+  const [candidates, setCandidates] = useState<AddressCandidate[] | null>(null);
+  const [retryable, setRetryable] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -88,36 +159,82 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
     }
   };
 
-  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
+  /**
+   * Saves the profile.
+   *
+   * `confirmed` carries the one-line address the admin picked from a previous
+   * ambiguous answer. It is an *address*, never a coordinate: the server still
+   * resolves the location itself and only accepts a candidate it produced.
+   */
+  const submitProfile = async (form: HTMLFormElement, confirmed: string | null) => {
+    const data = new FormData(form);
     const text = (name: string) => String(data.get(name) ?? "").trim();
     const optional = (name: string) => text(name) || null;
-    const lat = text("latitude");
-    const lng = text("longitude");
-    void act("HOA profile saved.", async () => {
-      const result = await requestJson<{ profile: HoaProfileSummary }>(
-        "PUT",
-        `/api/admin/communities/${communityId}/hoa-profile`,
-        {
-          legalName: text("legalName"),
-          displayName: optional("displayName"),
-          addressLine1: text("addressLine1"),
-          addressLine2: optional("addressLine2"),
-          locality: text("locality"),
-          region: text("region"),
-          postalCode: text("postalCode"),
-          country: text("country") || "US",
-          latitude: lat ? Number(lat) : null,
-          longitude: lng ? Number(lng) : null,
-          timezone: text("timezone") || "America/Chicago",
-          totalHomes: Number(text("totalHomes") || "1"),
-          referenceCode: optional("referenceCode"),
-          serviceNotes: optional("serviceNotes"),
-        },
-      );
-      setProfile(result.profile);
-    });
+    const result = await requestJson<{ profile: HoaProfileSummary }>(
+      "PUT",
+      `/api/admin/communities/${communityId}/hoa-profile`,
+      {
+        legalName: text("legalName"),
+        displayName: optional("displayName"),
+        addressLine1: text("addressLine1"),
+        addressLine2: optional("addressLine2"),
+        locality: text("locality"),
+        region: text("region"),
+        postalCode: text("postalCode"),
+        country: text("country") || "US",
+        confirmedFormattedAddress: confirmed,
+        timezone: text("timezone") || "America/Chicago",
+        totalHomes: Number(text("totalHomes") || "1"),
+        referenceCode: optional("referenceCode"),
+        serviceNotes: optional("serviceNotes"),
+      },
+    );
+    setProfile(result.profile);
+    setCandidates(null);
+    setRetryable(false);
+  };
+
+  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    setCandidates(null);
+    setRetryable(false);
+    void submitProfile(form, null)
+      .then(() => setSuccess("HOA profile saved and the address verified."))
+      .catch((caught) => {
+        if (caught instanceof AmbiguousAddress) {
+          setCandidates(caught.candidates);
+          setError(caught.message);
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : "Something went wrong.");
+        // Every transient answer says so in its own words; offering retry on
+        // anything that is not a plain validation failure is the safe default.
+        setRetryable(true);
+      })
+      .finally(() => setBusy(false));
+  };
+
+  /** Confirms one candidate by re-saving the same form with it attached. */
+  const confirmCandidate = (candidate: AddressCandidate) => {
+    const form = document.getElementById("hoa-profile-form") as HTMLFormElement | null;
+    if (!form) return;
+    setBusy(true);
+    setError(null);
+    void submitProfile(form, candidate.token)
+      .then(() => setSuccess("HOA profile saved and the address verified."))
+      .catch((caught) => {
+        if (caught instanceof AmbiguousAddress) {
+          setCandidates(caught.candidates);
+          setError(caught.message);
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : "Something went wrong.");
+      })
+      .finally(() => setBusy(false));
   };
 
   const setStage = (stage: string) => {
@@ -219,7 +336,68 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
             </select>
           </label>
         </div>
-        <form className="mt-3 grid gap-3 md:grid-cols-2" onSubmit={saveProfile}>
+        {profile ? (
+          <div className="mt-3">
+            <AddressStatusBadge profile={profile} />
+            {!profile.locationReady ? (
+              <p className="mt-2 text-xs" style={{ color: "#b45309" }}>
+                Provider matching and visit planning stay off until this address is verified.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {candidates ? (
+          <div
+            className="mt-3 rounded-xl border p-3"
+            style={{ borderColor: "var(--line)", background: "var(--canvas)" }}
+          >
+            <p className="text-xs font-semibold" style={{ color: "var(--ink-900)" }}>
+              Which address is correct?
+            </p>
+            <ul className="mt-2 space-y-1">
+              {candidates.map((candidate) => (
+                <li key={candidate.token}>
+                  <button
+                    className="w-full rounded-lg border px-3 py-2 text-left text-xs disabled:opacity-60"
+                    style={{ borderColor: "var(--line)", background: "var(--paper)" }}
+                    disabled={busy}
+                    onClick={() => confirmCandidate(candidate)}
+                    type="button"
+                  >
+                    {candidate.formatted}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+              Nothing was saved yet. Everything you typed is still in the form below.
+            </p>
+          </div>
+        ) : null}
+
+        {retryable ? (
+          <div className="mt-3">
+            <button
+              className="h-9 rounded-lg border px-3 text-xs font-semibold disabled:opacity-60"
+              style={{ borderColor: "var(--line)", color: "var(--ink-700)" }}
+              disabled={busy}
+              onClick={() => {
+                const form = document.getElementById("hoa-profile-form") as HTMLFormElement | null;
+                form?.requestSubmit();
+              }}
+              type="button"
+            >
+              Retry verification
+            </button>
+          </div>
+        ) : null}
+
+        <form
+          className="mt-3 grid gap-3 md:grid-cols-2"
+          id="hoa-profile-form"
+          onSubmit={saveProfile}
+        >
           <AdminField name="legalName" label="Legal name" defaultValue={profile?.legalName} required />
           <AdminField name="displayName" label="Display name (optional)" defaultValue={profile?.displayName ?? ""} />
           <AdminField name="addressLine1" label="Street address" defaultValue={profile?.addressLine1} required />
@@ -228,8 +406,6 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
           <AdminField name="region" label="State/region" defaultValue={profile?.region} required />
           <AdminField name="postalCode" label="Postal code" defaultValue={profile?.postalCode} required />
           <AdminField name="country" label="Country (2 letters)" defaultValue={profile?.country ?? "US"} required />
-          <AdminField name="latitude" label="Latitude" defaultValue={profile?.latitude?.toString() ?? ""} />
-          <AdminField name="longitude" label="Longitude" defaultValue={profile?.longitude?.toString() ?? ""} />
           <AdminField name="timezone" label="Timezone (IANA)" defaultValue={profile?.timezone ?? "America/Chicago"} required />
           <AdminField name="totalHomes" label="Total homes" type="number" defaultValue={profile?.totalHomes?.toString() ?? ""} required />
           <AdminField name="referenceCode" label="HOA reference code" defaultValue={profile?.referenceCode ?? ""} />
@@ -243,12 +419,10 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
             >
               {busy ? "Saving…" : profile ? "Update profile" : "Create profile"}
             </button>
-            {!profile ? (
-              <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-                The profile stores the verified HOA address and coordinates that provider matching
-                uses. Create it before inviting the manager.
-              </p>
-            ) : null}
+            <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+              Enter the association&rsquo;s postal address only. Bundleen verifies it and resolves
+              the map location used for provider matching and visit planning.
+            </p>
           </div>
         </form>
       </div>
@@ -316,7 +490,11 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
 
         <div className="mt-4 rounded-lg p-3" style={{ background: "var(--canvas)" }}>
           <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-            CSV import (label,addressLine1,locality,region,postalCode,latitude,longitude)
+            CSV import (label,addressLine1,locality,region,postalCode)
+          </p>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+            Labels and addresses only. Homes with their own address are located automatically;
+            homes without one use the HOA address.
           </p>
           <textarea
             className="mt-2 min-h-24 w-full rounded-lg border p-3 font-mono text-xs outline-none"
@@ -370,6 +548,11 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
           ) : null}
         </div>
       </div>
+
+      {/* Amenities are captured as drafts here and handed to the invited
+          manager. Placed after the unit inventory because it is the last thing
+          an onboarding call covers. */}
+      <AmenitiesOnboardingStep communityId={communityId} />
     </div>
   );
 }

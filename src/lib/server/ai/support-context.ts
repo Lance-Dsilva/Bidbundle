@@ -68,7 +68,7 @@ export type TicketAiContext = {
     id: string;
     status: string;
     scheduledDate: string | null;
-    unitLabel: string;
+    stopLabel: string;
     agreementTitle: string;
   }[];
   recentNotifications: { kind: string; title: string; at: string }[];
@@ -218,6 +218,7 @@ export async function buildTicketAiContext(ticketId: string): Promise<TicketAiCo
         // The unit's *label*, never its street address, access notes, or
         // coordinates — those are the resident's private service location.
         unit: { select: { label: true } },
+        serviceLabel: true,
         occurrence: {
           select: { agreement: { select: { request: { select: { title: true } } } } },
         },
@@ -300,7 +301,7 @@ export async function buildTicketAiContext(ticketId: string): Promise<TicketAiCo
       id: visit.id,
       status: visit.status,
       scheduledDate: visit.scheduledDate?.toISOString() ?? null,
-      unitLabel: visit.unit.label,
+      stopLabel: visit.unit?.label ?? visit.serviceLabel ?? "Home",
       agreementTitle: truncate(visit.occurrence.agreement.request.title, 120),
     })),
     recentNotifications: notifications.map((notification) => ({

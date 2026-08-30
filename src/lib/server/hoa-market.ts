@@ -15,6 +15,7 @@ import type {
   ServiceAreaSummary,
   VisitSummary,
 } from "@/lib/hoa-types";
+import { distanceMiles, roundDistanceMiles } from "@/lib/geo";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { circleCoversLocation } from "@/lib/server/provider-coverage";
@@ -26,6 +27,23 @@ import {
   serializeSurvey,
 } from "@/lib/server/hoa";
 import { getHoaProfile } from "@/lib/server/hoa-units";
+import {
+  findNeighborhoodManager,
+  requireActiveNeighborhoodMember,
+  requireCommunityManager,
+} from "@/lib/server/market-auth";
+import {
+  homeownerTargets,
+  type ServiceTarget,
+  unitTargets,
+  visitDataForTarget,
+} from "@/lib/server/service-targets";
+import {
+  serializeOccurrenceForViewer,
+  serializeVisitForViewer,
+  visitViewInclude,
+  type VisitViewRow,
+} from "@/lib/server/visit-views";
 import {
   buildPreferenceAwareNotificationOps,
   contentHash,
@@ -234,68 +252,17 @@ function serializeAgreement(row: AgreementRow): AgreementSummary {
   };
 }
 
-type VisitRow = {
-  id: string;
-  occurrenceId: string;
-  unitId: string;
-  stopRank: number | null;
-  scheduledDate: Date | null;
-  windowStart: string | null;
-  windowEnd: string | null;
-  estimatedMinutes: number | null;
-  status: VisitSummary["status"];
-  completionNote: string | null;
-  completedAt: Date | null;
-  unit: { label: string; latitude: number | null; longitude: number | null; addressLine1: string | null };
-};
-
-const visitInclude = {
-  unit: { select: { label: true, latitude: true, longitude: true, addressLine1: true } },
-} satisfies Prisma.ServiceVisitInclude;
-
-function serializeVisit(row: VisitRow, includeLocation: boolean): VisitSummary {
-  return {
-    id: row.id,
-    occurrenceId: row.occurrenceId,
-    unitId: row.unitId,
-    unitLabel: row.unit.label,
-    latitude: includeLocation ? row.unit.latitude : null,
-    longitude: includeLocation ? row.unit.longitude : null,
-    addressLine1: includeLocation ? row.unit.addressLine1 : null,
-    stopRank: row.stopRank,
-    scheduledDate: row.scheduledDate?.toISOString() ?? null,
-    windowStart: row.windowStart,
-    windowEnd: row.windowEnd,
-    estimatedMinutes: row.estimatedMinutes,
-    status: row.status,
-    completionNote: row.completionNote,
-    completedAt: row.completedAt?.toISOString() ?? null,
-  };
-}
-
-type OccurrenceRow = {
-  id: string;
-  agreementId: string;
-  sequence: number;
-  serviceDate: Date;
-  status: OccurrenceSummary["status"];
-  schedulePublishedAt: Date | null;
-  visits: VisitRow[];
-};
-
-function serializeOccurrence(row: OccurrenceRow, includeLocation: boolean): OccurrenceSummary {
-  return {
-    id: row.id,
-    agreementId: row.agreementId,
-    sequence: row.sequence,
-    serviceDate: row.serviceDate.toISOString(),
-    status: row.status,
-    schedulePublishedAt: row.schedulePublishedAt?.toISOString() ?? null,
-    visits: [...row.visits]
-      .sort((a, b) => (a.stopRank ?? 999) - (b.stopRank ?? 999))
-      .map((visit) => serializeVisit(visit, includeLocation)),
-  };
-}
+/**
+ * Visit and occurrence views come from `visit-views.ts`.
+ *
+ * They are shared with the neighbourhood pages deliberately: "who may see this
+ * address" must have exactly one implementation, and a second copy here would
+ * be the obvious place for the two to drift apart.
+ */
+type VisitRow = VisitViewRow;
+const visitInclude = visitViewInclude satisfies Prisma.ServiceVisitInclude;
+const serializeVisit = serializeVisitForViewer;
+const serializeOccurrence = serializeOccurrenceForViewer;
 
 /* ── Manager: request lifecycle ──────────────────────────────────────────── */
 
@@ -426,6 +393,12 @@ export async function createHoaRequest(
 /**
  * Manager lifecycle transitions. The transition table is enforced here — the
  * client sends an action name, never a raw status value.
+ *
+ * Authority is chosen by community type in {@link requireRequestManager}: an
+ * HOA request still needs its scoped HOA manager, a neighbourhood request needs
+ * that neighbourhood's one assigned resident manager, and a Bundleen admin has
+ * an audited recovery path over both. The `via` field lands in every audit
+ * entry, so a recovery action is never indistinguishable from a routine one.
  */
 export async function transitionHoaRequest(
   userId: string,
@@ -435,12 +408,21 @@ export async function transitionHoaRequest(
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     include: {
+      community: { select: { type: true } },
       participations: { select: { unitId: true, userId: true, response: true } },
       agreement: { select: { id: true, status: true, providerUserId: true } },
     },
   });
-  if (!request) throw new HoaWorkflowError("That HOA request does not exist.", 404);
-  const community = await requireManagedHoa(userId, request.communityId);
+  if (!request) throw new HoaWorkflowError("That service request does not exist.", 404);
+  const authority = await requireCommunityManager(userId, request.communityId);
+  const community = { id: authority.communityId, name: authority.communityName };
+  const isNeighborhood = request.community.type === "neighborhood";
+  const residentLinkPath = isNeighborhood
+    ? "/app/homeowner/neighbourhood"
+    : "/app/homeowner/community";
+  const managerLinkPath = isNeighborhood
+    ? "/app/homeowner/neighbourhood"
+    : "/app/hoa/dashboard";
   const now = new Date();
 
   const audit = (nextStatus: string, extra?: Record<string, unknown>) =>
@@ -451,7 +433,13 @@ export async function transitionHoaRequest(
         targetType: "hoa_request",
         targetId: request.id,
         communityId: request.communityId,
-        metadata: { previousStatus: request.status, nextStatus, ...extra },
+        metadata: {
+          previousStatus: request.status,
+          nextStatus,
+          context: request.community.type,
+          via: authority.via,
+          ...extra,
+        },
       }),
     });
 
@@ -479,7 +467,7 @@ export async function transitionHoaRequest(
           ? `${community.name}: new community service out for bids`
           : `${community.name}: optional service — join by the deadline`,
         body: request.title,
-        linkPath: "/app/homeowner/community",
+        linkPath: residentLinkPath,
         dedupeKey: `request-open:${request.id}:${user.id}`,
       }));
       const providerIntents = isCompulsory
@@ -534,15 +522,21 @@ export async function transitionHoaRequest(
       if (!biddingClosesAt || biddingClosesAt <= now) {
         throw new HoaWorkflowError("Set a future bidding deadline to open bidding.", 400);
       }
-      const joinedUnits = request.participations.filter(
-        (item) => item.response === "joined" && item.unitId,
+      // An HOA participation is a *unit*; a neighbourhood participation is a
+      // *homeowner*. Counting only `unitId` here is exactly what stopped
+      // neighbourhood requests from ever leaving `collecting_interest`.
+      const joinedHomes = request.participations.filter(
+        (item) => item.response === "joined" && (isNeighborhood ? item.userId : item.unitId),
       );
-      if (joinedUnits.length === 0) {
-        throw new HoaWorkflowError("No homes joined this optional service.");
+      if (joinedHomes.length === 0) {
+        throw new HoaWorkflowError("No homes joined this service.");
       }
-      if (request.minHomes != null && joinedUnits.length < request.minHomes) {
+      // `minHomes` is the only floor. A neighbourhood request created by one
+      // homeowner defaults to 1, so a single participating home is a complete,
+      // awardable job — it does not need neighbours to become real.
+      if (request.minHomes != null && joinedHomes.length < request.minHomes) {
         throw new HoaWorkflowError(
-          `Only ${joinedUnits.length} of the required ${request.minHomes} homes joined.`,
+          `Only ${joinedHomes.length} of the required ${request.minHomes} homes joined.`,
         );
       }
       const providerIntents = await eligibleProviderIntentsForRequest({
@@ -571,10 +565,10 @@ export async function transitionHoaRequest(
             targetType: "hoa_request",
             targetId: request.id,
             communityId: request.communityId,
-            metadata: { lockedHomeCount: joinedUnits.length },
+            metadata: { lockedHomeCount: joinedHomes.length, context: request.community.type },
           }),
         }),
-        audit("open_for_bids", { lockedHomeCount: joinedUnits.length }),
+        audit("open_for_bids", { lockedHomeCount: joinedHomes.length }),
         ...(await buildPreferenceAwareNotificationOps(providerIntents)),
       ]);
       return;
@@ -629,8 +623,8 @@ export async function transitionHoaRequest(
             email: managerUser?.email ?? null,
             kind: "review",
             title: `Review the completed service for ${community.name}`,
-            body: `“${request.title}” is complete. Share your HOA's review of the provider.`,
-            linkPath: "/app/hoa/dashboard",
+            body: `“${request.title}” is complete. Share your review of the provider.`,
+            linkPath: managerLinkPath,
             dedupeKey: `agreement-review-request:${request.agreement.id}:${userId}`,
           },
         ])),
@@ -655,7 +649,7 @@ export async function transitionHoaRequest(
           kind: "schedule",
           title: `${community.name}: service request cancelled`,
           body: `“${request.title}” has been cancelled. No service is currently scheduled for this request.`,
-          linkPath: "/app/homeowner/community",
+          linkPath: residentLinkPath,
           dedupeKey: `request-cancelled:${request.id}:${user.id}`,
         })),
         db.serviceBid.findMany({
@@ -891,6 +885,14 @@ async function requireProvider(
   return gate;
 }
 
+/**
+ * The location a provider is matched against, for either community type.
+ *
+ * For an HOA this is the verified profile address. For a neighbourhood it is
+ * the community's admin-owned approximate centre — never a participant's
+ * coordinates, and never precise enough to identify a home. Both are
+ * server-derived; nothing here can be supplied by a client.
+ */
 type HoaLocation = {
   latitude: number | null;
   longitude: number | null;
@@ -946,24 +948,91 @@ function providerCanSeeRequest(input: {
   return input.areas.some((area) => areaCoversLocation(area, input.location));
 }
 
-async function hoaLocation(communityId: string): Promise<HoaLocation> {
-  const profile = await db.hoaProfile.findUnique({
-    where: { communityId },
+/**
+ * The server-approved match location for one community, of either type.
+ *
+ * HOA → the verified profile address, and only when the address has actually
+ * been verified: an HOA whose geocoding is pending or needs correction has no
+ * routeable location, and a provider must not be matched to it.
+ *
+ * Neighbourhood → the admin-owned community centre. This is the "approximate
+ * point" providers are allowed to see. It is not derived from participants, so
+ * no amount of feed reading reveals where anybody lives.
+ */
+async function communityMatchLocation(communityId: string): Promise<HoaLocation> {
+  const community = await db.community.findUnique({
+    where: { id: communityId },
     select: {
-      latitude: true,
-      longitude: true,
-      postalCode: true,
-      locality: true,
-      region: true,
+      type: true,
+      name: true,
+      centerLatitude: true,
+      centerLongitude: true,
+      hoaProfile: {
+        select: {
+          latitude: true,
+          longitude: true,
+          postalCode: true,
+          locality: true,
+          region: true,
+          addressVerificationStatus: true,
+        },
+      },
     },
   });
+  if (!community) {
+    return { latitude: null, longitude: null, postalCode: null, locality: null, region: null };
+  }
+
+  if (community.type === "hoa") {
+    const profile = community.hoaProfile;
+    const verified = profile?.addressVerificationStatus === "verified";
+    return {
+      latitude: verified ? (profile?.latitude ?? null) : null,
+      longitude: verified ? (profile?.longitude ?? null) : null,
+      postalCode: profile?.postalCode ?? null,
+      locality: profile?.locality ?? null,
+      region: profile?.region ?? null,
+    };
+  }
+
   return {
-    latitude: profile?.latitude ?? null,
-    longitude: profile?.longitude ?? null,
-    postalCode: profile?.postalCode ?? null,
-    locality: profile?.locality ?? null,
-    region: profile?.region ?? null,
+    latitude: community.centerLatitude,
+    longitude: community.centerLongitude,
+    // A neighbourhood has no postal address of its own; postal-code-only
+    // coverage therefore never matches one, which is the correct answer rather
+    // than a gap: the circle geometry is what defines a neighbourhood.
+    postalCode: null,
+    locality: community.name,
+    region: null,
   };
+}
+
+/** @deprecated Superseded by {@link communityMatchLocation}. Kept for clarity. */
+async function hoaLocation(communityId: string): Promise<HoaLocation> {
+  return communityMatchLocation(communityId);
+}
+
+/**
+ * Rounded miles from the nearest covering area to the community's point.
+ *
+ * A tenth of a mile is precise enough for a provider to judge a job and far
+ * too coarse to locate a home — and it is measured from the community centre,
+ * never from a participant.
+ */
+function approximateDistanceMi(
+  areas: ReadonlyArray<{ centerLatitude: number | null; centerLongitude: number | null }>,
+  location: HoaLocation,
+): number | null {
+  if (location.latitude == null || location.longitude == null) return null;
+  const distances = areas
+    .filter((area) => area.centerLatitude != null && area.centerLongitude != null)
+    .map((area) =>
+      distanceMiles(
+        { latitude: area.centerLatitude as number, longitude: area.centerLongitude as number },
+        { latitude: location.latitude as number, longitude: location.longitude as number },
+      ),
+    );
+  return distances.length > 0 ? roundDistanceMiles(Math.min(...distances)) : null;
 }
 
 /** Resolves the same provider eligibility rules used by the marketplace feed. */
@@ -1033,6 +1102,18 @@ async function eligibleProviderIntentsForRequest(input: {
     }));
 }
 
+/**
+ * The one provider marketplace contract.
+ *
+ * Returns every open opportunity this provider is eligible for, in *both*
+ * community types, plus their own bids, agreements, and day plans. There is no
+ * second feed and no separate neighbourhood endpoint: a provider bids on work,
+ * and where the work came from is a property of the item, not of the API.
+ *
+ * Eligibility is computed here, server-side, from the provider's account
+ * status, verified credentials, trades, and active service areas against the
+ * community's server-approved location. Nothing in the request influences it.
+ */
 export async function getProviderHoaWorkspace(userId: string): Promise<ProviderHoaWorkspace> {
   const gate = await requireProvider(userId, { allowPending: true });
   const now = new Date();
@@ -1045,13 +1126,31 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
     db.hoaServiceRequest.findMany({
       where: {
         status: "open_for_bids",
-        community: { type: "hoa", status: "active" },
+        // Both community types, filtered per-item below by real coverage.
+        community: { status: "active" },
         OR: [{ biddingClosesAt: null }, { biddingClosesAt: { gt: now } }],
       },
       orderBy: { biddingClosesAt: "asc" },
-      take: 100,
+      take: 200,
       include: {
-        community: { select: { name: true, hoaProfile: true } },
+        community: {
+          select: {
+            name: true,
+            type: true,
+            centerLatitude: true,
+            centerLongitude: true,
+            hoaProfile: {
+              select: {
+                latitude: true,
+                longitude: true,
+                postalCode: true,
+                locality: true,
+                region: true,
+                addressVerificationStatus: true,
+              },
+            },
+          },
+        },
         participations: { where: { response: "joined" }, select: { id: true } },
         bids: { where: { providerUserId: userId }, include: bidInclude },
       },
@@ -1072,14 +1171,24 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
 
   const feed: ProviderFeedItem[] = [];
   for (const request of openRequests) {
+    const isNeighborhood = request.community.type === "neighborhood";
     const profile = request.community.hoaProfile;
-    const location: HoaLocation = {
-      latitude: profile?.latitude ?? null,
-      longitude: profile?.longitude ?? null,
-      postalCode: profile?.postalCode ?? null,
-      locality: profile?.locality ?? null,
-      region: profile?.region ?? null,
-    };
+    const hoaVerified = profile?.addressVerificationStatus === "verified";
+    const location: HoaLocation = isNeighborhood
+      ? {
+          latitude: request.community.centerLatitude,
+          longitude: request.community.centerLongitude,
+          postalCode: null,
+          locality: request.community.name,
+          region: null,
+        }
+      : {
+          latitude: hoaVerified ? (profile?.latitude ?? null) : null,
+          longitude: hoaVerified ? (profile?.longitude ?? null) : null,
+          postalCode: profile?.postalCode ?? null,
+          locality: profile?.locality ?? null,
+          region: profile?.region ?? null,
+        };
     if (
       !providerCanSeeRequest({
         gate,
@@ -1092,10 +1201,12 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
     ) {
       continue;
     }
-    // Before award, providers get the HOA-level location and the aggregate
-    // home count needed to quote — never resident or unit detail.
+    // Before award a provider gets the community-level location, the locked
+    // home count, the permitted budget, and an approximate distance — enough
+    // to price the job. No participant, unit, address, or competing amount.
     feed.push({
       requestId: request.id,
+      context: isNeighborhood ? "neighborhood" : "hoa",
       communityName: request.community.name,
       locality: location.locality,
       region: location.region,
@@ -1106,6 +1217,9 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
       recurrenceLabel: request.recurrenceLabel,
       totalOccurrences: request.totalOccurrences,
       homeCount: request.participations.length,
+      approximateDistanceMi: approximateDistanceMi(areas, location),
+      budgetMinCents: request.budgetMinCents,
+      budgetMaxCents: request.budgetMaxCents,
       startDate: request.startDate?.toISOString() ?? null,
       biddingClosesAt: request.biddingClosesAt?.toISOString() ?? null,
       myBid: request.bids[0] ? serializeBid(request.bids[0]) : null,
@@ -1120,9 +1234,10 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
       include: { visits: { include: visitInclude } },
     });
     for (const occurrence of occurrences) {
-      // The awarded provider needs exact stop locations to plan the day.
+      // These are the provider's *own* agreements, so they won the work and
+      // need exact stops and access notes to perform it.
       (occurrencesByAgreement[occurrence.agreementId] ??= []).push(
-        serializeOccurrence(occurrence, true),
+        serializeOccurrence(occurrence, true, { includeAccessNotes: true }),
       );
     }
   }
@@ -1140,6 +1255,58 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
 }
 
 /* ── Bids ────────────────────────────────────────────────────────────────── */
+
+type BidRecipient = { userId: string; email: string | null; linkPath: string };
+
+/**
+ * Who is told that a bid arrived.
+ *
+ * HOA → the scoped manager. Neighbourhood → the assigned neighbourhood
+ * manager, and the joined participants, because transparent comparison is the
+ * product: residents choose together even though only the manager awards.
+ * Competing providers are never on this list.
+ */
+async function bidNotificationRecipients(input: {
+  communityId: string;
+  communityType: "hoa" | "neighborhood";
+  requestId: string;
+}): Promise<BidRecipient[]> {
+  if (input.communityType === "hoa") {
+    const manager = await db.communityStaffAssignment.findFirst({
+      where: { communityId: input.communityId, role: "hoa_manager", status: "active" },
+      select: { user: { select: { id: true, email: true } } },
+    });
+    return manager
+      ? [{ userId: manager.user.id, email: manager.user.email, linkPath: "/app/hoa/dashboard" }]
+      : [];
+  }
+
+  const [manager, participants] = await Promise.all([
+    findNeighborhoodManager(input.communityId),
+    db.hoaRequestParticipation.findMany({
+      where: { requestId: input.requestId, response: "joined", userId: { not: null } },
+      select: { user: { select: { id: true, email: true } } },
+    }),
+  ]);
+
+  const byId = new Map<string, BidRecipient>();
+  if (manager) {
+    byId.set(manager.userId, {
+      userId: manager.userId,
+      email: manager.email,
+      linkPath: "/app/homeowner/neighbourhood",
+    });
+  }
+  for (const participant of participants) {
+    if (!participant.user || byId.has(participant.user.id)) continue;
+    byId.set(participant.user.id, {
+      userId: participant.user.id,
+      email: participant.user.email,
+      linkPath: "/app/homeowner/neighbourhood",
+    });
+  }
+  return [...byId.values()];
+}
 
 export async function submitBid(
   providerUserId: string,
@@ -1162,7 +1329,7 @@ export async function submitBid(
       participations: { where: { response: "joined" }, select: { id: true } },
     },
   });
-  if (!request || request.community.type !== "hoa" || request.community.status !== "active") {
+  if (!request || request.community.status !== "active") {
     throw new HoaWorkflowError("That request does not exist.", 404);
   }
   if (request.status !== "open_for_bids") {
@@ -1184,10 +1351,15 @@ export async function submitBid(
         postalCodes: true,
       },
     }),
-    hoaLocation(request.communityId),
+    communityMatchLocation(request.communityId),
   ]);
   if (!areas.some((area) => areaCoversLocation(area, location))) {
-    throw new HoaWorkflowError("This HOA is outside your service area.", 403);
+    throw new HoaWorkflowError(
+      request.community.type === "hoa"
+        ? "This HOA is outside your service area."
+        : "This neighbourhood is outside your service area.",
+      403,
+    );
   }
   if (input.validUntil && new Date(input.validUntil) <= now) {
     throw new HoaWorkflowError("The bid validity deadline is already in the past.", 400);
@@ -1217,9 +1389,14 @@ export async function submitBid(
     withdrawnAt: null,
   };
 
-  const manager = await db.communityStaffAssignment.findFirst({
-    where: { communityId: request.communityId, role: "hoa_manager", status: "active" },
-    select: { user: { select: { id: true, email: true } } },
+  // Whoever runs this request's lifecycle is who needs to hear about the bid.
+  // The commercial detail — amount, scope, exclusions — is deliberately absent
+  // from the notification body: it reaches the manager through the authorized
+  // comparison view, never through an email that could be forwarded onward.
+  const recipients = await bidNotificationRecipients({
+    communityId: request.communityId,
+    communityType: request.community.type,
+    requestId: request.id,
   });
 
   await db.$transaction([
@@ -1232,19 +1409,15 @@ export async function submitBid(
           data: { id: bidId, requestId, providerUserId, ...data },
         }),
     ...(await buildPreferenceAwareNotificationOps(
-      manager
-        ? [
-            {
-              userId: manager.user.id,
-              email: manager.user.email,
-              kind: "bid" as const,
-              title: `New bid on “${request.title}”`,
-              body: `A provider ${existing ? "revised their" : "submitted a"} bid for ${request.community.name}.`,
-              linkPath: "/app/hoa/dashboard",
-              dedupeKey: `bid:${bidId}:v${(existing?.version ?? 0) + 1}`,
-            },
-          ]
-        : [],
+      recipients.map((recipient) => ({
+        userId: recipient.userId,
+        email: recipient.email,
+        kind: "bid" as const,
+        title: `New bid on “${request.title}”`,
+        body: `A provider ${existing ? "revised their" : "submitted a"} bid for ${request.community.name}.`,
+        linkPath: recipient.linkPath,
+        dedupeKey: `bid:${bidId}:v${(existing?.version ?? 0) + 1}:${recipient.userId}`,
+      })),
     )),
   ]);
 
@@ -1272,34 +1445,66 @@ export async function withdrawBid(providerUserId: string, requestId: string): Pr
   });
 }
 
-/** Bids for one request, scoped: manager or resident of that HOA only. */
+/**
+ * Bids for one request, scoped by community type.
+ *
+ * HOA → the scoped manager, or any active resident of that HOA (transparency
+ * is the existing product rule there).
+ *
+ * Neighbourhood → the manager, the requester, and residents who actually
+ * joined. A neighbour who declined or never answered is not part of the group
+ * buying decision and does not see the quotes; an outsider is refused without
+ * learning whether the request exists.
+ */
 export async function listRequestBids(
   viewerUserId: string,
   requestId: string,
 ): Promise<BidSummary[]> {
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
-    select: { id: true, communityId: true },
+    select: {
+      id: true,
+      communityId: true,
+      createdByUserId: true,
+      community: { select: { type: true } },
+    },
   });
   if (!request) throw new HoaWorkflowError("That request does not exist.", 404);
 
-  const [assignment, membership] = await Promise.all([
-    db.communityStaffAssignment.findFirst({
-      where: {
-        userId: viewerUserId,
-        communityId: request.communityId,
-        role: "hoa_manager",
-        status: "active",
-      },
-      select: { id: true },
-    }),
-    db.communityMembership.findFirst({
-      where: { userId: viewerUserId, communityId: request.communityId, status: "active" },
-      select: { id: true },
-    }),
-  ]);
-  if (!assignment && !membership) {
-    throw new HoaWorkflowError("You do not have access to this request.", 403);
+  if (request.community.type === "hoa") {
+    const [assignment, membership] = await Promise.all([
+      db.communityStaffAssignment.findFirst({
+        where: {
+          userId: viewerUserId,
+          communityId: request.communityId,
+          role: "hoa_manager",
+          status: "active",
+        },
+        select: { id: true },
+      }),
+      db.communityMembership.findFirst({
+        where: { userId: viewerUserId, communityId: request.communityId, status: "active" },
+        select: { id: true },
+      }),
+    ]);
+    if (!assignment && !membership) {
+      throw new HoaWorkflowError("You do not have access to this request.", 403);
+    }
+  } else {
+    const [manager, participation] = await Promise.all([
+      findNeighborhoodManager(request.communityId),
+      db.hoaRequestParticipation.findFirst({
+        where: { requestId, userId: viewerUserId, response: "joined" },
+        select: { id: true },
+      }),
+    ]);
+    const permitted =
+      manager?.userId === viewerUserId ||
+      participation !== null ||
+      request.createdByUserId === viewerUserId;
+    if (!permitted) {
+      throw new HoaWorkflowError("You do not have access to this request.", 403);
+    }
   }
 
   const rows = await db.serviceBid.findMany({
@@ -1311,6 +1516,37 @@ export async function listRequestBids(
 }
 
 /* ── Award ───────────────────────────────────────────────────────────────── */
+
+/** Award notifications for the neighbours who actually joined the request. */
+async function participantAwardIntents(input: {
+  requestId: string;
+  excludeUserId: string;
+  communityName: string;
+  title: string;
+  providerLabel: string;
+  linkPath: string;
+}): Promise<NotificationIntent[]> {
+  const participants = await db.hoaRequestParticipation.findMany({
+    where: {
+      requestId: input.requestId,
+      response: "joined",
+      userId: { not: null },
+      NOT: { userId: input.excludeUserId },
+    },
+    select: { user: { select: { id: true, email: true } } },
+  });
+  return participants
+    .filter((participation) => participation.user !== null)
+    .map((participation) => ({
+      userId: participation.user!.id,
+      email: participation.user!.email,
+      kind: "award" as const,
+      title: `${input.communityName}: provider selected`,
+      body: `“${input.title}” was awarded to ${input.providerLabel}.`,
+      linkPath: input.linkPath,
+      dedupeKey: `award:${input.requestId}:${participation.user!.id}`,
+    }));
+}
 
 function computeOccurrenceDates(input: {
   startDate: Date;
@@ -1329,10 +1565,42 @@ function computeOccurrenceDates(input: {
 }
 
 /**
- * Atomically accepts exactly one bid: rejects the rest, snapshots the terms
- * into an agreement, and materializes every occurrence and unit visit. A
- * repeated click or concurrent attempt resolves to the same single award via
- * the agreement/accepted-bid unique indexes.
+ * Raised when an award cannot proceed because participating homes have no
+ * routeable address.
+ *
+ * A distinct error type because the answer is actionable rather than a plain
+ * refusal: the manager is told how many homes and who they are, so the
+ * addresses can be fixed and the award retried. Nothing is written first —
+ * there is no partial award to unwind.
+ */
+export class MissingParticipantAddressError extends HoaWorkflowError {
+  readonly missing: Array<{ userId: string; displayName: string }>;
+
+  constructor(missing: Array<{ userId: string; displayName: string }>) {
+    super(
+      `${missing.length} participating ${missing.length === 1 ? "home has" : "homes have"} no verified address yet, so the provider could not be routed to ${missing.length === 1 ? "it" : "them"}. Ask ${missing.length === 1 ? "that neighbour" : "those neighbours"} to complete their profile address, then award again.`,
+      409,
+    );
+    this.name = "MissingParticipantAddressError";
+    this.missing = missing;
+  }
+}
+
+/**
+ * Atomically accepts exactly one bid.
+ *
+ * Rejects the rest, snapshots the accepted terms into an agreement, and
+ * materializes every occurrence and one valid visit per locked participating
+ * home — an HOA unit stop, or a neighbourhood homeowner stop with its address
+ * and coordinates frozen at this moment.
+ *
+ * A repeated click or a concurrent attempt resolves to the same single award
+ * through the agreement/accepted-bid unique indexes: the second writer loses
+ * the race, catches `P2002`, and returns the agreement the first one created.
+ *
+ * The occurrence generator already understands cadence and count, so a future
+ * recurring neighbourhood service needs no schema change — only a request that
+ * carries `recurrenceIntervalDays` and `totalOccurrences > 1`.
  */
 export async function awardBid(
   userId: string,
@@ -1342,16 +1610,17 @@ export async function awardBid(
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     include: {
-      community: { select: { id: true, name: true } },
+      community: { select: { id: true, name: true, type: true } },
       participations: {
-        where: { response: "joined", unitId: { not: null } },
+        where: { response: "joined" },
         select: { unitId: true, userId: true },
       },
       agreement: { select: { id: true, bidId: true } },
     },
   });
-  if (!request) throw new HoaWorkflowError("That HOA request does not exist.", 404);
-  await requireManagedHoa(userId, request.communityId);
+  if (!request) throw new HoaWorkflowError("That service request does not exist.", 404);
+  const authority = await requireCommunityManager(userId, request.communityId);
+  const isNeighborhood = request.community.type === "neighborhood";
 
   // Idempotency: the same award request returns the same agreement.
   if (request.agreement) {
@@ -1388,10 +1657,19 @@ export async function awardBid(
     throw new HoaWorkflowError("That provider's account is no longer active.");
   }
 
-  const units = request.participations
-    .map((item) => ({ unitId: item.unitId as string, userId: item.userId }))
-    .filter((item, index, list) => list.findIndex((other) => other.unitId === item.unitId) === index);
-  if (units.length === 0) {
+  // Resolve the service targets *before* anything is written. A neighbourhood
+  // participant with no verified address aborts the whole award here, with a
+  // list the manager can act on, rather than producing an agreement whose
+  // locked home count exceeds the homes that can actually be served.
+  let targets: ServiceTarget[];
+  if (isNeighborhood) {
+    const resolution = await homeownerTargets(request.participations);
+    if (!resolution.ok) throw new MissingParticipantAddressError(resolution.missing);
+    targets = resolution.targets;
+  } else {
+    targets = unitTargets(request.participations);
+  }
+  if (targets.length === 0) {
     throw new HoaWorkflowError("This request has no participating homes.");
   }
 
@@ -1411,12 +1689,15 @@ export async function awardBid(
     serviceDate,
     updatedAt: now,
   }));
+  // One valid visit per locked home per occurrence. `visitDataForTarget`
+  // produces either `{ unitId }` or the homeowner id plus the frozen address —
+  // exactly one target, which is what the database CHECK requires.
   const visitRows = occurrenceRows.flatMap((occurrence) =>
-    units.map((unit) => ({
+    targets.map((target) => ({
       id: randomUUID(),
       occurrenceId: occurrence.id,
-      unitId: unit.unitId,
       updatedAt: now,
+      ...visitDataForTarget(target),
     })),
   );
 
@@ -1424,15 +1705,30 @@ export async function awardBid(
     where: { requestId: request.id, status: "submitted", id: { not: bid.id } },
     select: { id: true, provider: { select: { id: true, email: true } } },
   });
-  const residentIntents = await activeResidentIntents(request.communityId, userId, (user) => ({
-    userId: user.id,
-    email: user.email,
-    kind: "award",
-    title: `${request.community.name}: provider selected`,
-    body: `“${request.title}” was awarded to ${bid.provider.providerProfile?.companyName ?? bid.provider.fullName}.`,
-    linkPath: "/app/homeowner/community",
-    dedupeKey: `award:${request.id}:${user.id}`,
-  }));
+  const awardLinkPath = isNeighborhood
+    ? "/app/homeowner/neighbourhood"
+    : "/app/homeowner/community";
+  // HOA: every active resident hears, because the service is community-wide.
+  // Neighbourhood: only the people who joined — a neighbour who declined has
+  // no interest in the outcome and no right to the commercial detail.
+  const residentIntents = isNeighborhood
+    ? await participantAwardIntents({
+        requestId: request.id,
+        excludeUserId: userId,
+        communityName: request.community.name,
+        title: request.title,
+        providerLabel: bid.provider.providerProfile?.companyName ?? bid.provider.fullName,
+        linkPath: awardLinkPath,
+      })
+    : await activeResidentIntents(request.communityId, userId, (user) => ({
+        userId: user.id,
+        email: user.email,
+        kind: "award",
+        title: `${request.community.name}: provider selected`,
+        body: `“${request.title}” was awarded to ${bid.provider.providerProfile?.companyName ?? bid.provider.fullName}.`,
+        linkPath: awardLinkPath,
+        dedupeKey: `award:${request.id}:${user.id}`,
+      }));
 
   try {
     await db.$transaction([
@@ -1463,7 +1759,7 @@ export async function awardBid(
           scope: bid.scope,
           exclusions: bid.exclusions,
           cadenceLabel: bid.cadenceLabel,
-          lockedHomeCount: units.length,
+          lockedHomeCount: targets.length,
           startDate,
           endDate,
         },
@@ -1481,8 +1777,10 @@ export async function awardBid(
           metadata: {
             amountCents: bid.amountCents,
             currency: bid.currency,
-            lockedHomeCount: units.length,
+            lockedHomeCount: targets.length,
             occurrenceCount: occurrenceRows.length,
+            context: request.community.type,
+            via: authority.via,
           },
         }),
       }),
@@ -1493,7 +1791,7 @@ export async function awardBid(
           kind: "award",
           title: "Your bid was accepted",
           body: `${request.community.name} accepted your bid for “${request.title}”. Plan your visits in the provider portal.`,
-          linkPath: "/app/provider/hoa",
+          linkPath: "/app/provider/schedule",
           dedupeKey: `award:${request.id}:${bid.providerUserId}`,
         },
         ...losingBids.map((losing) => ({
@@ -1525,6 +1823,33 @@ export async function awardBid(
 
 /* ── Provider day plan ───────────────────────────────────────────────────── */
 
+/** Shape shared by every place that needs a stop's label or its resident. */
+type StopRow = {
+  unitId: string | null;
+  serviceLabel: string | null;
+  serviceAddressLine1: string | null;
+  unit: { label: string; memberships: Array<{ user: { id: string; email: string } }> } | null;
+  homeowner: { id: string; email: string } | null;
+};
+
+/** What this stop is called: the unit label, or the snapshotted street line. */
+function stopLabelOf(visit: StopRow): string {
+  if (visit.unitId) return visit.unit?.label ?? "this home";
+  return visit.serviceLabel ?? visit.serviceAddressLine1 ?? "this home";
+}
+
+/**
+ * The one account that lives at this stop, if any.
+ *
+ * HOA → the unit's active resident, which may be absent for a vacant home.
+ * Neighbourhood → the participating homeowner, who is always present because
+ * they are the target.
+ */
+function residentOfVisit(visit: StopRow): { id: string; email: string } | null {
+  if (visit.unitId) return visit.unit?.memberships[0]?.user ?? null;
+  return visit.homeowner;
+}
+
 async function requireProviderOccurrence(providerUserId: string, occurrenceId: string) {
   const occurrence = await db.serviceOccurrence.findUnique({
     where: { id: occurrenceId },
@@ -1541,12 +1866,15 @@ async function requireProviderOccurrence(providerUserId: string, occurrenceId: s
           communityId: true,
           status: true,
           requestId: true,
-          community: { select: { name: true } },
+          community: { select: { name: true, type: true } },
           request: { select: { title: true } },
         },
       },
     },
   });
+  // Only the awarded provider. A different provider passing a real occurrence
+  // id gets the same "does not exist" as a stranger, and learns nothing about
+  // whose work it is.
   if (!occurrence || occurrence.agreement.providerUserId !== providerUserId) {
     throw new HoaWorkflowError("That service day does not exist.", 404);
   }
@@ -1578,6 +1906,9 @@ export async function saveDayPlan(
       id: true,
       status: true,
       unitId: true,
+      homeownerUserId: true,
+      serviceLabel: true,
+      serviceAddressLine1: true,
       windowStart: true,
       windowEnd: true,
       stopRank: true,
@@ -1591,6 +1922,7 @@ export async function saveDayPlan(
           },
         },
       },
+      homeowner: { select: { id: true, email: true } },
     },
   });
   const visitById = new Map(visits.map((visit) => [visit.id, visit]));
@@ -1600,7 +1932,7 @@ export async function saveDayPlan(
       throw new HoaWorkflowError("A stop in this plan does not belong to this service day.", 400);
     }
     if (["completed", "skipped", "cancelled"].includes(visit.status)) {
-      throw new HoaWorkflowError(`Stop “${visit.unit.label}” is already resolved.`, 400);
+      throw new HoaWorkflowError(`Stop “${stopLabelOf(visit)}” is already resolved.`, 400);
     }
   }
 
@@ -1625,21 +1957,34 @@ export async function saveDayPlan(
   );
 
   if (input.publish) {
-    const manager = await db.communityStaffAssignment.findFirst({
-      where: {
-        communityId: occurrence.agreement.communityId,
-        role: "hoa_manager",
-        status: "active",
-      },
-      select: { user: { select: { id: true, email: true } } },
-    });
+    const isNeighborhood = occurrence.agreement.community.type === "neighborhood";
+    const manager = isNeighborhood
+      ? await findNeighborhoodManager(occurrence.agreement.communityId).then((found) =>
+          found ? { user: { id: found.userId, email: found.email } } : null,
+        )
+      : await db.communityStaffAssignment.findFirst({
+          where: {
+            communityId: occurrence.agreement.communityId,
+            role: "hoa_manager",
+            status: "active",
+          },
+          select: { user: { select: { id: true, email: true } } },
+        });
+    const residentLinkPath = isNeighborhood
+      ? "/app/homeowner/neighbourhood"
+      : "/app/homeowner/community";
+    const managerLinkPath = isNeighborhood
+      ? "/app/homeowner/neighbourhood"
+      : "/app/hoa/dashboard";
     const dayLabel = occurrence.serviceDate.toISOString().slice(0, 10);
     const scheduleWasAlreadyPublished = occurrence.schedulePublishedAt !== null;
 
+    // Each home hears about its own stop and nothing else — never the day's
+    // route, never another home's window.
     const residentIntents: NotificationIntent[] = [];
     for (const stop of input.stops) {
       const visit = visitById.get(stop.visitId);
-      const resident = visit?.unit.memberships[0]?.user;
+      const resident = visit ? residentOfVisit(visit) : null;
       if (!visit || !resident) continue;
       const window =
         stop.windowStart && stop.windowEnd
@@ -1650,8 +1995,8 @@ export async function saveDayPlan(
         email: resident.email,
         kind: "schedule",
         title: `${occurrence.agreement.community.name}: service schedule ${scheduleWasAlreadyPublished ? "updated" : "published"}`,
-        body: `“${occurrence.agreement.request.title}” ${scheduleWasAlreadyPublished ? "is now scheduled" : "visits"} for ${visit.unit.label} on ${dayLabel} ${window}.`,
-        linkPath: "/app/homeowner/community",
+        body: `“${occurrence.agreement.request.title}” ${scheduleWasAlreadyPublished ? "is now scheduled" : "visits"} for ${stopLabelOf(visit)} on ${dayLabel} ${window}.`,
+        linkPath: residentLinkPath,
         // A resend of the same plan is one event; a changed window is a new one.
         dedupeKey: `schedule:${visit.id}:${contentHash([
           dayLabel,
@@ -1679,7 +2024,11 @@ export async function saveDayPlan(
           targetId: occurrence.agreement.id,
           communityId: occurrence.agreement.communityId,
           providerUserId,
-          metadata: { sequence: occurrence.sequence, stopCount: input.stops.length },
+          metadata: {
+            sequence: occurrence.sequence,
+            stopCount: input.stops.length,
+            context: occurrence.agreement.community.type,
+          },
         }),
       }),
       ...(await buildPreferenceAwareNotificationOps([
@@ -1692,7 +2041,7 @@ export async function saveDayPlan(
                 kind: "schedule" as const,
                 title: `Schedule ${scheduleWasAlreadyPublished ? "updated" : "published"} for “${occurrence.agreement.request.title}”`,
                 body: `The provider ${scheduleWasAlreadyPublished ? "updated" : "planned"} ${input.stops.length} stops for ${dayLabel}.`,
-                linkPath: "/app/hoa/dashboard",
+                linkPath: managerLinkPath,
                 dedupeKey: `schedule-manager:${occurrenceId}:${contentHash(
                   input.stops.map(
                     (stop) =>
@@ -1729,6 +2078,9 @@ export async function updateVisitStatus(
       id: true,
       status: true,
       occurrenceId: true,
+      unitId: true,
+      serviceLabel: true,
+      serviceAddressLine1: true,
       unit: {
         select: {
           label: true,
@@ -1739,6 +2091,7 @@ export async function updateVisitStatus(
           },
         },
       },
+      homeowner: { select: { id: true, email: true } },
       occurrence: {
         select: {
           id: true,
@@ -1750,7 +2103,7 @@ export async function updateVisitStatus(
               communityId: true,
               status: true,
               requestId: true,
-              community: { select: { name: true } },
+              community: { select: { name: true, type: true } },
               request: { select: { title: true } },
             },
           },
@@ -1778,7 +2131,12 @@ export async function updateVisitStatus(
   }
 
   const now = new Date();
-  const resident = visit.unit.memberships[0]?.user;
+  const resident = residentOfVisit(visit);
+  const stopLabel = stopLabelOf(visit);
+  const residentLinkPath =
+    visit.occurrence.agreement.community.type === "neighborhood"
+      ? "/app/homeowner/neighbourhood"
+      : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
   await db.$transaction([
@@ -1808,15 +2166,15 @@ export async function updateVisitStatus(
               kind: (input.status === "completed" ? "review" : "visit") as "review" | "visit",
               title:
                 input.status === "completed"
-                  ? `Service completed at ${visit.unit.label} — share your review`
+                  ? `Service completed at ${stopLabel} — share your review`
                   : input.status === "en_route"
                     ? `Your provider is on the way`
-                    : `Service ${input.status} at ${visit.unit.label}`,
+                    : `Service ${input.status} at ${stopLabel}`,
               body:
                 input.status === "completed"
-                  ? `“${visit.occurrence.agreement.request.title}” is complete at ${visit.unit.label}. Tell your HOA how the provider did.`
-                  : `“${visit.occurrence.agreement.request.title}” — ${visit.unit.label} is now ${input.status.replace("_", " ")}.`,
-              linkPath: "/app/homeowner/community",
+                  ? `“${visit.occurrence.agreement.request.title}” is complete at ${stopLabel}. Tell your neighbours how the provider did.`
+                  : `“${visit.occurrence.agreement.request.title}” — ${stopLabel} is now ${input.status.replace("_", " ")}.`,
+              linkPath: residentLinkPath,
               dedupeKey: `visit-status:${visit.id}:${input.status}`,
             },
           ]
@@ -1837,7 +2195,9 @@ export async function closeOccurrence(userId: string, occurrenceId: string): Pro
     },
   });
   if (!occurrence) throw new HoaWorkflowError("That service day does not exist.", 404);
-  await requireManagedHoa(userId, occurrence.agreement.communityId);
+  await requireCommunityManager(userId, occurrence.agreement.communityId);
+  // Idempotent: closing an already-closed day is a no-op, not an error, so a
+  // double-click or a retried request settles on the same state.
   if (occurrence.status === "completed") return;
   if (occurrence.status === "cancelled") {
     throw new HoaWorkflowError("A cancelled service day stays cancelled.");
@@ -1860,6 +2220,15 @@ export async function closeOccurrence(userId: string, occurrenceId: string): Pro
 
 /* ── Reviews ─────────────────────────────────────────────────────────────── */
 
+/**
+ * One homeowner review of one completed visit to their own home.
+ *
+ * The ownership test differs by target kind and is the whole authorization:
+ * an HOA resident must be the active member of the unit that was visited, and
+ * a neighbourhood resident must be the homeowner the stop belongs to. Either
+ * way a resident cannot review a neighbour's visit, and the unique index on
+ * `(reviewerUserId, visitId)` keeps it to one review each.
+ */
 export async function createVisitReview(
   userId: string,
   visitId: string,
@@ -1871,19 +2240,37 @@ export async function createVisitReview(
       id: true,
       status: true,
       unitId: true,
+      homeownerUserId: true,
       occurrence: {
-        select: { agreement: { select: { providerUserId: true, communityId: true } } },
+        select: {
+          agreement: {
+            select: {
+              providerUserId: true,
+              communityId: true,
+              community: { select: { type: true } },
+            },
+          },
+        },
       },
     },
   });
   if (!visit) throw new HoaWorkflowError("That visit does not exist.", 404);
-  const membership = await requireActiveResident(
-    userId,
-    visit.occurrence.agreement.communityId,
-  );
-  if (membership.unitId !== visit.unitId) {
-    throw new HoaWorkflowError("You can only review visits to your own home.", 403);
+
+  if (visit.occurrence.agreement.community.type === "hoa") {
+    const membership = await requireActiveResident(
+      userId,
+      visit.occurrence.agreement.communityId,
+    );
+    if (membership.unitId !== visit.unitId) {
+      throw new HoaWorkflowError("You can only review visits to your own home.", 403);
+    }
+  } else {
+    await requireActiveNeighborhoodMember(userId, visit.occurrence.agreement.communityId);
+    if (visit.homeownerUserId !== userId) {
+      throw new HoaWorkflowError("You can only review visits to your own home.", 403);
+    }
   }
+
   if (visit.status !== "completed") {
     throw new HoaWorkflowError("Only a completed visit can be reviewed.");
   }
@@ -1917,7 +2304,10 @@ export async function createAgreementReview(
     select: { id: true, status: true, communityId: true, providerUserId: true },
   });
   if (!agreement) throw new HoaWorkflowError("That agreement does not exist.", 404);
-  await requireManagedHoa(userId, agreement.communityId);
+  // The group-level review stays a manager's review, of either kind: the HOA
+  // manager for an HOA agreement, the neighbourhood manager for a
+  // neighbourhood one.
+  await requireCommunityManager(userId, agreement.communityId);
   if (agreement.status !== "completed") {
     throw new HoaWorkflowError("Complete the agreement before reviewing it.");
   }
@@ -1969,6 +2359,8 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
               postalCode: true,
               latitude: true,
               longitude: true,
+              formattedAddress: true,
+              addressVerificationStatus: true,
               occupancyStatus: true,
               accessNotes: true,
               memberships: {
@@ -2046,16 +2438,21 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
       : [];
     const occurrencesByAgreement: Record<string, OccurrenceSummary[]> = {};
     for (const occurrence of occurrences) {
-      // The scoped manager sees the full HOA plan, locations included.
+      // The scoped manager sees the full plan and its stop locations, so they
+      // can answer residents — but not the private access notes, which stay
+      // between the resident and the awarded provider.
       (occurrencesByAgreement[occurrence.agreementId] ??= []).push(
         serializeOccurrence(occurrence, true),
       );
     }
 
+    const profile = await getHoaProfile(community.id);
+    const locationReady = profile?.locationReady ?? false;
+
     communities.push({
       id: community.id,
       name: community.name,
-      profile: await getHoaProfile(community.id),
+      profile,
       activeMemberCount: community._count.memberships,
       units: community.units.map((unit) => ({
         id: unit.id,
@@ -2064,8 +2461,14 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
         locality: unit.locality,
         region: unit.region,
         postalCode: unit.postalCode,
-        latitude: unit.latitude,
-        longitude: unit.longitude,
+        inheritsHoaAddress: !unit.addressLine1?.trim(),
+        addressVerificationStatus: unit.addressVerificationStatus,
+        formattedAddress: unit.formattedAddress,
+        locationReady: !unit.addressLine1?.trim()
+          ? locationReady
+          : unit.addressVerificationStatus === "verified" &&
+            unit.latitude !== null &&
+            unit.longitude !== null,
         occupancyStatus: unit.occupancyStatus,
         accessNotes: unit.accessNotes,
         residentName: unit.memberships[0]?.user.fullName ?? null,

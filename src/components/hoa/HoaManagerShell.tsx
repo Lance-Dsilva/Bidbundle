@@ -30,6 +30,7 @@ export function HoaManagerShell({
           <ManagerLink href="/app/hoa/dashboard#residents" icon="users" label="Residents" />
           <ManagerLink href="/app/hoa/dashboard#requests" icon="clipboard" label="Service requests" />
           <ManagerLink href="/app/hoa/dashboard#surveys" icon="bids" label="Monthly surveys" />
+          <ManagerLink href="/app/hoa/amenities" icon="calendar" label="Amenities & spaces" />
           {/* Same cross-role support surface every other customer uses. */}
           <ManagerLink href="/app/support" icon="chat" label="Support" />
         </nav>
@@ -68,7 +69,7 @@ function ManagerLink({
   label,
 }: {
   href: string;
-  icon: "home" | "users" | "clipboard" | "bids" | "chat";
+  icon: "home" | "users" | "clipboard" | "bids" | "chat" | "calendar";
   label: string;
 }) {
   return (

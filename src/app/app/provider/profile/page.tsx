@@ -6,7 +6,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 
 import { AvatarField } from "@/components/profile/AvatarField";
 import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
-import { useProviderBids } from "@/hooks/useProviderBids";
+import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderEarnings } from "@/hooks/useProviderEarnings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -218,7 +218,9 @@ export default function ProviderProfilePage() {
   const { avgRating, reviews } = useProviderReviews();
   const { dashboard } = useProviderDashboard();
   const { earnings } = useProviderEarnings();
-  const { bids } = useProviderBids();
+  // One marketplace payload, shared with the feed/bids/schedule pages.
+  const { workspace } = useProviderMarketplace();
+  const bids = workspace?.bids ?? [];
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
@@ -296,10 +298,28 @@ export default function ProviderProfilePage() {
     );
   }
 
-  const pendingBids = bids.filter((bid) => bid.status === "pending");
+  const pendingBids = bids.filter((bid) => bid.status === "submitted");
   const acceptedBids = bids.filter((bid) => bid.status === "accepted");
+  // Lead time is the gap between quoting and the start date the provider
+  // offered. Bids with no proposed date are excluded rather than counted as
+  // zero, which would drag the average toward "same day" dishonestly.
+  const datedBids = bids.filter((bid) => bid.proposedStartDate !== null);
   const avgLeadDays =
-    bids.length > 0 ? (bids.reduce((sum, bid) => sum + bid.estimated_days, 0) / bids.length).toFixed(1) : "—";
+    datedBids.length > 0
+      ? (
+          datedBids.reduce(
+            (sum, bid) =>
+              sum +
+              Math.max(
+                0,
+                (new Date(bid.proposedStartDate as string).getTime() -
+                  new Date(bid.submittedAt).getTime()) /
+                  86_400_000,
+              ),
+            0,
+          ) / datedBids.length
+        ).toFixed(1)
+      : "—";
 
   const areaLabel = profile.neighborhood ?? "Area not set";
   const workingHours =
@@ -420,7 +440,7 @@ export default function ProviderProfilePage() {
             <div style={cardPadStyle}>
               <div style={eyebrowStyle}>Performance · live</div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-3.5" style={{ marginTop: 14 }}>
-                <PStat big={fmtMoney(earnings?.total_cents ?? 0)} label="Earnings" tone="terracotta" />
+                <PStat big={fmtMoney(earnings?.earnedCents ?? 0)} label="Earnings" tone="terracotta" />
                 <PStat big={`${dashboard?.win_rate_pct?.toFixed(0) ?? 0}%`} label="Win rate" tone="sage" />
                 <PStat big={reviews.length > 0 ? String(avgRating ?? "—") : "—"} label="Rating" tone="gold" />
                 <PStat big={String(avgLeadDays)} label="Avg lead days" tone="ink" />
@@ -512,7 +532,7 @@ export default function ProviderProfilePage() {
             <div style={{ background: "linear-gradient(160deg, var(--terracotta-50), var(--cream-100))", borderRadius: 22, padding: 24, border: "1px solid var(--border-warm)" }}>
               <div style={eyebrowStyle}>Booked revenue</div>
               <div style={{ ...numeralStyle, fontSize: 38, color: "var(--terracotta-600)", marginTop: 6 }}>
-                {fmtMoney(earnings?.total_cents ?? 0)}
+                {fmtMoney(earnings?.earnedCents ?? 0)}
               </div>
               <div style={{ fontSize: 12, color: "var(--ink-500)" }}>{PAYOUT_LABELS[provider.payoutStatus]}</div>
               <div style={{ borderTop: "1px solid var(--border-warm)", marginTop: 18, paddingTop: 14, display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
@@ -522,17 +542,17 @@ export default function ProviderProfilePage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--ink-500)" }}>Gross earnings</span>
-                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{fmtMoney(earnings?.total_cents ?? 0)}</span>
+                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{fmtMoney(earnings?.earnedCents ?? 0)}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--ink-500)" }}>Pending pipeline</span>
                   <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>
-                    {fmtMoney(pendingBids.reduce((sum, bid) => sum + bid.amount, 0))}
+                    {fmtMoney(pendingBids.reduce((sum, bid) => sum + bid.amountCents, 0))}
                   </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--ink-500)" }}>This month</span>
-                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{fmtMoney(earnings?.this_month_cents ?? 0)}</span>
+                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{fmtMoney(earnings?.thisMonthCents ?? 0)}</span>
                 </div>
               </div>
               <Link href="/app/provider/earnings" style={{ ...smallQuietButtonStyle, width: "100%", marginTop: 12, background: "var(--bg-card)", justifyContent: "center", textDecoration: "none" }}>

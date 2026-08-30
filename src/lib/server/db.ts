@@ -5,12 +5,22 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
 /**
- * One Prisma client per process.
+ * Exactly one Prisma client per process, in every environment.
  *
- * Next.js hot reload re-evaluates modules on every edit, which would otherwise
- * open a new connection pool each time until the database refuses connections.
- * Caching on `globalThis` survives module re-evaluation; production creates the
- * client exactly once so nothing is cached there.
+ * The single-instance rule is not only about connection count. Prisma's batch
+ * `$transaction([...])` can only be atomic when every operation in the array
+ * was built by the *same* client: the batch is dispatched through that client's
+ * engine, so a promise created by a second client executes on its own
+ * connection, outside the transaction. Handing a batch mixed clients therefore
+ * runs the statements concurrently and independently — the parent row commits
+ * while the child inserts race it and fail their foreign keys.
+ *
+ * That is precisely what an earlier version of this file caused: the proxy
+ * below calls {@link getPrismaClient} on every property access, and the cache
+ * was skipped when `NODE_ENV === "production"`, so `db.a`, `db.b` and
+ * `db.$transaction` were three different clients in production only. The cache
+ * is unconditional now; `globalThis` is still used on top of it so Next's dev
+ * hot reload, which re-evaluates this module, does not leak a pool per edit.
  */
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -35,14 +45,7 @@ function createPrismaClient(): PrismaClient {
 }
 
 function getPrismaClient(): PrismaClient {
-  const existing = globalForPrisma.prisma;
-  if (existing) return existing;
-
-  const client = createPrismaClient();
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = client;
-  }
-  return client;
+  return (globalForPrisma.prisma ??= createPrismaClient());
 }
 
 /**

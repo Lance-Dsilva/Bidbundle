@@ -1,62 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { getToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import type { HomeownerBidView } from "@/lib/server/marketplace-reads";
 
-export interface HomeownerBid {
-  id: number;
-  request_id: number;
-  request_title: string;
-  provider_id: number;
-  provider_name: string;
-  amount: number;
-  estimated_days: number;
-  work_days: string[];
-  status: string;
-  created_at: string;
-}
-
+/**
+ * Quotes on the requests this homeowner opened or joined.
+ *
+ * Read-only. Accepting a bid is a lifecycle transition owned by the
+ * neighbourhood manager and goes through `useNeighbourhood`, which posts to
+ * the award endpoint and re-reads the server's answer — the previous version
+ * of this hook called `/bids/{id}/accept` and `/bids/{id}/decline`, neither of
+ * which existed, and then patched local state as if they had succeeded.
+ */
 export function useHomeownerBids() {
-  const [bids, setBids] = useState<HomeownerBid[]>([]);
+  const [bids, setBids] = useState<HomeownerBidView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = await apiFetch<{ bids: HomeownerBidView[] }>("/homeowner/bids");
+      setBids(payload.bids);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "We could not load your quotes.");
+    } finally {
       setLoading(false);
-      return;
     }
-    apiFetch<HomeownerBid[]>("/homeowner/bids", { token })
-      .then(setBids)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed"))
-      .finally(() => setLoading(false));
   }, []);
 
-  const acceptBid = async (bidId: number) => {
-    const token = getToken();
-    if (!token) return;
-    await apiFetch(`/bids/${bidId}/accept`, { method: "PUT", token });
-    setBids((prev) => {
-      const selectedBid = prev.find((bid) => bid.id === bidId);
-      return prev.map((bid) =>
-        bid.id === bidId
-          ? { ...bid, status: "accepted" }
-          : bid.request_id === selectedBid?.request_id
-            ? { ...bid, status: "declined" }
-            : bid
-      );
-    });
-  };
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
-  const declineBid = async (bidId: number) => {
-    const token = getToken();
-    if (!token) return;
-    await apiFetch(`/bids/${bidId}/decline`, { method: "PUT", token });
-    setBids((prev) => prev.map((bid) => (bid.id === bidId ? { ...bid, status: "declined" } : bid)));
-  };
-
-  return { bids, loading, error, acceptBid, declineBid };
+  return { bids, loading, error, refresh };
 }

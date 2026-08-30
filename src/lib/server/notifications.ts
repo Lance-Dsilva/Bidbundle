@@ -6,6 +6,10 @@ import { after } from "next/server";
 
 import type { NotificationKind } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  REMINDER_OUTBOX_KIND,
+  resolveBookingReminder,
+} from "@/lib/server/amenity-reminders";
 import { getEmailProvider } from "@/lib/server/email";
 import { db } from "@/lib/server/db";
 
@@ -195,6 +199,11 @@ export async function enqueueUpcomingServiceReminders(now = new Date()): Promise
       scheduledDate: true,
       windowStart: true,
       windowEnd: true,
+      // A stop is either an HOA unit or a neighbourhood homeowner. Both are
+      // selected; exactly one is present on any given row.
+      unitId: true,
+      serviceLabel: true,
+      serviceAddressLine1: true,
       unit: {
         select: {
           label: true,
@@ -205,6 +214,7 @@ export async function enqueueUpcomingServiceReminders(now = new Date()): Promise
           },
         },
       },
+      homeowner: { select: { id: true, email: true } },
       occurrence: {
         select: {
           id: true,
@@ -215,8 +225,12 @@ export async function enqueueUpcomingServiceReminders(now = new Date()): Promise
               community: {
                 select: {
                   name: true,
+                  type: true,
                   staffAssignments: {
-                    where: { role: "hoa_manager", status: "active" },
+                    where: {
+                      role: { in: ["hoa_manager", "neighborhood_manager"] },
+                      status: "active",
+                    },
                     select: { user: { select: { id: true, email: true } } },
                     take: 1,
                   },
@@ -238,15 +252,24 @@ export async function enqueueUpcomingServiceReminders(now = new Date()): Promise
       visit.windowStart && visit.windowEnd
         ? ` between ${visit.windowStart} and ${visit.windowEnd}`
         : "";
-    const resident = visit.unit.memberships[0]?.user;
+    const resident = visit.unitId
+      ? (visit.unit?.memberships[0]?.user ?? null)
+      : visit.homeowner;
+    const stopLabel = visit.unitId
+      ? (visit.unit?.label ?? "your home")
+      : (visit.serviceLabel ?? visit.serviceAddressLine1 ?? "your home");
+    const residentLinkPath =
+      agreement.community.type === "neighborhood"
+        ? "/app/homeowner/neighbourhood"
+        : "/app/homeowner/community";
     if (resident) {
       intents.push({
         userId: resident.id,
         email: resident.email,
         kind: "reminder",
-        title: `Upcoming service at ${visit.unit.label}`,
+        title: `Upcoming service at ${stopLabel}`,
         body: `“${agreement.request.title}” is scheduled for ${dateLabel}${window}.`,
-        linkPath: "/app/homeowner/community",
+        linkPath: residentLinkPath,
         dedupeKey: `service-reminder-resident:${visit.id}:${dateLabel}`,
       });
     }
@@ -260,7 +283,7 @@ export async function enqueueUpcomingServiceReminders(now = new Date()): Promise
         kind: "reminder",
         title: `Upcoming service day for ${agreement.community.name}`,
         body: `“${agreement.request.title}” is scheduled for ${dateLabel}. Review your route before starting.`,
-        linkPath: "/app/provider/hoa",
+        linkPath: "/app/provider/schedule",
         dedupeKey: `service-reminder-provider:${visit.occurrence.id}:${dateLabel}`,
       });
     }
@@ -275,7 +298,10 @@ export async function enqueueUpcomingServiceReminders(now = new Date()): Promise
         kind: "reminder",
         title: `Upcoming service day for ${agreement.community.name}`,
         body: `“${agreement.request.title}” is scheduled for ${dateLabel}.`,
-        linkPath: "/app/hoa/dashboard",
+        linkPath:
+          agreement.community.type === "neighborhood"
+            ? "/app/homeowner/neighbourhood"
+            : "/app/hoa/dashboard",
         dedupeKey: `service-reminder-manager:${visit.occurrence.id}:${dateLabel}`,
       });
     }
@@ -326,25 +352,42 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
     result.claimed += 1;
 
     try {
-      if (event.kind !== "notification_email") {
+      let providerMessageId: string | null = null;
+
+      if (event.kind === "notification_email") {
+        const payload = event.payload as { to?: string; subject?: string; text?: string };
+        if (!payload.to || !payload.subject || !payload.text) {
+          throw new Error("outbox payload is incomplete");
+        }
+        const delivery = await provider.send({
+          to: payload.to,
+          subject: payload.subject,
+          text: payload.text,
+          idempotencyKey: event.dedupeKey,
+        });
+        providerMessageId = delivery.providerMessageId;
+      } else if (event.kind === REMINDER_OUTBOX_KIND) {
+        // A delayed reminder. The row's `nextAttemptAt` was its due time; the
+        // booking is re-read now so a cancelled or moved reservation resolves
+        // the event without sending anything.
+        const outcome = await resolveBookingReminder(event.payload, absoluteAppUrl, now);
+        if (outcome.kind === "sent" && outcome.email) {
+          const delivery = await provider.send({
+            ...outcome.email,
+            idempotencyKey: event.dedupeKey,
+          });
+          providerMessageId = delivery.providerMessageId;
+        }
+      } else {
         throw new Error(`unknown outbox kind ${event.kind}`);
       }
-      const payload = event.payload as { to?: string; subject?: string; text?: string };
-      if (!payload.to || !payload.subject || !payload.text) {
-        throw new Error("outbox payload is incomplete");
-      }
-      const delivery = await provider.send({
-        to: payload.to,
-        subject: payload.subject,
-        text: payload.text,
-        idempotencyKey: event.dedupeKey,
-      });
+
       await db.outboxEvent.update({
         where: { id: event.id },
         data: {
           status: "delivered",
           deliveredAt: new Date(),
-          providerMessageId: delivery.providerMessageId,
+          providerMessageId,
           lastError: null,
         },
       });

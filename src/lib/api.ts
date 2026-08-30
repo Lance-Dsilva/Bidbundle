@@ -45,6 +45,15 @@ export class ApiError extends Error {
     message: string,
     /** Per-field messages from a `400`, for inline form errors. */
     public fields?: Record<string, string>,
+    /**
+     * The whole parsed error body.
+     *
+     * Some refusals are actionable and carry structure the message alone
+     * cannot: an award blocked by unrouteable homes returns the count and the
+     * names to fix. Keeping the body here means a caller can read that without
+     * every handler inventing its own error class.
+     */
+    public body?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -98,12 +107,15 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     let fields: Record<string, string> | undefined;
+    let body: Record<string, unknown> | undefined;
     try {
-      const parsed = readErrorBody(await res.json());
+      const raw = (await res.json()) as unknown;
+      if (raw && typeof raw === "object") body = raw as Record<string, unknown>;
+      const parsed = readErrorBody(raw);
       message = parsed.message ?? message;
       fields = parsed.fields;
     } catch {}
-    throw new ApiError(res.status, message, fields);
+    throw new ApiError(res.status, message, fields, body);
   }
 
   if (res.status === 204) return undefined as T;

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
 import { guardFailureResponse, guardSupportMutation } from "@/lib/server/auth-guard";
+import { logUnexpectedFailure } from "@/lib/server/errors";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
 import { SupportError } from "@/lib/server/support";
 import { MAX_SUPPORT_BODY_BYTES } from "@/lib/validation/support";
@@ -66,11 +67,15 @@ export function supportErrorResponse(scope: string, error: unknown): NextRespons
     }
   }
 
-  console.error(`[support] ${scope} failed`, {
-    name: error instanceof Error ? error.name : "UnknownError",
-  });
+  // Unexpected: log the complete cause (constraint, code, stack) under a
+  // reference, and give the client that reference and nothing else.
+  const reference = logUnexpectedFailure(`support:${scope}`, error);
   return NextResponse.json(
-    { error: "Something went wrong on our end. Please try again." },
+    {
+      error:
+        "Something went wrong on our end and your request was not saved. Please try again.",
+      reference,
+    },
     { status: 500 },
   );
 }

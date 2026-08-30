@@ -5,10 +5,8 @@ import type { CSSProperties } from "react";
 import { CategoryTile } from "@/components/ui/CategoryArt";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useProviderDashboard } from "@/hooks/useProviderDashboard";
-import { useProviderBids } from "@/hooks/useProviderBids";
-import { useProviderJobFeed } from "@/hooks/useProviderJobFeed";
+import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 import { useProviderMessages } from "@/hooks/useProviderMessages";
-import { useProviderSchedule } from "@/hooks/useProviderSchedule";
 
 const cardStyle: CSSProperties = {
   background: "var(--bg-card)",
@@ -291,31 +289,57 @@ function SmallStatCard(props: { eyebrow: string; big: string; sub: string | JSX.
 export default function ProviderDashboardPage() {
   const { dashboard, profile, loading } = useProviderDashboard();
   const animatedRevenue = useCountUp(Math.round((dashboard?.revenue_30d_cents ?? 0) / 100));
-  const { jobs: liveJobs, loading: jobsLoading } = useProviderJobFeed();
-  const { bids: providerBids, loading: bidsLoading } = useProviderBids();
   const { conversations, loading: messagesLoading } = useProviderMessages();
-  const { items: scheduleItems, loading: scheduleLoading } = useProviderSchedule();
-  const bidByRequestId = new Map(providerBids.map((bid) => [bid.request_id, bid]));
+  // One marketplace read backs the feed, the bid chips, and the schedule strip,
+  // so this dashboard cannot show a job as un-bid that My Bids shows as quoted.
+  const { workspace, loading: marketLoading } = useProviderMarketplace();
+
+  const liveJobs = workspace?.feed ?? [];
+  const providerBids = workspace?.bids ?? [];
+  const jobsLoading = marketLoading;
+
+  const bidByRequestId = new Map(providerBids.map((bid) => [bid.requestId, bid]));
+  // Nearest first, then most contested, then newest deadline: the order a
+  // provider actually triages in.
   const rankedJobs = [...liveJobs].sort((a, b) => {
-    const distanceA = a.distance_mi ?? Number.POSITIVE_INFINITY;
-    const distanceB = b.distance_mi ?? Number.POSITIVE_INFINITY;
+    const distanceA = a.approximateDistanceMi ?? Number.POSITIVE_INFINITY;
+    const distanceB = b.approximateDistanceMi ?? Number.POSITIVE_INFINITY;
     if (distanceA !== distanceB) return distanceA - distanceB;
-    if (b.bid_count !== a.bid_count) return b.bid_count - a.bid_count;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    const closesA = a.biddingClosesAt ? new Date(a.biddingClosesAt).getTime() : Infinity;
+    const closesB = b.biddingClosesAt ? new Date(b.biddingClosesAt).getTime() : Infinity;
+    return closesA - closesB;
   });
-  const unbidJobs = rankedJobs.filter((job) => !bidByRequestId.has(job.id));
+  const unbidJobs = rankedJobs.filter((job) => !bidByRequestId.has(job.requestId));
   const topJob = (unbidJobs[0] ?? rankedJobs[0]) ?? null;
-  const topJobExistingBid = topJob ? bidByRequestId.get(topJob.id) : undefined;
-  const visibleJobs = [...unbidJobs, ...rankedJobs.filter((job) => bidByRequestId.has(job.id))].slice(0, 5);
-  const upcomingSchedule = [...scheduleItems]
-    .filter((item) => new Date(item.scheduled_at).getTime() >= Date.now())
-    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+  const topJobExistingBid = topJob ? bidByRequestId.get(topJob.requestId) : undefined;
+  const visibleJobs = [
+    ...unbidJobs,
+    ...rankedJobs.filter((job) => bidByRequestId.has(job.requestId)),
+  ].slice(0, 5);
+
+  // The next three real stops across every agreement this provider won.
+  const upcomingSchedule = Object.values(workspace?.occurrencesByAgreement ?? {})
+    .flat()
+    .flatMap((occurrence) =>
+      occurrence.visits.map((visit) => ({
+        id: visit.id,
+        title: visit.stopLabel,
+        address: visit.addressLine1,
+        status: visit.status,
+        scheduledDate: visit.scheduledDate ?? occurrence.serviceDate,
+        windowStart: visit.windowStart,
+        estimatedMinutes: visit.estimatedMinutes,
+      })),
+    )
+    .filter((stop) => new Date(stop.scheduledDate).getTime() >= Date.now() - 86_400_000)
+    .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
     .slice(0, 3);
+
   const recentConversations = [...conversations]
     .sort((a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime())
     .slice(0, 3);
 
-  if (loading || bidsLoading || messagesLoading || scheduleLoading) {
+  if (loading || marketLoading || messagesLoading) {
     return (
       <div style={{ background: "var(--bg-app)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ color: "var(--ink-400)", fontSize: 14 }}>Loading your dashboard…</div>
@@ -366,36 +390,41 @@ export default function ProviderDashboardPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                     <span style={toneChipStyle("terracotta")}>
                       <span style={colorDotStyle()} />
-                      {topJob ? `Top nearby · ${topJob.bid_count} bid${topJob.bid_count !== 1 ? "s" : ""}` : "Live locality feed"}
+                      {topJob
+                        ? `Top nearby · ${topJob.homeCount} home${topJob.homeCount !== 1 ? "s" : ""}`
+                        : "Live locality feed"}
                     </span>
                     <span style={neutralChipStyle()}>{topJob?.category ?? "Job feed"}</span>
-                    <span style={{ fontSize: 12, color: "var(--ink-500)" }}>{topJob ? formatDateMeta(topJob.closes_at) : "Waiting for the next request in your area"}</span>
+                    <span style={{ fontSize: 12, color: "var(--ink-500)" }}>{topJob ? formatDateMeta(topJob.biddingClosesAt) : "Waiting for the next request in your area"}</span>
                   </div>
                   <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 500, letterSpacing: "-0.01em", color: "var(--ink-900)" }}>
                     {topJob?.title ?? "No active group jobs in your service area yet"}
                   </div>
                     <div style={{ fontSize: 13, color: "var(--ink-500)", marginTop: 4 }}>
                       {topJob
-                        ? `${topJob.neighborhood}${formatDistance(topJob.distance_mi) ? ` · ${formatDistance(topJob.distance_mi)}` : ""} · ${topJob.bid_count} provider bid${topJob.bid_count !== 1 ? "s" : ""} · ${topJob.status === "bidding" ? "Bidding" : topJob.status === "live" ? "Live now" : "Grouping"}`
+                        ? `${topJob.communityName}${formatDistance(topJob.approximateDistanceMi) ? ` · ${formatDistance(topJob.approximateDistanceMi)}` : ""} · ${topJob.homeCount} home${topJob.homeCount !== 1 ? "s" : ""} · ${topJob.context === "hoa" ? "HOA" : "Neighbourhood"}`
                         : `Complete your provider profile and Bundleen will keep pulling nearby requests into this dashboard.`}
                     </div>
                     {topJobExistingBid ? (
                       <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: "var(--sage-700)" }}>
-                        Your bid is already in: ${Math.round(topJobExistingBid.amount / 100).toLocaleString()} · {topJobExistingBid.estimated_days} day{topJobExistingBid.estimated_days !== 1 ? "s" : ""}
+                        Your bid is already in: ${Math.round(topJobExistingBid.amountCents / 100).toLocaleString()}
+                        {topJobExistingBid.estimatedDurationLabel
+                          ? ` · ${topJobExistingBid.estimatedDurationLabel}`
+                          : ""}
                       </div>
                     ) : null}
                   </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ ...eyebrowStyle, letterSpacing: "0.08em" }}>Bid range</div>
                   <div style={{ ...numeralStyle, fontSize: 30, color: "var(--terracotta-600)", lineHeight: 1, marginTop: 4 }}>
-                    {topJob
-                      ? `$${Math.round(topJob.budget_min / 100).toLocaleString()}–${Math.round(topJob.budget_max / 100).toLocaleString()}`
-                      : "—"}
+                    {topJob && topJob.budgetMinCents != null && topJob.budgetMaxCents != null
+                      ? `$${Math.round(topJob.budgetMinCents / 100).toLocaleString()}–${Math.round(topJob.budgetMaxCents / 100).toLocaleString()}`
+                      : "Open quote"}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--sage-700)", fontWeight: 600, marginTop: 4 }}>
-                    {topJob
-                      ? `Est. $${Math.round(((topJob.budget_min + topJob.budget_max) / 2) / 100).toLocaleString()} revenue`
-                      : "Local requests appear here automatically"}
+                    {topJob && topJob.budgetMinCents != null && topJob.budgetMaxCents != null
+                      ? `Est. $${Math.round(((topJob.budgetMinCents + topJob.budgetMaxCents) / 2) / 100).toLocaleString()} revenue`
+                      : "Price this one yourself"}
                   </div>
                 </div>
               </div>
@@ -404,8 +433,8 @@ export default function ProviderDashboardPage() {
                   <div style={{ fontSize: 13, color: "var(--ink-700)" }}>
                     {topJob
                       ? topJobExistingBid
-                        ? `You already bid on this request. ${topJob.bid_count} total provider bid${topJob.bid_count !== 1 ? "s" : ""} are now in for ${topJob.neighborhood}${formatDistance(topJob.distance_mi) ? `, ${formatDistance(topJob.distance_mi)} from your base.` : "."}`
-                        : `${topJob.bid_count} competing provider bid${topJob.bid_count !== 1 ? "s" : ""} already placed in ${topJob.neighborhood}${formatDistance(topJob.distance_mi) ? `, ${formatDistance(topJob.distance_mi)} from your base.` : "."}`
+                        ? `You have already quoted this request in ${topJob.communityName}${formatDistance(topJob.approximateDistanceMi) ? `, ${formatDistance(topJob.approximateDistanceMi)} from your base.` : "."}`
+                        : `${topJob.homeCount} home${topJob.homeCount !== 1 ? "s" : ""} in ${topJob.communityName}${formatDistance(topJob.approximateDistanceMi) ? `, ${formatDistance(topJob.approximateDistanceMi)} from your base.` : "."}`
                       : "As soon as a nearby homeowner group goes live, it will appear here."}
                   </div>
                 </div>
@@ -441,11 +470,13 @@ export default function ProviderDashboardPage() {
                     No live group requests are in your selected service area yet.
                   </div>
                 ) : visibleJobs.map((job, index) => {
-                  const isBidding = job.status === "bidding" || job.status === "live";
+                  // Everything in this feed is open for bids: the server does
+                  // not return work a provider cannot quote on.
+                  const isBidding = true;
 
                   return (
                     <div
-                      key={job.id}
+                      key={job.requestId}
                       className="flex flex-wrap items-center gap-3.5 p-4 md:px-[22px]"
                       style={{
                         ...cardStyle,
@@ -456,32 +487,30 @@ export default function ProviderDashboardPage() {
                       <div style={{ flex: 1, minWidth: 160 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <div style={{ fontWeight: 600, fontSize: 15, color: "var(--ink-900)" }}>{job.title}</div>
-                          {isBidding ? (
-                            <span style={toneChipStyle("sage")}>
-                              <span style={colorDotStyle()} />
-                              {job.status === "bidding" ? "Bidding" : "Live"}
-                            </span>
-                          ) : (
-                            <span style={toneChipStyle("gold")}>Grouping</span>
-                          )}
-                          {bidByRequestId.has(job.id) ? (
+                          <span style={toneChipStyle("sage")}>
+                            <span style={colorDotStyle()} />
+                            Bidding
+                          </span>
+                          {bidByRequestId.has(job.requestId) ? (
                             <span style={toneChipStyle("terracotta")}>Your bid placed</span>
                           ) : null}
                         </div>
                         <div style={{ fontSize: 12, color: "var(--ink-500)", marginTop: 2 }}>
-                          {job.neighborhood}{formatDistance(job.distance_mi) ? ` · ${formatDistance(job.distance_mi)}` : ""} · {job.bid_count} provider bid{job.bid_count !== 1 ? "s" : ""} · {formatDateMeta(job.closes_at)}
+                          {job.communityName}{formatDistance(job.approximateDistanceMi) ? ` · ${formatDistance(job.approximateDistanceMi)}` : ""} · {job.homeCount} home{job.homeCount !== 1 ? "s" : ""} · {formatDateMeta(job.biddingClosesAt)}
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ ...numeralStyle, fontSize: 18, color: "var(--ink-900)" }}>
-                          ${Math.round(job.budget_min / 100).toLocaleString()}–${Math.round(job.budget_max / 100).toLocaleString()}
+                          {job.budgetMinCents != null && job.budgetMaxCents != null
+                            ? `$${Math.round(job.budgetMinCents / 100).toLocaleString()}–${Math.round(job.budgetMaxCents / 100).toLocaleString()}`
+                            : "Open quote"}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2 }}>
                           {index === 0 ? "Best current fit" : `${job.category} request`}
                         </div>
                       </div>
                       <Link href="/app/provider/job-feed" style={{ ...(isBidding ? smallPrimaryButtonStyle : smallGhostButtonStyle), textDecoration: "none" }}>
-                        {bidByRequestId.has(job.id) ? "View bid" : isBidding ? "Bid now" : "View"}
+                        {bidByRequestId.has(job.requestId) ? "View bid" : "Bid now"}
                       </Link>
                     </div>
                   );
@@ -510,8 +539,10 @@ export default function ProviderDashboardPage() {
                     }}
                   >
                     <div>
-                      <div style={{ ...numeralStyle, fontSize: 16, color: "var(--ink-900)" }}>{formatClock(row.scheduled_at)}</div>
-                      <div style={{ fontSize: 11, color: "var(--ink-500)" }}>{Math.round((row.duration_minutes / 60) * 10) / 10}h</div>
+                      <div style={{ ...numeralStyle, fontSize: 16, color: "var(--ink-900)" }}>{formatClock(row.scheduledDate)}</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-500)" }}>
+                        {row.estimatedMinutes ? `${Math.round((row.estimatedMinutes / 60) * 10) / 10}h` : row.windowStart ?? "—"}
+                      </div>
                     </div>
                     <div style={{ width: 4, height: 36, borderRadius: 2, background: row.status === "completed" ? "var(--sage-500)" : row.status === "scheduled" ? "var(--terracotta-500)" : "var(--gold-500)" }} />
                     <div style={{ flex: 1, minWidth: 140 }}>

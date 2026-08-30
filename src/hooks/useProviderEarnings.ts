@@ -1,34 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
 import { apiFetch } from "@/lib/api";
-import { getToken } from "@/lib/auth";
+import type { ProviderEarnings } from "@/lib/server/marketplace-reads";
 
-export interface EarningsData {
-  total_cents: number;
-  pending_cents: number;
-  this_month_cents: number;
-  jobs_total: number;
-  jobs_this_month: number;
-  avg_job_value_cents: number;
-}
-
+/**
+ * Real earnings for the signed-in provider.
+ *
+ * The figures come from awarded agreements, so they change only when work is
+ * actually won or completed. The previous version of this hook called
+ * `/provider/earnings`, which no handler served.
+ */
 export function useProviderEarnings() {
-  const [earnings, setEarnings] = useState<EarningsData | null>(null);
+  const [earnings, setEarnings] = useState<ProviderEarnings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const token = getToken();
-    if (!token) { setLoading(false); return; }
-    apiFetch<EarningsData>("/provider/earnings", { token })
-      .then(setEarnings)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load"))
-      .finally(() => setLoading(false));
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = await apiFetch<{ earnings: ProviderEarnings }>(
+        "/provider/marketplace/earnings",
+      );
+      setEarnings(payload.earnings);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "We could not load your earnings.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fmt = (cents: number) =>
-    `$${Math.round(cents / 100).toLocaleString()}`;
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
-  return { earnings, loading, error, fmt };
+  /** Whole dollars. Cents are the stored unit; nobody wants them on a tile. */
+  const fmt = (cents: number) => `$${Math.round(cents / 100).toLocaleString()}`;
+
+  return { earnings, loading, error, refresh, fmt };
 }

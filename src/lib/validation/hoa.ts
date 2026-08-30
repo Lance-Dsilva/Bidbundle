@@ -45,8 +45,11 @@ const boundedText = (max: number) =>
       return trimmed ? trimmed.slice(0, max) : null;
     });
 
-const latitudeField = z.number().min(-90).max(90);
-const longitudeField = z.number().min(-180).max(180);
+/**
+ * Coordinates are server-resolved and are not accepted from any admin form or
+ * import file. There is deliberately no latitude/longitude field in this
+ * module: the geocoder in `lib/server/geocoding.ts` is the only writer.
+ */
 
 /* ── HOA profile (Bundleen admin) ────────────────────────────────────────── */
 
@@ -60,8 +63,13 @@ export const hoaProfileSchema = z
     region: z.string().trim().min(1, "Enter the state or region.").max(80),
     postalCode: z.string().trim().min(3, "Enter the postal code.").max(12),
     country: z.string().trim().length(2, "Use a two-letter country code.").default("US"),
-    latitude: z.union([latitudeField, z.null()]).optional(),
-    longitude: z.union([longitudeField, z.null()]).optional(),
+    /**
+     * Set only when the admin is confirming one of the candidates a previous
+     * ambiguous save returned. The server matches it against a fresh (cached)
+     * candidate list and stores that result — it never trusts the string on its
+     * own, and it is never a way to supply a location by hand.
+     */
+    confirmedFormattedAddress: boundedText(300),
     timezone: z
       .string()
       .trim()
@@ -79,16 +87,7 @@ export const hoaProfileSchema = z
     referenceCode: boundedText(40),
     serviceNotes: boundedText(1_000),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.latitude == null) !== (value.longitude == null)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["longitude"],
-        message: "Provide both latitude and longitude, or neither.",
-      });
-    }
-  });
+  .strict();
 
 export type HoaProfileInput = z.infer<typeof hoaProfileSchema>;
 
@@ -109,31 +108,21 @@ export type HoaOnboardingStatusInput = z.infer<typeof hoaOnboardingStatusSchema>
 
 /* ── Units ───────────────────────────────────────────────────────────────── */
 
+/**
+ * A home is a label plus, optionally, its own postal address. A home with no
+ * distinct address inherits the HOA's verified location; a home with one is
+ * geocoded on the server. Neither path accepts coordinates.
+ */
 const unitFields = {
   label: z.string().trim().min(1, "Enter a unit label.").max(MAX_UNIT_LABEL_LENGTH),
   addressLine1: boundedText(160),
   locality: boundedText(80),
   region: boundedText(80),
   postalCode: boundedText(12),
-  latitude: z.union([latitudeField, z.null()]).optional(),
-  longitude: z.union([longitudeField, z.null()]).optional(),
   accessNotes: boundedText(MAX_ACCESS_NOTES_LENGTH),
 };
 
-const requireCoordinatePair = (
-  value: { latitude?: number | null; longitude?: number | null },
-  context: z.RefinementCtx,
-) => {
-  if ((value.latitude == null) !== (value.longitude == null)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["longitude"],
-      message: "Provide both latitude and longitude, or neither.",
-    });
-  }
-};
-
-export const unitCreateSchema = z.object(unitFields).strict().superRefine(requireCoordinatePair);
+export const unitCreateSchema = z.object(unitFields).strict();
 
 export type UnitCreateInput = z.infer<typeof unitCreateSchema>;
 
@@ -143,15 +132,15 @@ export const unitUpdateSchema = z
     label: unitFields.label.optional(),
     occupancyStatus: z.enum(["vacant", "invite_pending", "occupied", "inactive"]).optional(),
   })
-  .strict()
-  .superRefine(requireCoordinatePair);
+  .strict();
 
 export type UnitUpdateInput = z.infer<typeof unitUpdateSchema>;
 
 /**
- * Idempotent CSV import. Header row: `label,addressLine1,locality,region,postalCode,latitude,longitude`
- * (label required, everything else optional). `commit: false` returns the
- * dry-run summary without writing.
+ * Idempotent CSV import. Header row: `label,addressLine1,locality,region,postalCode`
+ * (label required, everything else optional). There are no coordinate columns:
+ * a row with its own address is geocoded server-side after the commit.
+ * `commit: false` returns the dry-run summary without writing or geocoding.
  */
 export const unitImportSchema = z
   .object({
@@ -306,6 +295,15 @@ export const hoaSurveyVoteSchema = z
 export type HoaSurveyVoteInput = z.infer<typeof hoaSurveyVoteSchema>;
 
 /* ── Provider coverage ───────────────────────────────────────────────────── */
+
+/**
+ * A provider's *own* coverage circle centre. This is the one place a
+ * coordinate is legitimately accepted from a client: the provider drags a pin
+ * on their own map, and the value describes where they will travel — not where
+ * a customer lives. Customer locations are never entered this way.
+ */
+const latitudeField = z.number().min(-90).max(90);
+const longitudeField = z.number().min(-180).max(180);
 
 export const serviceAreaSchema = z
   .object({

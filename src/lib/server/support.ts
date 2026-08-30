@@ -406,16 +406,109 @@ async function authorizeTicketContext(
   };
 }
 
+/**
+ * How long two identical submissions from the same account are treated as one.
+ *
+ * A double-click, an impatient retry, and a browser replaying the request after
+ * a dropped response all arrive within seconds of each other and carry the same
+ * subject, category, and body. Answering the second one with the ticket the
+ * first one created is what "submit once" means to the customer — the
+ * alternative is two tickets an admin then has to merge by hand.
+ */
+const DUPLICATE_SUBMISSION_WINDOW_MS = 120_000;
+
+/**
+ * Returns the ticket an identical submission just created, if there is one.
+ *
+ * Matching is on requester + subject + category + the opening message, so two
+ * genuinely different problems reported a second apart still produce two
+ * tickets. Only the requester's own rows are considered.
+ */
+async function findRecentDuplicate(
+  requesterUserId: string,
+  input: CreateTicketInput,
+): Promise<string | null> {
+  const candidates = await db.supportTicket.findMany({
+    where: {
+      requesterUserId,
+      subject: input.subject,
+      category: input.category,
+      createdAt: { gte: new Date(Date.now() - DUPLICATE_SUBMISSION_WINDOW_MS) },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: {
+      id: true,
+      messages: {
+        where: { kind: "customer_reply" },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { body: true },
+      },
+    },
+  });
+
+  return candidates.find((row) => row.messages[0]?.body === input.message)?.id ?? null;
+}
+
+/**
+ * The receipt a customer gets for opening a ticket.
+ *
+ * Persisted as a notification + outbox row inside the creation transaction, so
+ * a committed ticket always has its delivery intent recorded and the mail is
+ * retried by the outbox worker rather than being lost with the request.
+ */
+function ticketOpenedNotification(input: {
+  ticketId: string;
+  ticketNumber: string;
+  subject: string;
+  requesterUserId: string;
+  requesterEmail: string;
+}): NotificationIntent {
+  return {
+    userId: input.requesterUserId,
+    email: input.requesterEmail,
+    kind: "account",
+    title: `We received ${input.ticketNumber}`,
+    body: `“${input.subject}” is with the Bundleen support team. Open the ticket in Bundleen to add detail or read our reply — this mailbox is not monitored.`,
+    linkPath: ticketLinkForCustomer(input.ticketId),
+    dedupeKey: `support-created:${input.ticketId}`,
+  };
+}
+
 export async function createSupportTicket(
   requester: { id: string; role: UserRole; email: string; name: string | null },
   input: CreateTicketInput,
   options?: { reopenedFromTicketId?: string },
 ): Promise<SupportTicketDetail> {
+  // Idempotency first: a retry must return the original ticket, not open a
+  // second one and not burn a second ticket number.
+  const duplicateId = await findRecentDuplicate(requester.id, input);
+  if (duplicateId) {
+    const existing = await getTicketForRequester(requester.id, duplicateId);
+    if (existing) return existing;
+  }
+
   const context = await authorizeTicketContext(requester.id, input);
   const ticketId = randomUUID();
   const ticketNumber = await nextTicketNumber();
   const now = new Date();
 
+  // Built before the batch so a preference lookup failure fails the request
+  // cleanly rather than half-way through the write.
+  const notificationOps = await buildPreferenceAwareNotificationOps([
+    ticketOpenedNotification({
+      ticketId,
+      ticketNumber,
+      subject: input.subject,
+      requesterUserId: requester.id,
+      requesterEmail: requester.email,
+    }),
+  ]);
+
+  // One batch, one transaction: the ticket, its opening message, the creation
+  // event, and the queued notification either all exist or none do. There is no
+  // state in which an admin sees a ticket with no message in it.
   await db.$transaction([
     db.supportTicket.create({
       data: {
@@ -451,10 +544,23 @@ export async function createSupportTicket(
         toValue: "new",
       },
     }),
+    ...(notificationOps as Prisma.PrismaPromise<unknown>[]),
   ]);
 
+  // Delivery is deliberately outside the transaction and cannot fail the
+  // request: the intent is already durable, and both this drain and the cron
+  // worker retry it. A mail outage delays the receipt, it never voids the
+  // ticket.
+  scheduleOutboxDrain();
+
   const detail = await getTicketForRequester(requester.id, ticketId);
-  if (!detail) throw new SupportError("The ticket could not be opened.", 500);
+  if (!detail) {
+    // The write committed, so this is a read-back failure, not a lost ticket.
+    throw new SupportError(
+      "Your request was saved but could not be displayed. Reload the support centre to see it.",
+      500,
+    );
+  }
   return detail;
 }
 

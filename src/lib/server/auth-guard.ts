@@ -187,6 +187,23 @@ export async function guardSupportAi(
   return applyLimiter("supportAi", ["support-ai", adminUserId, ticketId]);
 }
 
+/** Applies a per-account limiter to HOA amenity reads and writes. */
+export async function guardAmenityMutation(userId: string): Promise<GuardFailure | null> {
+  return applyLimiter("amenityMutation", ["amenity-mutation", userId]);
+}
+
+/** Applies a per-account limiter to amenity and issue photo uploads. */
+export async function guardAmenityMediaUpload(
+  userId: string,
+): Promise<GuardFailure | null> {
+  return applyLimiter("amenityMediaUpload", ["amenity-media", userId]);
+}
+
+/** Applies a per-manager limiter to HOA-scoped amenity messages. */
+export async function guardAmenityBroadcast(userId: string): Promise<GuardFailure | null> {
+  return applyLimiter("amenityBroadcast", ["amenity-broadcast", userId]);
+}
+
 /** Applies a per-admin limiter to broadcast composition and delivery. */
 export async function guardBroadcastMutation(userId: string): Promise<GuardFailure | null> {
   return applyLimiter("broadcastMutation", ["broadcast-mutation", userId]);

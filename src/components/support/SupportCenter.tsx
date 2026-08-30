@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import {
   CATEGORY_LABELS,
@@ -120,7 +120,10 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
+  /** Synchronous in-flight latch; see `submit`. */
+  const inFlight = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,8 +145,15 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
   }, [load]);
 
   const submit = async () => {
+    // `disabled` alone is not a guard: a second click can land in the same tick
+    // before React re-renders, and that would open a second ticket. The ref
+    // flips synchronously, so only the first click reaches the network.
+    if (inFlight.current) return;
+    inFlight.current = true;
+
     setBusy(true);
     setError(null);
+    setFieldErrors({});
     setSuccess(null);
     try {
       const response = await fetch("/api/support/tickets", {
@@ -153,12 +163,25 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
         body: JSON.stringify({ subject, category, message }),
       });
       const payload = (await response.json().catch(() => null)) as
-        | { ticket?: TicketSummary; error?: string; fields?: Record<string, string> }
+        | {
+            ticket?: TicketSummary;
+            error?: string;
+            fields?: Record<string, string>;
+            reference?: string;
+          }
         | null;
 
       if (!response.ok || !payload?.ticket) {
-        const firstFieldError = payload?.fields ? Object.values(payload.fields)[0] : undefined;
-        setError(firstFieldError ?? payload?.error ?? "We could not open your request.");
+        // Everything the customer typed stays exactly where it is; only the
+        // error state changes, so a failed send is never a retype.
+        setFieldErrors(payload?.fields ?? {});
+        setError(
+          payload?.error
+            ? payload.reference
+              ? `${payload.error} (reference ${payload.reference})`
+              : payload.error
+            : `We could not open your request (HTTP ${response.status}). Your details are still here — please try again.`,
+        );
         return;
       }
 
@@ -172,6 +195,7 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
     } catch {
       setError("We could not reach Bundleen. Check your connection and try again.");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -254,7 +278,14 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
               placeholder="A one-line summary"
               className="mt-1.5 h-11 px-3.5"
               style={fieldStyle}
+              aria-invalid={fieldErrors.subject ? true : undefined}
+              aria-describedby={fieldErrors.subject ? "support-subject-error" : undefined}
             />
+            {fieldErrors.subject ? (
+              <span id="support-subject-error" className="mt-1 block text-[12px] font-medium text-red-600">
+                {fieldErrors.subject}
+              </span>
+            ) : null}
           </label>
 
           <label className="mt-3 block">
@@ -269,7 +300,14 @@ export function SupportCenter({ basePath = "/app/support" }: { basePath?: string
               placeholder="What happened, what you expected, and anything you already tried."
               className="mt-1.5 px-3.5 py-3 leading-6"
               style={fieldStyle}
+              aria-invalid={fieldErrors.message ? true : undefined}
+              aria-describedby={fieldErrors.message ? "support-message-error" : undefined}
             />
+            {fieldErrors.message ? (
+              <span id="support-message-error" className="mt-1 block text-[12px] font-medium text-red-600">
+                {fieldErrors.message}
+              </span>
+            ) : null}
           </label>
 
           {error ? (

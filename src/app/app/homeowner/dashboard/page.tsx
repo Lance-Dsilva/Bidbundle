@@ -8,9 +8,23 @@ import { Icon } from "@/components/ui/Icon";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
-import { useHomeownerRequests } from "@/hooks/useHomeownerRequests";
-import { useNeighbourhoodRequests } from "@/hooks/useNeighbourhoodRequests";
+import { ACTIVE_REQUEST_STATUSES, useHomeownerRequests } from "@/hooks/useHomeownerRequests";
+import { useNeighbourhood } from "@/hooks/useNeighbourhood";
 import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
+
+/** Server lifecycle values, in the words a homeowner would use for them. */
+const REQUEST_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  collecting_interest: "Grouping",
+  open_for_bids: "Bids open",
+  bidding_closed: "Reviewing",
+  awarded: "Awarded",
+  scheduled: "Scheduled",
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  failed: "Not filled",
+};
 
 const POPULAR_SERVICES: { label: string; icon: "cleaning" | "plumbing" | "electrical" | "painting"; blurb: string }[] = [
   { label: "Cleaning", icon: "cleaning", blurb: "Home, office" },
@@ -22,14 +36,18 @@ const POPULAR_SERVICES: { label: string; icon: "cleaning" | "plumbing" | "electr
 export default function HomeownerDashboard() {
   const { dashboard, user, loading } = useHomeownerDashboard();
   const { requests, refresh: refreshRequests } = useHomeownerRequests();
-  const { requests: nbRequests, loading: nbRequestsLoading } = useNeighbourhoodRequests();
+  // The real neighbourhood, from `/api/homeowner/neighbourhood`. The previous
+  // hook called `/neighbourhood/requests`, which had no Route Handler behind
+  // it, so this panel had nothing to show even when neighbours were active.
+  const { hub, loading: nbRequestsLoading } = useNeighbourhood();
+  const nbRequests = hub?.requests ?? [];
   const { otherMembers, neighbourhoodName, neighborCount } = useNeighbourhoodSummary();
   const totalSaved = Math.round((dashboard?.total_saved_cents ?? 0) / 100);
   const animatedSavings = useCountUp(totalSaved);
-  const groupCount = requests.filter((r) => r.status === "grouping").length;
+  const groupCount = requests.filter((r) => r.status === "collecting_interest").length;
   const savingsGoal = totalSaved > 0 ? Math.ceil((totalSaved + 1) / 500) * 500 : 500;
   const savingsProgress = Math.min(100, Math.round((totalSaved / savingsGoal) * 100));
-  const totalBidsAcrossRequests = requests.reduce((sum, r) => sum + r.bid_count, 0);
+  const totalBidsAcrossRequests = requests.reduce((sum, r) => sum + r.bidCount, 0);
 
   useEffect(() => {
     const onFocus = () => refreshRequests();
@@ -43,25 +61,30 @@ export default function HomeownerDashboard() {
   }, [refreshRequests]);
 
   const firstName = user?.full_name?.split(" ")[0] ?? "there";
-  const openRequests = requests.filter((r) => ["draft", "live", "grouping"].includes(r.status));
-  const neighbourhoodOpportunities = nbRequests.filter((request) => !request.is_mine);
-  const liveRequest = openRequests.find((r) => r.status === "live") ?? openRequests[0] ?? null;
+  const openRequests = requests.filter((r) => ACTIVE_REQUEST_STATUSES.includes(r.status));
+  // Neighbours' requests this account could still join.
+  const neighbourhoodOpportunities = nbRequests.filter(
+    (request) => !request.isOwner && request.permissions.canRespond,
+  );
+  const liveRequest = openRequests.find((r) => r.status === "open_for_bids") ?? openRequests[0] ?? null;
   const ownRecommendedRequest = openRequests
-    .filter((request) => request.bid_count > 0)
+    .filter((request) => request.bidCount > 0)
     .sort((a, b) => {
-      const bestBidA = a.best_bid_cents ?? Number.POSITIVE_INFINITY;
-      const bestBidB = b.best_bid_cents ?? Number.POSITIVE_INFINITY;
+      const bestBidA = a.bestBidCents ?? Number.POSITIVE_INFINITY;
+      const bestBidB = b.bestBidCents ?? Number.POSITIVE_INFINITY;
       if (bestBidA !== bestBidB) return bestBidA - bestBidB;
-      return b.bid_count - a.bid_count;
+      return b.bidCount - a.bidCount;
     })[0] ?? null;
-  const neighbourhoodRecommendedRequest = nbRequests
-    .filter((request) => !request.is_mine && request.bid_count > 0)
-    .sort((a, b) => b.bid_count - a.bid_count)[0] ?? null;
+  const neighbourhoodRecommendedRequest =
+    nbRequests
+      .filter((request) => !request.isOwner && request.bidCount > 0)
+      .sort((a, b) => b.bidCount - a.bidCount)[0] ?? null;
   const recommendationTarget = ownRecommendedRequest ?? neighbourhoodRecommendedRequest;
   const hasRecommendation = recommendationTarget !== null;
   const recommendationSavings =
-    ownRecommendedRequest && ownRecommendedRequest.best_bid_cents !== null
-      ? Math.max(0, ownRecommendedRequest.budget_min - ownRecommendedRequest.best_bid_cents)
+    ownRecommendedRequest?.bestBidCents != null &&
+    ownRecommendedRequest.budgetMaxCents != null
+      ? Math.max(0, ownRecommendedRequest.budgetMaxCents - ownRecommendedRequest.bestBidCents)
       : 0;
   const neighbourhoodPulse = [
     ...otherMembers.slice(0, 2).map((member) => ({
@@ -72,24 +95,30 @@ export default function HomeownerDashboard() {
       highlight: neighbourhoodName,
       when: new Date(member.joined_at).toLocaleDateString([], { month: "short", day: "numeric" }),
     })),
-    ...nbRequests.filter((request) => !request.is_mine).slice(0, 2).map((request) => ({
+    ...nbRequests.filter((request) => !request.isOwner).slice(0, 2).map((request) => ({
       key: `request-${request.id}`,
-      who: request.owner_name,
-      initials: request.owner_name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
+      who: request.createdByName,
+      initials: request.createdByName.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
       what: "posted a new",
-      highlight: `${request.category} request`,
-      when: "New",
+      highlight: `${request.categoryLabel} request`,
+      when: new Date(request.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }),
     })),
   ].slice(0, 3);
 
   function statusChip(status: string): { bg: string; color: string } {
     switch (status.toLowerCase()) {
-      case "live":     return { bg: "var(--terracotta-50)",  color: "var(--terracotta-600)" };
-      case "bidding":  return { bg: "var(--terracotta-50)",  color: "var(--terracotta-600)" };
-      case "grouping": return { bg: "var(--sage-50)",        color: "var(--sage-700)"       };
-      case "pending_approval": return { bg: "var(--gold-50)", color: "var(--gold-600)"      };
-      case "draft":    return { bg: "var(--cream-200)",      color: "var(--ink-700)"        };
-      default:         return { bg: "var(--cream-200)",      color: "var(--ink-400)"        };
+      // Server lifecycle values from `HoaRequestStatus`.
+      case "open_for_bids":
+      case "bidding":            return { bg: "var(--terracotta-50)", color: "var(--terracotta-600)" };
+      case "collecting_interest":
+      case "grouping":           return { bg: "var(--sage-50)",       color: "var(--sage-700)"       };
+      case "bidding_closed":
+      case "pending_approval":   return { bg: "var(--gold-50)",       color: "var(--gold-600)"       };
+      case "awarded":
+      case "scheduled":
+      case "in_progress":        return { bg: "var(--sage-50)",       color: "var(--sage-700)"       };
+      case "draft":              return { bg: "var(--cream-200)",     color: "var(--ink-700)"        };
+      default:                   return { bg: "var(--cream-200)",     color: "var(--ink-400)"        };
     }
   }
 
@@ -109,7 +138,7 @@ export default function HomeownerDashboard() {
         </h1>
         <p style={{ color: "var(--muted)", lineHeight: 1.55, margin: "8px 0 0" }}>
           {liveRequest
-            ? `${liveRequest.title} · ${liveRequest.bid_count} bid${liveRequest.bid_count !== 1 ? "s" : ""} in · ${liveRequest.neighborhood}`
+            ? `${liveRequest.title} · ${liveRequest.bidCount} bid${liveRequest.bidCount !== 1 ? "s" : ""} in · ${liveRequest.communityName}`
             : "Bundle your home-service request with nearby neighbors and unlock better group pricing."}
         </p>
 
@@ -204,23 +233,25 @@ export default function HomeownerDashboard() {
         {openRequests.length === 0 && neighbourhoodOpportunities.length > 0 ? (
           <div className="dash-request-list" style={{ padding: "0 22px 20px" }}>
             {neighbourhoodOpportunities.slice(0, 5).map((r) => {
-              const chip = statusChip(r.group_status ?? r.status);
-              const activityLabel =
-                r.group_status === "bidding" ? "Bids live" : r.group_status === "pending_approval" ? "Pending approval" : "Join group";
+              const chip = statusChip(r.status);
               return (
-                <div key={r.id} className="dash-request-row">
+                <Link
+                  className="dash-request-row"
+                  href="/app/homeowner/neighbourhood"
+                  key={r.id}
+                >
                   <CategoryTile category={r.category} size={38} />
                   <div style={{ minWidth: 0 }}>
                     <strong style={{ display: "block", fontSize: 14, color: "var(--ink-900)" }}>{r.title}</strong>
                     <small style={{ display: "block", marginTop: 4, color: "var(--muted)", fontSize: 12 }}>
-                      {r.neighborhood} · by {r.owner_name} · {r.bid_count} bid{r.bid_count !== 1 ? "s" : ""}
+                      {r.communityName} · by {r.createdByName} · {r.joinedCount} home{r.joinedCount !== 1 ? "s" : ""} joined
                     </small>
                   </div>
                   <span className="dash-request-status" style={{ background: chip.bg, color: chip.color }}>
-                    {activityLabel}
+                    Join group
                   </span>
                   <Icon name="chevron-right" size={16} style={{ color: "var(--ink-400)" }} />
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -243,11 +274,11 @@ export default function HomeownerDashboard() {
                   <div style={{ minWidth: 0 }}>
                     <strong style={{ display: "block", fontSize: 14, color: "var(--ink-900)" }}>{r.title}</strong>
                     <small style={{ display: "block", marginTop: 4, color: "var(--muted)", fontSize: 12 }}>
-                      {r.neighborhood} · {r.bid_count} {r.bid_count === 1 ? "bid" : "bids"}
+                      {r.communityName} · {r.bidCount} {r.bidCount === 1 ? "bid" : "bids"}
                     </small>
                   </div>
                   <span className="dash-request-status" style={{ background: chip.bg, color: chip.color }}>
-                    {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                    {REQUEST_STATUS_LABELS[r.status] ?? r.status}
                   </span>
                   <Icon name="chevron-right" size={16} style={{ color: "var(--ink-400)" }} />
                 </div>
@@ -393,8 +424,8 @@ export default function HomeownerDashboard() {
               <h3 style={{ margin: "2px 0 5px", fontSize: 20, color: "var(--ink-900)" }}>Bundleen AI</h3>
               <p style={{ color: "var(--muted)", lineHeight: 1.5, margin: "0 0 14px" }}>
                 {ownRecommendedRequest
-                  ? `${ownRecommendedRequest.title} has ${ownRecommendedRequest.bid_count} provider bid${ownRecommendedRequest.bid_count !== 1 ? "s" : ""}${ownRecommendedRequest.best_bid_cents ? `, with the best at $${Math.round(ownRecommendedRequest.best_bid_cents / 100).toLocaleString()}` : ""}${recommendationSavings > 0 ? ` and about $${Math.round(recommendationSavings / 100).toLocaleString()} under your target.` : "."}`
-                  : `${neighbourhoodRecommendedRequest?.owner_name}'s ${neighbourhoodRecommendedRequest?.title} is getting provider interest in ${neighbourhoodRecommendedRequest?.neighborhood} with ${neighbourhoodRecommendedRequest?.bid_count} live bid${neighbourhoodRecommendedRequest && neighbourhoodRecommendedRequest.bid_count !== 1 ? "s" : ""}.`}
+                  ? `${ownRecommendedRequest.title} has ${ownRecommendedRequest.bidCount} provider bid${ownRecommendedRequest.bidCount !== 1 ? "s" : ""}${ownRecommendedRequest.bestBidCents ? `, with the best at $${Math.round(ownRecommendedRequest.bestBidCents / 100).toLocaleString()}` : ""}${recommendationSavings > 0 ? ` and about $${Math.round(recommendationSavings / 100).toLocaleString()} under your target.` : "."}`
+                  : `${neighbourhoodRecommendedRequest?.createdByName}'s ${neighbourhoodRecommendedRequest?.title} is getting provider interest in ${neighbourhoodRecommendedRequest?.communityName} with ${neighbourhoodRecommendedRequest?.bidCount} live bid${neighbourhoodRecommendedRequest && neighbourhoodRecommendedRequest.bidCount !== 1 ? "s" : ""}.`}
               </p>
               <div style={{ display: "flex", gap: 8 }}>
                 <Link href="/app/homeowner/bids" className="bb-btn bb-btn-primary" style={{ height: 36, padding: "0 16px", fontSize: 13 }}>

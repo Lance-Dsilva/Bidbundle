@@ -55,6 +55,26 @@ const ALLOWED_METADATA_KEYS = new Set([
   "occurrenceCount",
   "visitCount",
   "rating",
+  // ── Shared HOA / neighbourhood marketplace ────────────────────────────
+  /** `hoa` or `neighborhood` — which workflow a transition belonged to. */
+  "context",
+  /**
+   * Which rule granted the authority: `hoa_manager`, `neighborhood_manager`,
+   * or `admin_recovery`. The whole point of the recovery path is that it is
+   * distinguishable afterwards, which requires this key to survive redaction.
+   */
+  "via",
+  // ── Address verification ──────────────────────────────────────────────
+  /** Which record was verified — `hoa_profile`, `unit_import`. Never an address. */
+  "subject",
+  /** Whether a profile save re-ran the geocoder. */
+  "addressReVerified",
+  /** Import outcome counts. Counts only; labels and addresses stay out. */
+  "resolvedCount",
+  "unresolvedCount",
+  /** Deadline reconciliation totals. */
+  "biddingClosed",
+  "enrollmentExpired",
 ]);
 
 const MAX_METADATA_STRING_LENGTH = 200;
@@ -173,6 +193,9 @@ const ACTION_SUMMARIES: Record<AdminAuditAction, string> = {
   hoa_participants_locked: "locked request participants",
   hoa_bid_awarded: "awarded a service bid",
   hoa_schedule_published: "published a service schedule",
+  address_verified: "verified a postal address",
+  address_verification_failed: "could not verify a postal address",
+  marketplace_recovery_action: "performed a marketplace recovery action",
   hoa_visit_corrected: "corrected a service visit",
   review_moderated: "moderated a review",
   provider_service_area_changed: "changed a provider service area",
@@ -187,6 +210,17 @@ const ACTION_SUMMARIES: Record<AdminAuditAction, string> = {
   broadcast_sent: "sent a global operational broadcast",
   broadcast_discarded: "discarded a broadcast draft",
   admin_permissions_changed: "changed an admin's permissions",
+  amenity_created: "created an HOA amenity",
+  amenity_updated: "updated an HOA amenity",
+  amenity_published: "changed an amenity's publication status",
+  amenity_archived: "archived an HOA amenity",
+  amenity_closure_changed: "changed an amenity closure",
+  amenity_booking_status_changed: "changed an amenity booking",
+  amenity_issue_status_changed: "changed an amenity issue",
+  amenity_issue_assigned: "assigned an amenity issue",
+  amenity_review_moderated: "moderated an amenity review",
+  amenity_broadcast_sent: "sent an HOA amenity message",
+  amenity_media_removed: "removed an amenity photo",
 };
 
 export function auditActionSummary(action: AdminAuditAction): string {

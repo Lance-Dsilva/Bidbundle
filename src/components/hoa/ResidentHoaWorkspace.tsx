@@ -309,7 +309,7 @@ function VisitCard({
         </span>
       </div>
       <p className="mt-1 text-xs text-[var(--muted)]">
-        {visit.unitLabel}
+        {visit.stopLabel}
         {visit.windowStart ? ` · window ${visit.windowStart}–${visit.windowEnd ?? ""}` : ""}
       </p>
       {visit.status === "completed" ? (

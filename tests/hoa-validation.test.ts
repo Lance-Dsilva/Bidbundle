@@ -64,12 +64,22 @@ describe("HOA profile validation", () => {
     expect(hoaProfileSchema.safeParse(base).success).toBe(true);
   });
 
-  it("rejects a bogus timezone and half a coordinate pair", () => {
+  it("rejects a bogus timezone", () => {
     expect(hoaProfileSchema.safeParse({ ...base, timezone: "Central" }).success).toBe(false);
+  });
+
+  /**
+   * The admin form is address-only. Coordinates are resolved on the server, so
+   * the schema is `.strict()` and a body carrying them is refused outright
+   * rather than having them quietly dropped — a caller that thinks it set a
+   * location must be told that it did not.
+   */
+  it("refuses any attempt to supply coordinates", () => {
     expect(hoaProfileSchema.safeParse({ ...base, latitude: 30.4 }).success).toBe(false);
     expect(
       hoaProfileSchema.safeParse({ ...base, latitude: 30.4, longitude: -97.7 }).success,
-    ).toBe(true);
+    ).toBe(false);
+    expect(hoaProfileSchema.safeParse({ ...base, longitude: -97.7 }).success).toBe(false);
   });
 
   it("bounds the declared home count", () => {

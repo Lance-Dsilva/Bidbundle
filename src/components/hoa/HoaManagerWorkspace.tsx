@@ -709,7 +709,7 @@ function OccurrenceList({
                 <li className="flex items-center justify-between gap-2 rounded bg-white px-2 py-1.5" key={visit.id}>
                   <span className="min-w-0 truncate">
                     {visit.stopRank ? `${visit.stopRank}. ` : ""}
-                    {visit.unitLabel}
+                    {visit.stopLabel}
                     {visit.windowStart ? ` · ${visit.windowStart}–${visit.windowEnd ?? ""}` : ""}
                   </span>
                   <Badge tone={visit.status === "completed" ? "green" : ["skipped", "blocked"].includes(visit.status) ? "amber" : "gray"}>

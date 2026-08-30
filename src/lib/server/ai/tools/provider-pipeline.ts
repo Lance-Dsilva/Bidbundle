@@ -58,6 +58,7 @@ export const getProviderPipeline: ToolDefinition<Input> = {
           windowEnd: true,
           status: true,
           unit: { select: { label: true } },
+        serviceLabel: true,
         },
       }),
       db.review.aggregate({
@@ -114,7 +115,7 @@ export const getProviderPipeline: ToolDefinition<Input> = {
         })),
         upcomingVisits: visits.map((visit) => ({
           id: visit.id,
-          unitLabel: visit.unit.label,
+          stopLabel: visit.unit?.label ?? visit.serviceLabel ?? "Home",
           scheduledDate: visit.scheduledDate?.toISOString() ?? null,
           windowStart: visit.windowStart,
           windowEnd: visit.windowEnd,

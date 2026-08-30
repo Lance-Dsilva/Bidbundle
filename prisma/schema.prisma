@@ -104,6 +104,9 @@ enum AdminAuditAction {
   hoa_bid_awarded
   hoa_schedule_published
   hoa_visit_corrected
+  address_verified
+  address_verification_failed
+  marketplace_recovery_action
   review_moderated
   provider_service_area_changed
   support_ticket_assigned
@@ -117,6 +120,17 @@ enum AdminAuditAction {
   broadcast_sent
   broadcast_discarded
   admin_permissions_changed
+  amenity_created
+  amenity_updated
+  amenity_published
+  amenity_archived
+  amenity_closure_changed
+  amenity_booking_status_changed
+  amenity_issue_status_changed
+  amenity_issue_assigned
+  amenity_review_moderated
+  amenity_broadcast_sent
+  amenity_media_removed
 }
 
 enum AdminAuditTargetType {
@@ -137,6 +151,11 @@ enum AdminAuditTargetType {
   provider_service_area
   support_ticket
   broadcast
+  amenity
+  amenity_booking
+  amenity_issue
+  amenity_review
+  media_asset
 }
 
 enum CommunityInvitationRole {
@@ -244,6 +263,20 @@ enum ProviderServiceAreaStatus {
   removed
 }
 
+/// Server-owned outcome of the last forward-geocode of a stored postal
+/// address. Admins never type coordinates; they read this instead.
+///
+/// - `pending`        — saved, not yet resolved (or a re-geocode is queued).
+/// - `verified`       — one confident result; coordinates are current.
+/// - `needs_correction` — the provider could not resolve it confidently, or
+///                        returned only ambiguous candidates. Coordinates, if
+///                        any, are stale and must not be trusted for routing.
+enum AddressVerificationStatus {
+  pending
+  verified
+  needs_correction
+}
+
 enum NotificationKind {
   invitation
   survey
@@ -256,6 +289,10 @@ enum NotificationKind {
   account
   security
   reminder
+  /// HOA amenity reservations: requested, approved, declined, cancelled.
+  booking
+  /// HOA amenity issue tickets: acknowledged, replied, resolved.
+  issue
 }
 
 enum OutboxStatus {
@@ -340,6 +377,7 @@ model User {
   auditLogEntries              AdminAuditLog[]             @relation("AuditActor")
   providerServiceAreas         ProviderServiceArea[]
   serviceBids                  ServiceBid[]                @relation("BidProvider")
+  serviceVisitsAsHomeowner     ServiceVisit[]              @relation("VisitHomeowner")
   serviceAgreementsWon         ServiceAgreement[]          @relation("AgreementProvider")
   serviceAgreementsAwarded     ServiceAgreement[]          @relation("AgreementAwarder")
   reviewsWritten               Review[]                    @relation("ReviewAuthor")
@@ -365,6 +403,22 @@ model User {
   broadcastsCreated   Broadcast[]          @relation("BroadcastAuthor")
   broadcastsApproved  Broadcast[]          @relation("BroadcastApprover")
   broadcastDeliveries BroadcastRecipient[] @relation("BroadcastRecipientUser")
+
+  // ── HOA amenities ─────────────────────────────────────────────────────
+  amenitiesCreated         Amenity[]               @relation("AmenityCreator")
+  amenityClosuresCreated   AmenityClosure[]        @relation("AmenityClosureCreator")
+  amenityBookings          AmenityBooking[]        @relation("AmenityBookingResident")
+  amenityBookingsApproved  AmenityBooking[]        @relation("AmenityBookingApprover")
+  amenityBookingsCancelled AmenityBooking[]        @relation("AmenityBookingCanceller")
+  amenityBookingEvents     AmenityBookingEvent[]   @relation("AmenityBookingEventActor")
+  amenityIssuesReported    AmenityIssue[]          @relation("AmenityIssueReporter")
+  amenityIssuesAssigned    AmenityIssue[]          @relation("AmenityIssueAssignee")
+  amenityIssueMessages     AmenityIssueMessage[]   @relation("AmenityIssueMessageAuthor")
+  amenityIssueEvents       AmenityIssueEvent[]     @relation("AmenityIssueEventActor")
+  amenityReviewsWritten    AmenityReview[]         @relation("AmenityReviewAuthor")
+  amenityReviewsModerated  AmenityReview[]         @relation("AmenityReviewModerator")
+  amenityReviewResponses   AmenityReviewResponse[] @relation("AmenityReviewResponder")
+  mediaUploaded            MediaAsset[]            @relation("MediaUploader")
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -444,6 +498,13 @@ model Community {
   serviceAgreements ServiceAgreement[]
   supportTickets    SupportTicket[]
 
+  // ── HOA amenities (never populated for a `neighborhood` community) ─────
+  amenities       Amenity[]
+  amenityBookings AmenityBooking[]
+  amenityIssues   AmenityIssue[]
+  amenityReviews  AmenityReview[]
+  mediaAssets     MediaAsset[]
+
   @@index([type, status])
   @@index([status, name])
 }
@@ -463,10 +524,26 @@ model HoaProfile {
   locality     String
   region       String
   postalCode   String
-  country      String @default("US")
+  country      String  @default("US")
 
+  // ── Resolved location ─────────────────────────────────────────────────
+  // Internal only. Admins enter a postal address; the server forward-geocodes
+  // it through `lib/server/geocoding.ts` and writes these atomically with the
+  // normalized address. No admin form or CSV column accepts a coordinate, and
+  // no API response returns these to a customer or an unawarded provider.
   latitude  Float?
   longitude Float?
+
+  /// The geocoder's own one-line rendering of the address it matched. Shown
+  /// to the admin as "this is what we verified", in place of numbers.
+  formattedAddress String?
+
+  addressVerificationStatus AddressVerificationStatus @default(pending)
+  addressVerifiedAt         DateTime?
+  /// Provider place identifier, kept so a later re-check can be exact.
+  geocodePlaceId            String?
+  /// 0..1 provider confidence for the accepted result. Diagnostic only.
+  geocodeConfidence         Float?
 
   /// IANA name such as `America/Chicago`. Occurrence dates are computed in it.
   timezone String @default("America/Chicago")
@@ -497,13 +574,22 @@ model CommunityUnit {
   /// Display label such as `Home 14`, `Unit 2B`, or `11804 Cedar Lane`.
   label String
 
-  // Null address fields inherit the HOA's primary address.
+  // Null address fields inherit the HOA's primary address — and, when they do,
+  // the unit inherits the HOA's verified coordinates too rather than being
+  // geocoded separately.
   addressLine1 String?
   locality     String?
   region       String?
   postalCode   String?
   latitude     Float?
   longitude    Float?
+
+  /// Set only on units with their own distinct address. A unit inheriting the
+  /// HOA address stays `pending` and is never sent to the geocoder.
+  addressVerificationStatus AddressVerificationStatus @default(pending)
+  addressVerifiedAt         DateTime?
+  formattedAddress          String?
+  geocodePlaceId            String?
 
   occupancyStatus UnitOccupancyStatus @default(vacant)
 
@@ -513,13 +599,15 @@ model CommunityUnit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships    CommunityMembership[]
-  invitations    CommunityInvitation[]
-  participations HoaRequestParticipation[]
-  visits         ServiceVisit[]
+  memberships     CommunityMembership[]
+  invitations     CommunityInvitation[]
+  participations  HoaRequestParticipation[]
+  visits          ServiceVisit[]
+  amenityBookings AmenityBooking[]
 
   @@unique([communityId, label])
   @@index([communityId, occupancyStatus])
+  @@index([communityId, addressVerificationStatus])
 }
 
 /// Homeowner residency in a community.
@@ -659,19 +747,26 @@ model HoaServiceRequest {
   opensAt         DateTime?
 
   /// Optional requests: when resident enrollment closes.
-  enrollmentClosesAt DateTime?
+  enrollmentClosesAt     DateTime?
   /// When provider bidding closes. Required before `open_for_bids`.
-  biddingClosesAt    DateTime?
+  biddingClosesAt        DateTime?
   /// Requested first service date for the winning provider.
-  startDate          DateTime?
+  startDate              DateTime?
   /// Recurring cadence in days (e.g. 14 for biweekly). Null for one-off work.
   recurrenceIntervalDays Int?
   /// How many occurrences the agreement materializes. 1 for one-off work.
-  totalOccurrences       Int  @default(1)
+  totalOccurrences       Int       @default(1)
 
   /// Optional requests: minimum/maximum homes needed before an award.
   minHomes Int?
   maxHomes Int?
+
+  /// The homeowner's budget range, in whole US cents — the same unit as
+  /// `ServiceBid.amountCents`. Null on HOA-manager requests, which are quoted
+  /// by providers rather than budgeted by a resident. A database CHECK keeps
+  /// the pair all-or-nothing, non-negative, and correctly ordered.
+  budgetMinCents Int?
+  budgetMaxCents Int?
 
   /// Set when the participant set was snapshotted/locked so providers quote
   /// against a stable number of homes. Immutable afterwards.
@@ -687,6 +782,9 @@ model HoaServiceRequest {
 
   @@index([communityId, status, createdAt])
   @@index([status, category, biddingClosesAt])
+  @@index([createdByUserId, createdAt])
+  @@index([status, biddingClosesAt])
+  @@index([status, enrollmentClosesAt])
 }
 
 /// One unit's relationship to one request: a resident's explicit join/decline
@@ -701,13 +799,14 @@ model HoaRequestParticipation {
   unitId    String?
   unit      CommunityUnit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
-  response ParticipationResponse @default(joined)
-  joinedAt DateTime              @default(now())
-  updatedAt DateTime             @default(now()) @updatedAt
+  response  ParticipationResponse @default(joined)
+  joinedAt  DateTime              @default(now())
+  updatedAt DateTime              @default(now()) @updatedAt
 
   @@unique([requestId, unitId])
   @@index([userId, joinedAt])
   @@index([requestId, response])
+  @@index([userId, response])
 }
 
 /// Structured provider coverage: a center-plus-radius circle and/or a set of
@@ -815,13 +914,13 @@ model ServiceAgreement {
   awardedBy       User?   @relation("AgreementAwarder", fields: [awardedByUserId], references: [id], onDelete: SetNull)
 
   // ── Snapshot of the accepted terms ────────────────────────────────────
-  amountCents  Int
-  currency     String          @default("usd")
-  pricingBasis BidPricingBasis
-  perHomeCents Int?
-  scope        String
-  exclusions   String?
-  cadenceLabel String?
+  amountCents     Int
+  currency        String          @default("usd")
+  pricingBasis    BidPricingBasis
+  perHomeCents    Int?
+  scope           String
+  exclusions      String?
+  cadenceLabel    String?
   /// Number of participating homes locked at award time.
   lockedHomeCount Int
 
@@ -866,14 +965,51 @@ model ServiceOccurrence {
   @@index([agreementId, serviceDate])
 }
 
-/// One provider stop at one unit for one occurrence.
+/// One provider stop for one occurrence, at exactly one service target.
+///
+/// Two kinds of target share this table because they share the whole schedule,
+/// completion, and review lifecycle:
+///
+/// - **HOA** — `unitId` points at a {@link CommunityUnit}. The unit inventory
+///   owns the address; nothing is snapshotted, because the HOA's roster is the
+///   record of what was serviced. This is the original, unchanged behavior.
+/// - **Neighborhood** — `homeownerUserId` points at the participating
+///   homeowner, and the `service*` columns hold an *immutable* copy of the
+///   address and coordinates as they stood at award time.
+///
+/// A database CHECK (`ServiceVisit_one_target`) enforces exactly one of the
+/// two, so no code path can create a stop with no service location or with
+/// two conflicting ones. A second CHECK (`ServiceVisit_homeowner_snapshot`)
+/// requires the snapshot whenever the target is a homeowner: a routeable stop
+/// with no routeable address is not a valid row.
+///
+/// The snapshot is the reason a later profile edit cannot rewrite historical
+/// work. The homeowner relation is retained for authorization — "is this my
+/// stop?" — never re-read to resolve where the crew should go.
 model ServiceVisit {
   id           String            @id @default(cuid())
   occurrenceId String
   occurrence   ServiceOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
 
-  unitId String
-  unit   CommunityUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  unitId String?
+  unit   CommunityUnit? @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  homeownerUserId String?
+  homeowner       User?   @relation("VisitHomeowner", fields: [homeownerUserId], references: [id], onDelete: Restrict)
+
+  // ── Immutable service-location snapshot (neighborhood targets) ────────
+  /// Display label for the stop, e.g. `11804 Cedar Lane`.
+  serviceLabel        String?
+  serviceAddressLine1 String?
+  serviceAddressLine2 String?
+  serviceLocality     String?
+  serviceRegion       String?
+  servicePostalCode   String?
+  serviceCountry      String?
+  serviceLatitude     Float?
+  serviceLongitude    Float?
+  /// Gate codes, pet warnings. Awarded provider and resident only; never audited.
+  serviceAccessNotes  String?
 
   /// Provider-chosen order of the day's stops. Authoritative once published.
   stopRank Int?
@@ -894,8 +1030,11 @@ model ServiceVisit {
   updatedAt DateTime @updatedAt
 
   @@unique([occurrenceId, unitId])
+  @@unique([occurrenceId, homeownerUserId])
   @@index([unitId, status])
+  @@index([homeownerUserId, status])
   @@index([occurrenceId, stopRank])
+  @@index([status, scheduledDate])
 }
 
 /// One homeowner review per completed visit, or one manager review per
@@ -961,11 +1100,11 @@ model OutboxEvent {
   /// addresses, coordinates, tokens, or access notes.
   payload Json
 
-  status        OutboxStatus @default(pending)
-  attempts      Int          @default(0)
-  nextAttemptAt DateTime     @default(now())
-  lastError     String?
-  deliveredAt   DateTime?
+  status            OutboxStatus @default(pending)
+  attempts          Int          @default(0)
+  nextAttemptAt     DateTime     @default(now())
+  lastError         String?
+  deliveredAt       DateTime?
   /// Delivery provider's message id, for support. Never a secret.
   providerMessageId String?
 
@@ -1149,7 +1288,9 @@ model ProviderProfile {
   @@index([accountStatus])
 }
 
-/* ── Customer support ───────────────────────────────────────────────────── */
+/**
+ * ── Customer support ─────────────────────────────────────────────────────
+ */
 
 /// Where a ticket sits in the queue. `new` is "nobody has looked yet";
 /// `pending_customer` stops the SLA clock because Bundleen is not the blocker.
@@ -1229,7 +1370,7 @@ model SupportTicket {
   ticketNumber String @unique
 
   requesterUserId String
-  requester       User   @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  requester       User     @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
   /// The requester's global role at creation time, kept so the queue can still
   /// filter by "provider tickets" after an account changes role.
   requesterRole   UserRole
@@ -1268,9 +1409,9 @@ model SupportTicket {
   /// A follow-up created from a ticket that could no longer be reopened.
   reopenedFromTicketId String?
 
-  messages  SupportTicketMessage[]
-  events    SupportTicketEvent[]
-  aiDrafts  SupportTicketAiDraft[]
+  messages SupportTicketMessage[]
+  events   SupportTicketEvent[]
+  aiDrafts SupportTicketAiDraft[]
 
   createdAt DateTime @default(now())
   /// Also the optimistic-concurrency token: admin mutations pass the value they
@@ -1368,7 +1509,9 @@ model SupportTicketAiDraft {
   @@index([ticketId, kind, createdAt])
 }
 
-/* ── Operational broadcasts ─────────────────────────────────────────────── */
+/**
+ * ── Operational broadcasts ───────────────────────────────────────────────
+ */
 
 /// How serious the message is. Only the three operational classes may override
 /// a recipient's general email preference, and only with explicit admin
@@ -1461,7 +1604,7 @@ model BroadcastRecipient {
 
   email String
 
-  status BroadcastRecipientStatus @default(pending)
+  status           BroadcastRecipientStatus @default(pending)
   /// Coarse reason a recipient was skipped (`preference_opt_out`,
   /// `invalid_email`). Never a provider error body.
   suppressedReason String?
@@ -1475,7 +1618,9 @@ model BroadcastRecipient {
   @@index([broadcastId, status])
 }
 
-/* ── Bundleen AI assistant ──────────────────────────────────────────────── */
+/**
+ * ── Bundleen AI assistant ────────────────────────────────────────────────
+ */
 
 enum AiMessageRole {
   user
@@ -1520,20 +1665,601 @@ model AiMessage {
 /// log. `errorType` is a small closed set of coarse classes, never a raw
 /// error message, which can otherwise embed request data.
 model AiUsageLog {
-  id                String   @id @default(cuid())
-  userId            String?
-  role              UserRole
-  model             String
-  latencyMs         Int
-  toolNames         String[] @default([])
-  success           Boolean
-  errorType         String?
-  promptTokens      Int?
-  completionTokens  Int?
-  createdAt         DateTime @default(now())
+  id               String   @id @default(cuid())
+  userId           String?
+  role             UserRole
+  model            String
+  latencyMs        Int
+  toolNames        String[] @default([])
+  success          Boolean
+  errorType        String?
+  promptTokens     Int?
+  completionTokens Int?
+  createdAt        DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([userId, createdAt])
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * HOA amenities, bookings, issues, and reviews
+ * Everything below is private to one official `hoa` community. There is no
+ * public listing, no provider surface, and no neighborhood surface: every read
+ * and write is scoped by `communityId` to an active HOA membership, an active
+ * staff assignment for that HOA, or a Bundleen admin.
+ * ══════════════════════════════════════════════════════════════════════════
+ */
+
+enum AmenityStatus {
+  draft
+  published
+  archived
+}
+
+/// What residents are told *right now*, independent of publication. A
+/// published amenity that is closed for repairs stays visible and explains
+/// itself rather than vanishing from the catalog.
+enum AmenityOperationalStatus {
+  open
+  closed
+  maintenance
+  temporarily_unavailable
+}
+
+enum AmenityType {
+  pool
+  clubhouse
+  gym
+  tennis_court
+  badminton_court
+  basketball_court
+  meeting_room
+  barbecue_area
+  playground
+  park
+  other
+}
+
+enum AmenityClosureKind {
+  blackout
+  maintenance
+  holiday
+  private_event
+}
+
+/// Explicit booking lifecycle. `pending_approval` and `confirmed` are the two
+/// states that hold capacity; every other state releases it.
+enum AmenityBookingStatus {
+  pending_approval
+  confirmed
+  declined
+  cancelled_by_resident
+  cancelled_by_manager
+  completed
+  no_show
+}
+
+enum AmenityBookingEventType {
+  requested
+  confirmed
+  approved
+  declined
+  cancelled_by_resident
+  cancelled_by_manager
+  rescheduled
+  completed
+  no_show
+  reminder_scheduled
+  reminder_cancelled
+}
+
+enum AmenityIssueCategory {
+  damage
+  cleanliness
+  safety
+  access
+  equipment
+  reservation_conflict
+  noise
+  other
+}
+
+enum AmenityIssuePriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum AmenityIssueStatus {
+  new
+  acknowledged
+  investigating
+  waiting_on_resident
+  resolved
+  closed
+}
+
+/// `internal_note` is never serialized by a resident-facing reader. The
+/// distinction is a column rather than a separate table so a manager reading
+/// one thread sees a single ordered conversation.
+enum AmenityIssueMessageKind {
+  resident_message
+  manager_reply
+  internal_note
+}
+
+/// What a stored file is for. Visibility follows the purpose, so an issue
+/// photo can never be served under gallery rules.
+enum MediaPurpose {
+  amenity_gallery
+  amenity_review
+  amenity_issue
+}
+
+enum MediaStatus {
+  active
+  removed
+}
+
+enum AmenityReviewStatus {
+  published
+  removed
+}
+
+/// One shared space in one HOA.
+///
+/// `bookingRequired = false` means a common area with hours and rules but no
+/// calendar: residents read status, hours, and reviews and report issues, and
+/// no booking row can ever be created against it.
+model Amenity {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  name          String
+  type          AmenityType
+  description   String?
+  /// Short bounded highlights such as `Floodlit`, `Towels provided`.
+  features      String[]    @default([])
+  /// Human location inside the HOA, e.g. `Behind the clubhouse`. Never an
+  /// access code and never a coordinate.
+  locationLabel String?
+
+  rules               String?
+  permittedUses       String?
+  ageRestriction      String?
+  guestPolicy         String?
+  cancellationPolicy  String?
+  /// Where to turn when something goes wrong. Resident-visible.
+  contactInstructions String?
+
+  status            AmenityStatus            @default(draft)
+  operationalStatus AmenityOperationalStatus @default(open)
+  /// Resident-visible explanation for a non-`open` status.
+  operationalNote   String?
+  /// Expected reopening, shown with the closure reason.
+  reopensAt         DateTime?
+
+  bookingRequired Boolean @default(false)
+
+  // ── Booking policy ────────────────────────────────────────────────────
+  // Every value here is snapshotted onto a booking at creation time, so a
+  // later rule change cannot silently rewrite a reservation a resident is
+  // already holding.
+  slotMinutes                  Int     @default(60)
+  minDurationMinutes           Int     @default(60)
+  maxDurationMinutes           Int     @default(120)
+  /// Cleanup/turnaround time reserved after each booking. Blocks the resource
+  /// but is never shown to the resident as part of their reservation.
+  bufferMinutes                Int     @default(0)
+  maxPartySize                 Int     @default(1)
+  /// How far ahead residents may book.
+  advanceDays                  Int     @default(14)
+  minNoticeMinutes             Int     @default(0)
+  /// Residents may cancel until this many minutes before the start.
+  cancellationCutoffMinutes    Int     @default(120)
+  /// Concurrent upcoming reservations one resident may hold.
+  maxActiveBookingsPerResident Int     @default(2)
+  /// Same limit applied across everyone in one HOA unit; null disables it.
+  maxActiveBookingsPerUnit     Int?
+  approvalRequired             Boolean @default(false)
+
+  /// Chosen from this amenity's own gallery. Enforced by a trigger, since a
+  /// foreign key alone cannot say "and it must belong to this amenity".
+  coverMediaId String?     @unique
+  coverMedia   MediaAsset? @relation("AmenityCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
+
+  /// Transactionally maintained with every published review write. Never
+  /// recomputed lazily, and never trusted from a client.
+  ratingCount Int @default(0)
+  ratingSum   Int @default(0)
+
+  createdByUserId String
+  createdBy       User   @relation("AmenityCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  resources AmenityResource[]
+  hours     AmenityHours[]
+  closures  AmenityClosure[]
+  bookings  AmenityBooking[]
+  issues    AmenityIssue[]
+  reviews   AmenityReview[]
+  media     MediaAsset[]      @relation("AmenityGallery")
+
+  @@unique([communityId, name])
+  @@index([communityId, status, name])
+  @@index([communityId, status, type])
+}
+
+/// One independently bookable unit of an amenity: `Court 1`, `Court 2`.
+///
+/// Capacity is modelled as rows rather than a number because that is what
+/// makes overbooking a database guarantee: every booking holds exactly one
+/// resource, and a GiST exclusion constraint forbids two live bookings from
+/// overlapping on the same resource. An exclusive room simply has one row.
+model AmenityResource {
+  id        String  @id @default(cuid())
+  amenityId String
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  label    String
+  position Int     @default(0)
+  active   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings AmenityBooking[]
+
+  @@unique([amenityId, label])
+  @@index([amenityId, active, position])
+}
+
+/// One opening period on one weekday, in the HOA's IANA timezone.
+///
+/// Minutes from local midnight. `closesMinute` may exceed 1440 to express an
+/// overnight range (22:00–02:00 is `1320 -> 1560`), which keeps every window a
+/// simple ordered pair instead of two rows that have to be stitched together.
+model AmenityHours {
+  id        String  @id @default(cuid())
+  amenityId String
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  weekday      Weekday
+  opensMinute  Int
+  closesMinute Int
+
+  @@unique([amenityId, weekday, opensMinute])
+  @@index([amenityId, weekday])
+}
+
+/// A period when the amenity, or one of its resources, cannot be booked.
+///
+/// Either a one-off UTC range or a weekly recurring local-time window —
+/// exactly one, CHECK-enforced.
+model AmenityClosure {
+  id        String  @id @default(cuid())
+  amenityId String
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  kind AmenityClosureKind @default(blackout)
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  recurringWeekday     Weekday?
+  recurringStartMinute Int?
+  recurringEndMinute   Int?
+
+  /// Shown to residents when true; an internal private-event block stays
+  /// unlabelled but still removes the slot.
+  residentVisible Boolean @default(true)
+  reason          String?
+
+  createdByUserId String?
+  createdBy       User?   @relation("AmenityClosureCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([amenityId, startsAt, endsAt])
+  @@index([amenityId, recurringWeekday])
+}
+
+/// One resident reservation of one resource for one period.
+///
+/// `blockStartsAt`/`blockEndsAt` widen the resident-facing range by the
+/// buffer in force when the booking was made, and are the range the exclusion
+/// constraint compares. Storing both means a later buffer change cannot move
+/// an existing reservation's footprint.
+model AmenityBooking {
+  id          String          @id @default(cuid())
+  /// Denormalized from the amenity so every tenant-scoped read and index is
+  /// one table away from the HOA, never a join the caller might forget.
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  amenityId   String
+  amenity     Amenity         @relation(fields: [amenityId], references: [id], onDelete: Restrict)
+  resourceId  String
+  resource    AmenityResource @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+
+  userId String
+  user   User           @relation("AmenityBookingResident", fields: [userId], references: [id], onDelete: Restrict)
+  /// The HOA home the resident occupied when booking. Kept for per-unit limits
+  /// and manager filtering; null for a manager-created operational block.
+  unitId String?
+  unit   CommunityUnit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  /// Short human reference for the confirmation email and the front desk. The
+  /// opaque `id` remains the only thing any API accepts.
+  reference String @unique
+
+  startsAt      DateTime
+  endsAt        DateTime
+  /// Exclusion-constraint range: `startsAt` .. `endsAt + bufferMinutes`.
+  blockStartsAt DateTime
+  blockEndsAt   DateTime
+
+  partySize      Int                  @default(1)
+  status         AmenityBookingStatus
+  /// IANA zone in force at creation, so the booking renders identically
+  /// forever even if the HOA later corrects its timezone.
+  timezone       String
+  /// Frozen copy of the amenity policy this booking was accepted under.
+  policySnapshot Json
+
+  /// Resident-supplied note. Never included in an outbox payload.
+  residentNote String?
+
+  /// True when the amenity required approval at creation.
+  approvalRequired Boolean   @default(false)
+  approvedByUserId String?
+  approvedBy       User?     @relation("AmenityBookingApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  approvedAt       DateTime?
+
+  cancelledByUserId  String?
+  cancelledBy        User?     @relation("AmenityBookingCanceller", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  /// Set when a manager creates a closure/maintenance block rather than a
+  /// resident reservation. Such a row holds capacity and sends no reminder.
+  isManagerBlock Boolean @default(false)
+
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events  AmenityBookingEvent[]
+  issues  AmenityIssue[]
+  reviews AmenityReview[]
+
+  @@index([amenityId, startsAt])
+  @@index([communityId, status, startsAt])
+  @@index([userId, startsAt])
+  @@index([resourceId, blockStartsAt])
+  @@index([status, startsAt])
+}
+
+/// Append-only history of what happened to one booking.
+model AmenityBookingEvent {
+  id        String         @id @default(cuid())
+  bookingId String
+  booking   AmenityBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  type        AmenityBookingEventType
+  actorUserId String?
+  actor       User?                   @relation("AmenityBookingEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  /// Short operational summary. Never a resident note or an access code.
+  note        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+/// A resident-reported problem with an amenity, routed to that HOA's manager.
+///
+/// Deliberately *not* a `SupportTicket`: this never reaches the Bundleen
+/// support queue, the global admin CRM, or the AI support context.
+model AmenityIssue {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  amenityId   String
+  amenity     Amenity   @relation(fields: [amenityId], references: [id], onDelete: Restrict)
+
+  reporterUserId String
+  reporter       User   @relation("AmenityIssueReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+
+  bookingId String?
+  booking   AmenityBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  reference String               @unique
+  category  AmenityIssueCategory
+  priority  AmenityIssuePriority @default(normal)
+  status    AmenityIssueStatus   @default(new)
+
+  subject     String
+  description String
+
+  assignedToUserId String?
+  assignedTo       User?   @relation("AmenityIssueAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  /// Manager's closing summary. Resident-visible by design.
+  resolutionSummary String?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  /// Set when the reporter withdrew it themselves.
+  withdrawnAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AmenityIssueMessage[]
+  events   AmenityIssueEvent[]
+  media    MediaAsset[]          @relation("AmenityIssueMedia")
+
+  @@index([communityId, status, createdAt])
+  @@index([amenityId, status])
+  @@index([reporterUserId, createdAt])
+  @@index([assignedToUserId, status])
+}
+
+model AmenityIssueMessage {
+  id      String       @id @default(cuid())
+  issueId String
+  issue   AmenityIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  author       User   @relation("AmenityIssueMessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  kind AmenityIssueMessageKind
+  body String
+
+  createdAt DateTime @default(now())
+
+  @@index([issueId, createdAt])
+  @@index([issueId, kind])
+}
+
+model AmenityIssueEvent {
+  id      String       @id @default(cuid())
+  issueId String
+  issue   AmenityIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  /// Short closed vocabulary such as `created`, `acknowledged`, `assigned`.
+  type        String
+  actorUserId String?
+  actor       User?   @relation("AmenityIssueEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  fromStatus AmenityIssueStatus?
+  toStatus   AmenityIssueStatus?
+
+  createdAt DateTime @default(now())
+
+  @@index([issueId, createdAt])
+}
+
+/// A resident's rating of an amenity in their own HOA.
+///
+/// Eligibility is documented in `lib/server/amenity-reviews.ts`: a booking-
+/// required amenity is reviewable only after a completed booking (one review
+/// per completed booking); a non-bookable common area is reviewable by any
+/// active resident, at most once.
+model AmenityReview {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  amenityId   String
+  amenity     Amenity   @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  author       User   @relation("AmenityReviewAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  /// Set for a booking-backed review; drives the "verified booking" badge and
+  /// the one-review-per-completed-booking rule.
+  bookingId String?         @unique
+  booking   AmenityBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  /// 1..5, CHECK-bounded.
+  rating  Int
+  comment String
+
+  status   AmenityReviewStatus @default(published)
+  /// Set on the first edit, so "Edited" is displayed honestly.
+  editedAt DateTime?
+
+  moderatedByUserId String?
+  moderatedBy       User?     @relation("AmenityReviewModerator", fields: [moderatedByUserId], references: [id], onDelete: SetNull)
+  moderationReason  String?
+  moderatedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  response AmenityReviewResponse?
+  media    MediaAsset[]           @relation("AmenityReviewMedia")
+
+  @@index([amenityId, status, createdAt])
+  @@index([amenityId, status, rating])
+  @@index([authorUserId, createdAt])
+}
+
+/// At most one manager reply per review, always labelled as the manager's.
+/// Managers may respond; they may never edit or delete the resident's words.
+model AmenityReviewResponse {
+  id       String        @id @default(cuid())
+  reviewId String        @unique
+  review   AmenityReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  responderUserId String
+  responder       User   @relation("AmenityReviewResponder", fields: [responderUserId], references: [id], onDelete: Restrict)
+
+  body String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// One stored image, owned by exactly one amenity gallery, review, or issue
+/// (CHECK-enforced).
+///
+/// `storageUrl` is server-only and is never serialized into an API response:
+/// bytes reach a browser through `/api/hoa/amenities/media/[mediaId]`, which
+/// re-checks authorization on every request. No storage credential is stored.
+model MediaAsset {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  purpose MediaPurpose
+
+  uploaderUserId String
+  uploader       User   @relation("MediaUploader", fields: [uploaderUserId], references: [id], onDelete: Restrict)
+
+  amenityId String?
+  amenity   Amenity?       @relation("AmenityGallery", fields: [amenityId], references: [id], onDelete: Cascade)
+  reviewId  String?
+  review    AmenityReview? @relation("AmenityReviewMedia", fields: [reviewId], references: [id], onDelete: Cascade)
+  issueId   String?
+  issue     AmenityIssue?  @relation("AmenityIssueMedia", fields: [issueId], references: [id], onDelete: Cascade)
+
+  /// Blob pathname, used for deletion and ownership checks.
+  storagePath String @unique
+  /// Blob read URL. Server-only; see the model comment.
+  storageUrl  String
+
+  contentType String
+  byteSize    Int
+  width       Int?
+  height      Int?
+  /// SHA-256 of the stored (re-encoded) bytes, for dedupe and integrity.
+  checksum    String
+
+  /// Gallery ordering. Null for review and issue attachments.
+  position Int?
+
+  status            MediaStatus @default(active)
+  deletedAt         DateTime?
+  /// Set when a Bundleen admin removed it under the moderation policy.
+  moderatedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  coverOf Amenity? @relation("AmenityCover")
+
+  @@index([amenityId, status, position])
+  @@index([reviewId, status])
+  @@index([issueId, status])
+  @@index([communityId, purpose, createdAt])
 }

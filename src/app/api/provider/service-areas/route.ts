@@ -20,7 +20,7 @@ import {
 /**
  * The canonical provider coverage endpoint.
  *
- * `/api/provider/hoa/service-areas` still exists and still works for the
+ * `/api/provider/marketplace/service-areas` still exists and still works for the
  * older HOA workspace form; both write the same rows through the same
  * ownership checks. New callers use this path.
  */

@@ -51,9 +51,23 @@ async function send<T>(path: string, init?: RequestInit): Promise<T> {
 
 /* ── Communities ─────────────────────────────────────────────────────────── */
 
+/**
+ * A neighbourhood's centre address. The admin interface sends this; the server
+ * resolves it and stores the coordinates. The raw pair below remains in the
+ * type for staff tooling, but no admin form fills it in any more.
+ */
+export type CommunityCentreAddress = {
+  addressLine1: string;
+  locality: string;
+  region: string;
+  postalCode: string;
+  country: string;
+};
+
 export type CommunityCreateBody = {
   name: string;
   type: "hoa" | "neighborhood";
+  centerAddress?: CommunityCentreAddress | null;
   centerLatitude?: number | null;
   centerLongitude?: number | null;
   radiusMiles?: number | null;
@@ -69,6 +83,7 @@ export function createCommunity(body: CommunityCreateBody) {
 export type CommunityPatchBody = Partial<{
   name: string;
   status: "active" | "archived";
+  centerAddress: CommunityCentreAddress | null;
   centerLatitude: number | null;
   centerLongitude: number | null;
   radiusMiles: number | null;

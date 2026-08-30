@@ -15,6 +15,7 @@ import type {
   StaffCandidate,
   ViewerContext,
 } from "@/lib/community-types";
+import { resolveForStorage } from "@/lib/server/address-verification";
 import {
   assertCanAssignStaffRole,
   assertCanBeMember,
@@ -540,20 +541,63 @@ async function requireCommunity(communityId: string) {
   };
 }
 
+/**
+ * Resolves an admin-supplied centre address into the stored centre point.
+ *
+ * The admin picks a *place*; the coordinates come from the server's own
+ * geocoder, the same one HOA onboarding uses. When no address is given the
+ * caller's explicit pair is kept, which is what staff tooling and existing
+ * automation still send.
+ */
+async function resolveCentre(input: {
+  centerAddress?: {
+    addressLine1: string;
+    locality: string;
+    region: string;
+    postalCode: string;
+    country: string;
+  } | null;
+  centerLatitude?: number | null;
+  centerLongitude?: number | null;
+}): Promise<{ centerLatitude: number | null; centerLongitude: number | null }> {
+  if (!input.centerAddress) {
+    return {
+      centerLatitude: input.centerLatitude ?? null,
+      centerLongitude: input.centerLongitude ?? null,
+    };
+  }
+
+  const resolved = await resolveForStorage({
+    ...input.centerAddress,
+    addressLine2: null,
+  });
+  return { centerLatitude: resolved.latitude, centerLongitude: resolved.longitude };
+}
+
 export async function createCommunity(
   actor: Actor,
   input: {
     name: string;
     type: CommunitySummary["type"];
+    centerAddress?: {
+      addressLine1: string;
+      locality: string;
+      region: string;
+      postalCode: string;
+      country: string;
+    } | null;
     centerLatitude: number | null;
     centerLongitude: number | null;
     radiusMiles: number | null;
   },
 ): Promise<string> {
   const communityId = randomUUID();
+  const { centerAddress: _centerAddress, ...rest } = input;
+  const centre = await resolveCentre(input);
+  const data = { ...rest, ...centre };
 
   await db.$transaction([
-    db.community.create({ data: { id: communityId, ...input } }),
+    db.community.create({ data: { id: communityId, ...data } }),
     db.adminAuditLog.create({
       data: buildAuditEntry({
         actorUserId: actor.id,
@@ -605,8 +649,15 @@ export async function updateCommunity(
         ? "community_restored"
         : "community_updated";
 
+  // The address, when one is sent, is resolved before the write and replaces
+  // whatever centre the row held. Nothing is written if the geocoder cannot
+  // answer, so an admin retries with the form intact rather than moving a
+  // live neighbourhood to a place it never verified.
+  const { centerAddress, ...rest } = input;
+  const data = centerAddress ? { ...rest, ...(await resolveCentre(input)) } : rest;
+
   await db.$transaction([
-    db.community.update({ where: { id: communityId }, data: input }),
+    db.community.update({ where: { id: communityId }, data }),
     db.adminAuditLog.create({
       data: buildAuditEntry({
         actorUserId: actor.id,

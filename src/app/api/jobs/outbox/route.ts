@@ -6,6 +6,7 @@ import {
   deliverPendingOutbox,
   enqueueUpcomingServiceReminders,
 } from "@/lib/server/notifications";
+import { reconcileExpiredWindows } from "@/lib/server/neighborhood-market";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,9 +35,15 @@ async function drain(request: Request): Promise<NextResponse> {
   }
 
   try {
+    // Deadlines are advanced before reminders are queued, so a request whose
+    // bidding window closed this minute is already `bidding_closed` when the
+    // manager reads their notification. Every step is a conditional update, so
+    // a manager clicking the same button concurrently changes zero rows rather
+    // than transitioning twice.
+    const reconciled = await reconcileExpiredWindows();
     const remindersQueued = await enqueueUpcomingServiceReminders();
     const result = await deliverPendingOutbox(100);
-    return NextResponse.json({ ...result, remindersQueued });
+    return NextResponse.json({ ...result, remindersQueued, reconciled });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

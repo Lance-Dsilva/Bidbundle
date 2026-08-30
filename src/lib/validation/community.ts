@@ -116,10 +116,30 @@ const idField = z.string().trim().min(1).max(64);
  * accepted here only because Bundleen staff, not customers, may tune a
  * particular neighborhood.
  */
+/**
+ * How an admin names a neighbourhood's centre.
+ *
+ * A postal address, not a coordinate pair. The admin types the street the
+ * neighbourhood is centred on and the server resolves it, exactly as it does
+ * for an HOA profile — one geocoding boundary, one place numbers come from.
+ * The raw pair below remains accepted for staff tooling and existing
+ * automation, but the admin interface no longer offers it.
+ */
+const centreAddressField = z
+  .object({
+    addressLine1: z.string().trim().min(1).max(160),
+    locality: z.string().trim().min(1).max(80),
+    region: z.string().trim().min(1).max(80),
+    postalCode: z.string().trim().min(3).max(12),
+    country: z.string().trim().length(2).default("US"),
+  })
+  .strict();
+
 export const communityCreateSchema = z
   .object({
     name: communityNameField,
     type: z.enum(COMMUNITY_TYPES, { message: "Choose a community type." }),
+    centerAddress: centreAddressField.nullable().optional(),
     centerLatitude: latitudeField.nullable().optional(),
     centerLongitude: longitudeField.nullable().optional(),
     radiusMiles: radiusField.nullable().optional(),
@@ -131,11 +151,15 @@ export const communityCreateSchema = z
       value.type === "neighborhood" && value.radiusMiles == null
         ? COMMUNITY_RADIUS_MI
         : (value.radiusMiles ?? null),
+    centerAddress: value.centerAddress ?? null,
     centerLatitude: value.centerLatitude ?? null,
     centerLongitude: value.centerLongitude ?? null,
   }))
   .superRefine((value, context) => {
     if (value.type !== "neighborhood") return;
+    // An address is the preferred input and satisfies the requirement on its
+    // own — the server resolves it into the stored centre.
+    if (value.centerAddress) return;
 
     if (value.centerLatitude === null) {
       context.addIssue({
@@ -164,6 +188,7 @@ export const communityUpdateSchema = z
   .object({
     name: communityNameField,
     status: z.enum(COMMUNITY_STATUSES, { message: "Choose a valid status." }),
+    centerAddress: centreAddressField.nullable(),
     centerLatitude: latitudeField.nullable(),
     centerLongitude: longitudeField.nullable(),
     radiusMiles: radiusField.nullable(),

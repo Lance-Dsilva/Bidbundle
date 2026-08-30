@@ -11,6 +11,7 @@ type Op = { model: string; action: string; args: Record<string, unknown> };
 
 const state = vi.hoisted(() => ({
   request: null as Record<string, unknown> | null,
+  community: null as Record<string, unknown> | null,
   managerAssignment: null as Record<string, unknown> | null,
   bid: null as Record<string, unknown> | null,
   providerUser: null as Record<string, unknown> | null,
@@ -31,9 +32,15 @@ vi.mock("@/lib/server/db", () => ({
       update: op("hoaServiceRequest", "update"),
       updateMany: op("hoaServiceRequest", "updateMany"),
     },
+    community: {
+      findUnique: async () => state.community,
+    },
     communityStaffAssignment: {
       findFirst: async () => state.managerAssignment,
       findMany: async () => [],
+    },
+    adminAccessGrant: {
+      findUnique: async () => null,
     },
     communityMembership: {
       findFirst: async () => null,
@@ -151,6 +158,9 @@ describe("areaCoversLocation", () => {
 describe("awardBid", () => {
   beforeEach(() => {
     state.batches = [];
+    // `requireCommunityManager` reads the community first, so the type it
+    // returns is what decides whether HOA or neighbourhood rules apply.
+    state.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa", status: "active" };
     state.managerAssignment = {
       id: "assignment-1",
       community: { id: "hoa-1", name: "Cedar Park HOA" },
@@ -164,7 +174,7 @@ describe("awardBid", () => {
       recurrenceIntervalDays: 14,
       totalOccurrences: 3,
       startDate: new Date("2026-09-01T00:00:00Z"),
-      community: { id: "hoa-1", name: "Cedar Park HOA" },
+      community: { id: "hoa-1", name: "Cedar Park HOA", type: "hoa" },
       participations: [
         { unitId: "unit-1", userId: "resident-1" },
         { unitId: "unit-2", userId: null },

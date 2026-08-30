@@ -4,6 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AdminRequestError, createCommunity } from "@/lib/admin-client";
+import {
+  CentreAddressFields,
+  EMPTY_CENTRE_ADDRESS,
+  type CentreAddress,
+} from "@/components/admin/CentreAddressFields";
 import { COMMUNITY_RADIUS_MI } from "@/lib/validation/profile";
 
 /**
@@ -18,8 +23,9 @@ export function CommunityCreateForm() {
   const router = useRouter();
   const [type, setType] = useState<"hoa" | "neighborhood">("hoa");
   const [name, setName] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  // The centre is an address. The server geocodes it and stores the
+  // coordinates; this form has no field that can carry one.
+  const [centre, setCentre] = useState<CentreAddress>(EMPTY_CENTRE_ADDRESS);
   const [radius, setRadius] = useState(String(COMMUNITY_RADIUS_MI));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +43,9 @@ export function CommunityCreateForm() {
       const detail = await createCommunity({
         name,
         type,
-        centerLatitude: latitude === "" ? null : Number(latitude),
-        centerLongitude: longitude === "" ? null : Number(longitude),
+        centerAddress: type === "neighborhood" ? centre : null,
+        centerLatitude: null,
+        centerLongitude: null,
         radiusMiles: type === "neighborhood" ? Number(radius) : null,
       });
 
@@ -96,50 +103,18 @@ export function CommunityCreateForm() {
       </div>
 
       {type === "neighborhood" && (
-        <div className="grid gap-3 md:grid-cols-3">
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
-              Centre latitude
+        <div className="space-y-3">
+          <CentreAddressFields
+            fieldErrors={fieldErrors}
+            onChange={setCentre}
+            required
+            value={centre}
+          />
+          {fieldErrors.centerLatitude || fieldErrors.centerAddress ? (
+            <span className="block text-[11px]" style={{ color: "var(--danger-600)" }}>
+              {fieldErrors.centerAddress ?? fieldErrors.centerLatitude}
             </span>
-            <input
-              className={inputClass}
-              style={inputStyle}
-              type="number"
-              step="any"
-              min={-90}
-              max={90}
-              value={latitude}
-              onChange={(event) => setLatitude(event.target.value)}
-              required
-            />
-            {fieldErrors.centerLatitude && (
-              <span className="mt-1 block text-[11px]" style={{ color: "var(--danger-600)" }}>
-                {fieldErrors.centerLatitude}
-              </span>
-            )}
-          </label>
-
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
-              Centre longitude
-            </span>
-            <input
-              className={inputClass}
-              style={inputStyle}
-              type="number"
-              step="any"
-              min={-180}
-              max={180}
-              value={longitude}
-              onChange={(event) => setLongitude(event.target.value)}
-              required
-            />
-            {fieldErrors.centerLongitude && (
-              <span className="mt-1 block text-[11px]" style={{ color: "var(--danger-600)" }}>
-                {fieldErrors.centerLongitude}
-              </span>
-            )}
-          </label>
+          ) : null}
 
           <label className="block">
             <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">

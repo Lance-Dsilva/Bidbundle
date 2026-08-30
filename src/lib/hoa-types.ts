@@ -50,6 +50,26 @@ export type HoaInvitationSummary = {
   acceptedAt: string | null;
 };
 
+export type AddressVerificationValue = "pending" | "verified" | "needs_correction";
+
+/**
+ * One normalized address candidate returned to the admin for confirmation.
+ *
+ * Deliberately carries no coordinates: the browser chooses an *address*, and
+ * the server re-resolves and stores the numbers itself.
+ */
+export type AddressCandidate = {
+  /** Opaque handle the admin's confirmation sends back. */
+  token: string;
+  formatted: string;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  locality: string | null;
+  region: string | null;
+  postalCode: string | null;
+  country: string | null;
+};
+
 export type HoaProfileSummary = {
   communityId: string;
   legalName: string;
@@ -60,8 +80,17 @@ export type HoaProfileSummary = {
   region: string;
   postalCode: string;
   country: string;
-  latitude: number | null;
-  longitude: number | null;
+  /**
+   * The geocoder's normalized rendering of the verified address. This is what
+   * the admin interface shows — the coordinates behind it are internal and are
+   * never sent to the browser, which is why there is no latitude/longitude
+   * here any more.
+   */
+  formattedAddress: string | null;
+  addressVerificationStatus: AddressVerificationValue;
+  addressVerifiedAt: string | null;
+  /** True once the resolved location is good enough to route work to. */
+  locationReady: boolean;
   timezone: string;
   totalHomes: number;
   referenceCode: string | null;
@@ -76,8 +105,15 @@ export type UnitSummary = {
   locality: string | null;
   region: string | null;
   postalCode: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  /**
+   * `true` when this home has no distinct address of its own and therefore
+   * inherits the HOA's verified location.
+   */
+  inheritsHoaAddress: boolean;
+  addressVerificationStatus: AddressVerificationValue;
+  formattedAddress: string | null;
+  /** True once this home can be routed to, by its own address or the HOA's. */
+  locationReady: boolean;
   occupancyStatus: UnitOccupancyValue;
   accessNotes: string | null;
   residentName: string | null;
@@ -99,6 +135,13 @@ export type UnitImportResult = {
   duplicateCount: number;
   invalidCount: number;
   rows: UnitImportPreviewRow[];
+  /** Homes whose own address was resolved. Absent on a dry run. */
+  geocodedCount?: number;
+  /**
+   * Labels of imported homes whose address could not be resolved. Re-running
+   * the same file is safe and retries only these.
+   */
+  unresolvedLabels?: string[];
 };
 
 export type BidSummary = {
@@ -174,12 +217,28 @@ export type AgreementSummary = {
 export type VisitSummary = {
   id: string;
   occurrenceId: string;
-  unitId: string;
-  unitLabel: string;
-  /** Present only for viewers authorized to see the stop location. */
+  /**
+   * Which kind of service target this stop has. `unit` is an HOA home from the
+   * community's inventory; `homeowner` is a participating non-HOA resident,
+   * whose address was snapshotted at award time.
+   */
+  targetKind: "unit" | "homeowner";
+  /** Set for `unit` stops only. */
+  unitId: string | null;
+  /** Set for `homeowner` stops only. */
+  homeownerUserId: string | null;
+  /** Human label for the stop: the unit label, or the snapshotted address. */
+  stopLabel: string;
+  /**
+   * Exact location. Present only for viewers authorized to see it — the
+   * resident of this stop, the scoped manager/admin, and the awarded provider.
+   * `null` for everyone else, including providers who did not win the work.
+   */
   latitude: number | null;
   longitude: number | null;
   addressLine1: string | null;
+  /** Private operational detail. Awarded provider and the resident only. */
+  accessNotes: string | null;
   stopRank: number | null;
   scheduledDate: string | null;
   windowStart: string | null;
@@ -285,6 +344,8 @@ export type ResidentHoaHub = {
 
 export type ProviderFeedItem = {
   requestId: string;
+  /** Which workflow the work belongs to. Derived from `Community.type`. */
+  context: "hoa" | "neighborhood";
   communityName: string;
   locality: string | null;
   region: string | null;
@@ -294,9 +355,20 @@ export type ProviderFeedItem = {
   description: string;
   recurrenceLabel: string | null;
   totalOccurrences: number;
+  /** Locked participating homes once bidding is open. Never a per-home list. */
   homeCount: number;
+  /**
+   * Rounded miles from the nearest covering service area to the community's
+   * approximate centre. Never a participant coordinate, and never precise
+   * enough to locate a home.
+   */
+  approximateDistanceMi: number | null;
+  /** The homeowner's permitted budget range in whole cents, when they set one. */
+  budgetMinCents: number | null;
+  budgetMaxCents: number | null;
   startDate: string | null;
   biddingClosesAt: string | null;
+  /** The caller's own bid. Competitors' amounts are never included. */
   myBid: BidSummary | null;
 };
 

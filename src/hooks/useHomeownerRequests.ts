@@ -1,66 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { getToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 
+/**
+ * "My Requests" — the requests the signed-in homeowner owns.
+ *
+ * Backed by `/api/homeowner/requests`, which scopes every row to the session.
+ * There is no token here: Clerk's HttpOnly cookie travels with the same-origin
+ * request, so the old `getToken()` gate — which only ever returned a truthy
+ * placeholder — is gone rather than being carried forward as decoration.
+ */
+
 export interface HomeownerRequest {
-  id: number;
+  id: string;
   title: string;
   description: string;
   category: string;
-  neighborhood: string;
+  categoryLabel: string;
+  /** Server-owned lifecycle status, e.g. `collecting_interest`. */
   status: string;
-  budget_min: number;
-  budget_max: number;
-  bid_count: number;
-  best_bid_cents: number | null;
-  closes_at: string | null;
-  created_at: string;
+  /** Which workflow the request belongs to. */
+  context: "neighborhood" | "hoa";
+  communityId: string;
+  communityName: string;
+  /** Whole US cents. */
+  budgetMinCents: number | null;
+  budgetMaxCents: number | null;
+  bidCount: number;
+  bestBidCents: number | null;
+  enrollmentClosesAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export function useHomeownerRequests(status?: string) {
+export type RequestEligibility =
+  | { canCreate: true; communityId: string; communityName: string }
+  | {
+      canCreate: false;
+      reason: string;
+      message: string;
+      actionLabel: string;
+      actionPath: string;
+    };
+
+type RequestsResponse = {
+  requests: HomeownerRequest[];
+  eligibility: RequestEligibility;
+};
+
+/** Statuses in which a request is still doing something for the homeowner. */
+export const ACTIVE_REQUEST_STATUSES = [
+  "collecting_interest",
+  "open_for_bids",
+  "bidding_closed",
+  "awarded",
+  "scheduled",
+  "in_progress",
+];
+
+export function useHomeownerRequests() {
   const [requests, setRequests] = useState<HomeownerRequest[]>([]);
+  const [eligibility, setEligibility] = useState<RequestEligibility | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => {
-    const token = getToken();
-    if (!token) {
+  const refresh = useCallback(async () => {
+    try {
+      const payload = await apiFetch<RequestsResponse>("/homeowner/requests");
+      setRequests(payload.requests);
+      setEligibility(payload.eligibility);
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "We could not load your requests. Please try again.",
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-    const params = status ? `?status=${encodeURIComponent(status)}` : "";
-    apiFetch<HomeownerRequest[]>(`/homeowner/requests${params}`, { token })
-      .then(setRequests)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed"))
-      .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, [status]);
+    void refresh();
+  }, [refresh]);
 
-  const createRequest = async (payload: {
-    title: string;
-    description: string;
-    category: string;
-    neighborhood: string;
-    budget_min: number;
-    budget_max: number;
-    status?: string;
-  }) => {
-    const token = getToken();
-    if (!token) return null;
-    const req = await apiFetch<HomeownerRequest>("/requests", {
-      method: "POST",
-      body: JSON.stringify({ ...payload, status: payload.status ?? "draft" }),
-      token,
-    });
-    setRequests((prev) => [req, ...prev]);
-    return req;
-  };
-
-  return { requests, loading, error, refresh, createRequest };
+  return { requests, eligibility, loading, error, refresh };
 }

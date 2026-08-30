@@ -25,6 +25,12 @@ import {
   type CommunityStaffRole,
   type MembershipStatus,
 } from "@/lib/validation/community";
+import {
+  CentreAddressFields,
+  EMPTY_CENTRE_ADDRESS,
+  isCompleteCentreAddress,
+  type CentreAddress,
+} from "@/components/admin/CentreAddressFields";
 import { HoaManagerInvitationPanel } from "@/components/admin/HoaManagerInvitationPanel";
 import { HoaOnboardingPanel } from "@/components/admin/HoaOnboardingPanel";
 
@@ -449,7 +455,14 @@ function MemberSection({
   );
 }
 
-/** Centre point and radius. Neighborhood communities only. */
+/**
+ * Centre address and radius. Neighbourhood communities only.
+ *
+ * The radius stays a staff decision — homeowners never choose one — but the
+ * centre is an address, resolved on the server. Moving a live neighbourhood by
+ * retyping two decimals was a coordinate-entry error waiting to happen, and it
+ * silently changed who the placement algorithm matched.
+ */
 function GeometryEditor({
   detail,
   busy,
@@ -458,21 +471,17 @@ function GeometryEditor({
   detail: CommunityDetail;
   busy: boolean;
   onSave: (body: {
-    centerLatitude: number;
-    centerLongitude: number;
+    centerAddress: CentreAddress;
     radiusMiles: number;
   }) => Promise<boolean>;
 }) {
   const { community } = detail;
-  const [latitude, setLatitude] = useState(String(community.centerLatitude ?? ""));
-  const [longitude, setLongitude] = useState(String(community.centerLongitude ?? ""));
+  const [centre, setCentre] = useState<CentreAddress>(EMPTY_CENTRE_ADDRESS);
   const [radius, setRadius] = useState(String(community.radiusMiles ?? ""));
 
   useEffect(() => {
-    setLatitude(String(community.centerLatitude ?? ""));
-    setLongitude(String(community.centerLongitude ?? ""));
     setRadius(String(community.radiusMiles ?? ""));
-  }, [community.centerLatitude, community.centerLongitude, community.radiusMiles]);
+  }, [community.radiusMiles]);
 
   const inputClass = "h-9 w-full rounded-xl border px-3 text-[13px] outline-none";
   const inputStyle = {
@@ -481,75 +490,52 @@ function GeometryEditor({
     color: "var(--ink-900)",
   };
 
+  const located = community.centerLatitude !== null && community.centerLongitude !== null;
+
   return (
     <form
-      className="mt-5 grid items-end gap-3 border-t pt-4 md:grid-cols-4"
+      className="mt-5 space-y-3 border-t pt-4"
       style={{ borderColor: "var(--line)" }}
       onSubmit={async (event) => {
         event.preventDefault();
-        await onSave({
-          centerLatitude: Number(latitude),
-          centerLongitude: Number(longitude),
-          radiusMiles: Number(radius),
-        });
+        if (!isCompleteCentreAddress(centre)) return;
+        await onSave({ centerAddress: centre, radiusMiles: Number(radius) });
       }}
     >
-      <label className="block">
-        <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-          Centre latitude
-        </span>
-        <input
-          className={inputClass}
-          style={inputStyle}
-          type="number"
-          step="any"
-          min={-90}
-          max={90}
-          value={latitude}
-          onChange={(event) => setLatitude(event.target.value)}
-          required
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-          Centre longitude
-        </span>
-        <input
-          className={inputClass}
-          style={inputStyle}
-          type="number"
-          step="any"
-          min={-180}
-          max={180}
-          value={longitude}
-          onChange={(event) => setLongitude(event.target.value)}
-          required
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-          Radius (miles)
-        </span>
-        <input
-          className={inputClass}
-          style={inputStyle}
-          type="number"
-          step="0.1"
-          min={0.1}
-          max={100}
-          value={radius}
-          onChange={(event) => setRadius(event.target.value)}
-          required
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={busy}
-        className="h-9 rounded-xl px-4 text-[13px] font-semibold text-white disabled:opacity-60"
-        style={{ background: "var(--teal-800)" }}
-      >
-        Save location
-      </button>
+      <p className="text-[12px]" style={{ color: "var(--muted)" }}>
+        {located
+          ? "This neighbourhood has a resolved centre. Enter a new address only to move it."
+          : "This neighbourhood has no resolved centre yet, so nobody is being matched into it."}
+      </p>
+
+      <CentreAddressFields onChange={setCentre} value={centre} />
+
+      <div className="grid items-end gap-3 md:grid-cols-4">
+        <label className="block">
+          <span className="mb-1 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
+            Radius (miles)
+          </span>
+          <input
+            className={inputClass}
+            style={inputStyle}
+            type="number"
+            step="0.1"
+            min={0.1}
+            max={100}
+            value={radius}
+            onChange={(event) => setRadius(event.target.value)}
+            required
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy || !isCompleteCentreAddress(centre)}
+          className="h-9 rounded-xl px-4 text-[13px] font-semibold text-white disabled:opacity-60"
+          style={{ background: "var(--teal-800)" }}
+        >
+          Save location
+        </button>
+      </div>
     </form>
   );
 }
