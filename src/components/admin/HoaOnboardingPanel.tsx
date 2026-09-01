@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 
 import type {
   AddressCandidate,
@@ -109,6 +109,7 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
   const [success, setSuccess] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<UnitImportResult | null>(null);
   const [csv, setCsv] = useState("");
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   /**
    * Candidates from an ambiguous save. While these are on screen the form
    * keeps everything the admin typed — the save wrote nothing, so retrying
@@ -267,6 +268,35 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
         [...current, result.unit].sort((a, b) => a.label.localeCompare(b.label)),
       );
       form.reset();
+    });
+  };
+
+  const saveUnit = (event: FormEvent<HTMLFormElement>, unit: UnitSummary) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const optional = (name: string) => String(data.get(name) ?? "").trim() || null;
+    void act("Unit updated.", async () => {
+      const result = await requestJson<{ unit: UnitSummary }>(
+        "PATCH",
+        `/api/admin/communities/${communityId}/units/${unit.id}`,
+        {
+          label: String(data.get("label") ?? "").trim(),
+          addressLine1: optional("addressLine1"),
+          locality: optional("locality"),
+          region: optional("region"),
+          postalCode: optional("postalCode"),
+          accessNotes: optional("accessNotes"),
+          ...((unit.occupancyStatus === "vacant" || unit.occupancyStatus === "inactive")
+            ? { occupancyStatus: String(data.get("occupancyStatus")) }
+            : {}),
+        },
+      );
+      setUnits((current) =>
+        current
+          .map((item) => (item.id === result.unit.id ? result.unit : item))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      );
+      setEditingUnitId(null);
     });
   };
 
@@ -440,21 +470,89 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
                   <th className="px-3 py-2">Home</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Resident / invite</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {units.map((unit) => (
-                  <tr key={unit.id} style={{ borderTop: "1px solid var(--line)" }}>
-                    <td className="px-3 py-2 font-medium" style={{ color: "var(--ink-900)" }}>
-                      {unit.label}
-                    </td>
-                    <td className="px-3 py-2" style={{ color: "var(--muted)" }}>
-                      {unit.occupancyStatus.replace("_", " ")}
-                    </td>
-                    <td className="px-3 py-2" style={{ color: "var(--ink-700)" }}>
-                      {unit.residentName ?? unit.pendingInviteEmail ?? "—"}
-                    </td>
-                  </tr>
+                  <Fragment key={unit.id}>
+                    <tr style={{ borderTop: "1px solid var(--line)" }}>
+                      <td className="px-3 py-2 font-medium" style={{ color: "var(--ink-900)" }}>
+                        {unit.label}
+                        <span className="mt-0.5 block text-[10px] font-normal" style={{ color: "var(--muted)" }}>
+                          {unit.inheritsHoaAddress ? "Uses HOA address" : unit.formattedAddress || unit.addressLine1}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2" style={{ color: "var(--muted)" }}>
+                        {unit.occupancyStatus.replace("_", " ")}
+                      </td>
+                      <td className="px-3 py-2" style={{ color: "var(--ink-700)" }}>
+                        {unit.residentName ?? unit.pendingInviteEmail ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-60"
+                          style={{ borderColor: "var(--line)", color: "var(--teal-800)" }}
+                          disabled={busy}
+                          onClick={() => setEditingUnitId((current) => current === unit.id ? null : unit.id)}
+                          type="button"
+                        >
+                          {editingUnitId === unit.id ? "Cancel" : "Edit"}
+                        </button>
+                      </td>
+                    </tr>
+                    {editingUnitId === unit.id ? (
+                      <tr style={{ borderTop: "1px solid var(--line)", background: "var(--canvas)" }}>
+                        <td className="p-3" colSpan={4}>
+                          <form className="grid gap-2 md:grid-cols-2" onSubmit={(event) => saveUnit(event, unit)}>
+                            <UnitEditField label="Unit label" name="label" defaultValue={unit.label} required />
+                            <UnitEditField label="Street address (blank uses HOA address)" name="addressLine1" defaultValue={unit.addressLine1 ?? ""} />
+                            <UnitEditField label="City" name="locality" defaultValue={unit.locality ?? ""} />
+                            <UnitEditField label="State / region" name="region" defaultValue={unit.region ?? ""} />
+                            <UnitEditField label="Postal code" name="postalCode" defaultValue={unit.postalCode ?? ""} />
+                            <UnitEditField label="Access notes" name="accessNotes" defaultValue={unit.accessNotes ?? ""} />
+                            {unit.occupancyStatus === "vacant" || unit.occupancyStatus === "inactive" ? (
+                              <label className="block">
+                                <span className="mb-1 block text-[11px] font-semibold" style={{ color: "var(--ink-700)" }}>Inventory status</span>
+                                <select
+                                  className="h-9 w-full rounded-lg border px-2 text-xs"
+                                  defaultValue={unit.occupancyStatus}
+                                  name="occupancyStatus"
+                                  style={{ borderColor: "var(--line)", background: "var(--paper)" }}
+                                >
+                                  <option value="vacant">Vacant</option>
+                                  <option value="inactive">Inactive</option>
+                                </select>
+                              </label>
+                            ) : (
+                              <p className="self-end pb-2 text-[11px]" style={{ color: "var(--muted)" }}>
+                                Occupancy is controlled by the resident invitation and cannot be edited manually.
+                              </p>
+                            )}
+                            <div className="flex items-end gap-2">
+                              <button
+                                className="h-9 rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-60"
+                                style={{ background: "var(--teal-800)" }}
+                                disabled={busy}
+                                type="submit"
+                              >
+                                {busy ? "Saving…" : "Save changes"}
+                              </button>
+                              <button
+                                className="h-9 rounded-lg border px-3 text-xs font-semibold disabled:opacity-60"
+                                style={{ borderColor: "var(--line)", color: "var(--ink-700)" }}
+                                disabled={busy}
+                                onClick={() => setEditingUnitId(null)}
+                                type="button"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -554,6 +652,34 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
           an onboarding call covers. */}
       <AmenitiesOnboardingStep communityId={communityId} />
     </div>
+  );
+}
+
+function UnitEditField({
+  label,
+  name,
+  defaultValue,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] font-semibold" style={{ color: "var(--ink-700)" }}>
+        {label}
+      </span>
+      <input
+        className="h-9 w-full rounded-lg border px-2.5 text-xs outline-none"
+        defaultValue={defaultValue}
+        maxLength={name === "accessNotes" ? 500 : name === "label" ? 120 : 160}
+        name={name}
+        required={required}
+        style={{ borderColor: "var(--line)", background: "var(--paper)" }}
+      />
+    </label>
   );
 }
 

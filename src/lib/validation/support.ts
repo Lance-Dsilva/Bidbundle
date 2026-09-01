@@ -162,7 +162,7 @@ export const adminTicketQuerySchema = z
     status: z.enum(SUPPORT_TICKET_STATUSES).optional(),
     priority: z.enum(SUPPORT_TICKET_PRIORITIES).optional(),
     category: z.enum(SUPPORT_TICKET_CATEGORIES).optional(),
-    requesterRole: z.enum(["homeowner", "provider", "admin"]).optional(),
+    requesterRole: z.enum(["homeowner", "provider", "hoa_staff", "admin"]).optional(),
     /** `unassigned` is a distinct filter, not an empty assignee id. */
     assignee: z.string().trim().max(64).optional(),
     /** Minimum age in days, for "what has been waiting too long". */

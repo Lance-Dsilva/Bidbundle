@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/server/db";
 import { HoaWorkflowError, requireActiveResident, requireManagedHoa } from "@/lib/server/hoa";
 import type { SessionUser } from "@/lib/server/auth";
+import type { AppRole } from "@/lib/validation/auth";
 import { AiToolError } from "@/lib/server/ai/errors";
 
 /**
@@ -13,7 +14,7 @@ import { AiToolError } from "@/lib/server/ai/errors";
  */
 export type AiCallerScope = {
   userId: string;
-  role: "homeowner" | "provider" | "admin";
+  role: AppRole;
   isAdmin: boolean;
 };
 

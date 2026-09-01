@@ -4,7 +4,7 @@ import { HoaManagerShell } from "@/components/hoa/HoaManagerShell";
 import { HomeownerShell } from "@/components/layout/HomeownerShell";
 import { ProviderShell } from "@/components/layout/ProviderShell";
 import { requireUser } from "@/lib/server/auth";
-import { isHoaManager } from "@/lib/server/hoa";
+import { getHoaStaffRole, isHoaManager } from "@/lib/server/hoa";
 
 /**
  * `/app/support/**` is the one customer surface shared by every non-admin role,
@@ -20,8 +20,13 @@ export default async function SupportLayout({ children }: Readonly<{ children: R
   if (user.role === "provider") {
     return <ProviderShell userName={name}>{children}</ProviderShell>;
   }
-  if (user.role === "homeowner" && (await isHoaManager(user.id))) {
-    return <HoaManagerShell userName={name}>{children}</HoaManagerShell>;
+  if (user.role === "hoa_staff" || (user.role === "homeowner" && (await isHoaManager(user.id)))) {
+    const staffRole = await getHoaStaffRole(user.id);
+    return (
+      <HoaManagerShell userName={name} roleLabel={staffRole === "hoa_team" ? "HOA team" : "HOA manager"}>
+        {children}
+      </HoaManagerShell>
+    );
   }
   return <HomeownerShell userName={name}>{children}</HomeownerShell>;
 }

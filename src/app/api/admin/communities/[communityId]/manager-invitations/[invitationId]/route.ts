@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { adminErrorResponse, requireAdminMutation } from "@/lib/server/admin-api";
-import { revokeHoaManagerInvitation } from "@/lib/server/hoa";
+import { revokeHoaStaffInvitation } from "@/lib/server/hoa";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export async function DELETE(_request: Request, context: RouteContext): Promise<
   if (!gate.ok) return gate.response;
   const { communityId, invitationId } = await context.params;
   try {
-    await revokeHoaManagerInvitation({ actorUserId: gate.user.id, communityId, invitationId });
+    await revokeHoaStaffInvitation({ actorUserId: gate.user.id, communityId, invitationId });
     return NextResponse.json({ revoked: true });
   } catch (error) {
     return adminErrorResponse("HOA manager invitation revoke", error);

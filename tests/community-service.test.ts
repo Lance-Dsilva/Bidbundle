@@ -227,17 +227,19 @@ describe("assignStaffRole", () => {
     expect(state.batches).toHaveLength(0);
   });
 
-  it("assigns HOA staff who hold no membership at all", async () => {
+  it("requires the separate invitation flow for HOA team members", async () => {
     state.community = { ...state.community!, type: "hoa", radiusMiles: null };
     state.user = {
       id: "u1",
       email: "resident@example.com",
-      role: "homeowner",
+      role: "hoa_staff",
       communityMemberships: [],
     };
 
-    await assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_team" });
-    expect(opsOf("communityStaffAssignment", "create")).toHaveLength(1);
+    await expect(
+      assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_team" }),
+    ).rejects.toMatchObject({ code: "hoa_staff_invitation_required" });
+    expect(state.batches).toHaveLength(0);
   });
 
   it("requires the separate invitation flow for an HOA manager", async () => {
@@ -247,7 +249,7 @@ describe("assignStaffRole", () => {
 
     await expect(
       assignStaffRole(ADMIN, "c1", { userId: "u1", role: "hoa_manager" }),
-    ).rejects.toMatchObject({ code: "hoa_manager_invitation_required" });
+    ).rejects.toMatchObject({ code: "hoa_staff_invitation_required" });
 
     expect(state.batches).toHaveLength(0);
   });

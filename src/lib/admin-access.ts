@@ -21,6 +21,7 @@ export type AdminAccessSummary = {
   level: AdminAccessLevel;
   status: AdminAccessStatus;
   fullName: string | null;
+  invitationExpiresAt: string | null;
   grantedByName: string | null;
   grantedAt: string;
   acceptedAt: string | null;
@@ -32,4 +33,3 @@ export type AdminAccessSummary = {
 export function isPrimaryAdminEmail(email: string): boolean {
   return normalizeEmail(email) === PRIMARY_ADMIN_EMAIL;
 }
-

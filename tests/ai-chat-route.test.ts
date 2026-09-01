@@ -26,7 +26,7 @@ function fakeStream(chunks: FakeChunk[]) {
 
 const state = vi.hoisted(() => ({
   clerkUserId: null as string | null,
-  role: "homeowner" as "homeowner" | "provider" | "admin",
+  role: "homeowner" as "homeowner" | "provider" | "hoa_staff" | "admin",
   hasProfile: true,
   accessLevel: "owner" as "owner" | "admin" | null,
   guardFailure: null as { kind: "rate-limited"; retryAfterSeconds: number } | { kind: "unavailable" } | null,
@@ -246,7 +246,7 @@ describe("POST /api/ai/chat — unconfigured model", () => {
 });
 
 describe("POST /api/ai/chat — grounded answers per role", () => {
-  it.each(["homeowner", "provider", "admin"] as const)(
+  it.each(["homeowner", "provider", "hoa_staff", "admin"] as const)(
     "streams a grounded answer and persists it for role=%s",
     async (role) => {
       state.role = role;

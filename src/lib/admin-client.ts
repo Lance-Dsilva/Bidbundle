@@ -166,10 +166,15 @@ export function fetchHoaManagerInvitations(communityId: string) {
   );
 }
 
-export function sendHoaManagerInvitation(communityId: string, email: string) {
+export function sendHoaManagerInvitation(
+  communityId: string,
+  fullName: string,
+  email: string,
+  role: "hoa_manager" | "hoa_team",
+) {
   return send<{ invitation: HoaInvitationSummary }>(
     `/api/admin/communities/${communityId}/manager-invitations`,
-    { method: "POST", body: JSON.stringify({ email }) },
+    { method: "POST", body: JSON.stringify({ fullName, email, role }) },
   );
 }
 

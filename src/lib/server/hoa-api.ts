@@ -14,7 +14,7 @@ type HoaGate =
   | { ok: false; response: NextResponse };
 
 export async function requireHoaUser(): Promise<HoaGate> {
-  const authorized = await authorizeRequest(["homeowner"]);
+  const authorized = await authorizeRequest(["homeowner", "hoa_staff"]);
   return authorized.ok
     ? { ok: true, user: authorized.user }
     : { ok: false, response: authorized.response };

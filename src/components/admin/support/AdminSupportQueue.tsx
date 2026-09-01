@@ -308,6 +308,7 @@ export function AdminSupportQueue() {
           value={filters.requesterRole}
           options={[
             { value: "homeowner", label: "Homeowner" },
+            { value: "hoa_staff", label: "HOA manager / team" },
             { value: "provider", label: "Provider" },
           ]}
           onChange={(value) => update("requesterRole", value)}

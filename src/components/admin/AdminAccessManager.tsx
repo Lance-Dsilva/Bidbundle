@@ -17,6 +17,7 @@ type ErrorBody = { error?: string; fields?: Record<string, string> };
 export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAccessSummary[] }) {
   const router = useRouter();
   const [access, setAccess] = useState(initialAccess);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,13 +33,15 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
       const response = await fetch("/api/admin/access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ fullName, email }),
       });
       const body = (await response.json().catch(() => ({}))) as ErrorBody & {
         access?: AdminAccessSummary;
       };
       if (!response.ok || !body.access) {
-        throw new Error(body.fields?.email ?? body.error ?? "Could not grant admin access.");
+        throw new Error(
+          body.fields?.fullName ?? body.fields?.email ?? body.error ?? "Could not send admin invitation.",
+        );
       }
 
       setAccess((current) => {
@@ -47,8 +50,9 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
           a.level === b.level ? a.grantedAt.localeCompare(b.grantedAt) : a.level === "owner" ? -1 : 1,
         );
       });
+      setFullName("");
       setEmail("");
-      setNotice("Admin access granted. The user can now sign in with that existing Clerk account.");
+      setNotice("Admin invitation sent. Access activates after the recipient creates and verifies the invited account.");
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not grant admin access.");
@@ -58,7 +62,7 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
   }
 
   async function revoke(item: AdminAccessSummary) {
-    if (!window.confirm(`Remove admin access from ${item.email}?`)) return;
+    if (!window.confirm(`${item.status === "pending" ? "Revoke the invitation for" : "Remove admin access from"} ${item.email}?`)) return;
     setBusy(item.id);
     setError(null);
     setNotice(null);
@@ -76,7 +80,7 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
       setAccess((current) =>
         current.map((row) => (row.id === body.access!.id ? body.access! : row)),
       );
-      setNotice(`Admin access removed from ${item.email}.`);
+      setNotice(item.status === "pending" ? `Invitation revoked for ${item.email}.` : `Admin access removed from ${item.email}.`);
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not revoke admin access.");
@@ -132,10 +136,22 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
     <div className="space-y-5">
       <form onSubmit={grant} className="space-y-3">
         <div>
-          <label htmlFor="admin-access-email" className="mb-1.5 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
-            Existing Bundleen account email
+          <label htmlFor="admin-access-name" className="mb-1.5 block text-[12px] font-semibold" style={{ color: "var(--ink-900)" }}>
+            Invite a Bundleen administrator
           </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <input
+              id="admin-access-name"
+              type="text"
+              autoComplete="name"
+              required
+              maxLength={120}
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Full name"
+              className="min-h-11 rounded-xl border px-3 text-[14px] outline-none focus:ring-2"
+              style={{ borderColor: "var(--line)", background: "var(--paper)", color: "var(--ink-900)" }}
+            />
             <input
               id="admin-access-email"
               type="email"
@@ -154,11 +170,11 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
               className="min-h-11 rounded-xl px-5 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: "var(--teal-800)" }}
             >
-              {busy === "grant" ? "Granting…" : "Grant admin access"}
+              {busy === "grant" ? "Sending…" : "Send invitation"}
             </button>
           </div>
           <p className="mt-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
-            For safety, the email must already have a verified Clerk and Bundleen account. This does not create credentials.
+            The recipient does not need a homeowner or provider account. The email link creates a separate internal staff identity; pending invitations have no portal access.
           </p>
         </div>
       </form>
@@ -177,10 +193,15 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
                 <p className="truncate text-[11px]" style={{ color: "var(--muted)" }}>
                   {item.email}{item.grantedByName ? ` · granted by ${item.grantedByName}` : ""}
                 </p>
+                {item.status === "pending" && item.invitationExpiresAt ? (
+                  <p className="mt-0.5 text-[10px]" style={{ color: "var(--muted)" }}>
+                    Invitation expires {new Date(item.invitationExpiresAt).toLocaleDateString()}
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <StatusPill label={item.level === "owner" ? "Primary owner" : item.status[0].toUpperCase() + item.status.slice(1)} tone={item.status === "active" ? "positive" : item.status === "revoked" ? "danger" : "warning"} />
-                {item.level !== "owner" && item.status === "active" && (
+                {item.level !== "owner" && item.status !== "revoked" && (
                   <button
                     type="button"
                     disabled={busy !== null}
@@ -188,7 +209,7 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
                     className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
                     style={{ borderColor: "var(--line)", color: "var(--danger-600)" }}
                   >
-                    {busy === item.id ? "Removing…" : "Remove"}
+                    {busy === item.id ? "Updating…" : item.status === "pending" ? "Revoke invitation" : "Remove"}
                   </button>
                 )}
               </div>
@@ -237,4 +258,3 @@ export function AdminAccessManager({ initialAccess }: { initialAccess: AdminAcce
     </div>
   );
 }
-

@@ -5,6 +5,7 @@ import {
   SERVICE_RADIUS_MIN_MILES,
 } from "@/lib/provider-coverage";
 import { normalizeEmail } from "@/lib/validation/auth";
+import { MAX_NAME_LENGTH } from "@/lib/validation/auth";
 
 export const MAX_HOA_BODY_BYTES = 64 * 1024;
 export const MAX_HOA_TITLE_LENGTH = 120;
@@ -28,6 +29,12 @@ const emailField = z
   .email("Enter a valid email address.")
   .max(254, "Email address is too long.")
   .transform(normalizeEmail);
+
+const inviteeNameField = z
+  .string()
+  .trim()
+  .min(2, "Enter the person's full name.")
+  .max(MAX_NAME_LENGTH, "Name is too long.");
 
 const idField = z.string().trim().min(1).max(64);
 
@@ -154,7 +161,11 @@ export type UnitImportInput = z.infer<typeof unitImportSchema>;
 /* ── Invitations ─────────────────────────────────────────────────────────── */
 
 export const hoaManagerInvitationCreateSchema = z
-  .object({ email: emailField })
+  .object({
+    fullName: inviteeNameField,
+    email: emailField,
+    role: z.enum(["hoa_manager", "hoa_team"]),
+  })
   .strict();
 
 export const hoaResidentInvitationCreateSchema = z

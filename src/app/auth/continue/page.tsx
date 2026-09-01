@@ -36,6 +36,8 @@ export default async function ContinueAfterAuthentication() {
   });
 
   if (!profile || !isAppRole(profile.role)) redirect("/get-started/profile");
+  // Compatibility for manager identities created before `hoa_staff` became a
+  // first-class account type. New staff invitations never take this path.
   if (profile.role === "homeowner" && (await isHoaManager(profile.id))) {
     redirect("/app/hoa/dashboard");
   }

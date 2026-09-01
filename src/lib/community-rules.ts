@@ -38,7 +38,7 @@ export type CommunityRuleCode =
   | "manual_override_required"
   | "stale_review"
   | "provider_not_active"
-  | "hoa_manager_invitation_required";
+  | "hoa_staff_invitation_required";
 
 /** HTTP status each rule failure maps to. */
 const STATUS_BY_CODE: Record<CommunityRuleCode, number> = {
@@ -56,7 +56,7 @@ const STATUS_BY_CODE: Record<CommunityRuleCode, number> = {
   manual_override_required: 409,
   stale_review: 409,
   provider_not_active: 403,
-  hoa_manager_invitation_required: 409,
+  hoa_staff_invitation_required: 409,
 };
 
 /**
@@ -137,13 +137,13 @@ export function assertCanAssignStaffRole(input: {
 
   assertStaffRoleMatchesCommunity(role, community);
 
-  // Scoped responsibilities sit on top of the homeowner experience. A provider
-  // account has a different dashboard entirely, and a Bundleen admin already
-  // has portal-wide access that a community assignment would only confuse.
-  if (assignee.role !== "homeowner") {
+  const expectedAccountRole = role === "neighborhood_manager" ? "homeowner" : "hoa_staff";
+  if (assignee.role !== expectedAccountRole) {
     throw new CommunityRuleError(
       "not_a_homeowner",
-      "Only homeowner accounts can hold a community role.",
+      role === "neighborhood_manager"
+        ? "Only homeowner accounts can manage a neighbourhood."
+        : "HOA roles require a separate HOA staff account.",
     );
   }
 
@@ -213,5 +213,6 @@ export function viewerRoleLabel(
   if (globalRole === "provider") return "Service provider";
 
   const scoped = primaryStaffRole(staffRoles);
-  return scoped ? STAFF_ROLE_LABELS[scoped] : "Homeowner";
+  if (scoped) return STAFF_ROLE_LABELS[scoped];
+  return globalRole === "hoa_staff" ? "HOA staff" : "Homeowner";
 }

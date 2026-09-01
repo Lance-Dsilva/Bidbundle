@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({
     clerkUserId: string;
     email: string;
     fullName: string;
-    role: "homeowner" | "provider" | "admin";
+    role: "homeowner" | "provider" | "hoa_staff" | "admin";
     isVerified: boolean;
     adminAccess: null | {
       email: string;
@@ -126,7 +126,7 @@ describe("requireUser", () => {
 });
 
 describe("requireRole", () => {
-  it.each(["homeowner", "provider", "admin"] as const)("permits matching role %s", async (role) => {
+  it.each(["homeowner", "provider", "hoa_staff", "admin"] as const)("permits matching role %s", async (role) => {
     signedInAs(role);
     await expect(requireRole([role])).resolves.toMatchObject({ role });
   });

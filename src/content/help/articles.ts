@@ -41,6 +41,6 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     slug: "roles-and-access",
     title: "Account roles and what each one can see",
-    body: `Every Bundleen account has one global role — homeowner, provider, or admin — but day-to-day permissions are more specific than that. HOA manager access is a separate, per-community assignment on top of the homeowner role: a person is only ever a manager of a particular HOA, never a manager everywhere. Homeowners see their own communities, requests, bids, and schedule. Providers see their own bids, agreements, and visits. Bundleen admins are the only role with cross-community operational visibility, and even an admin account needs an active, database-backed access grant — the role alone is not enough.`,
+    body: `Customer accounts are homeowners or service providers. HOA managers and team members use separate invitation-only staff identities, and their day-to-day permissions come from an assignment to one specific HOA rather than residency. Bundleen administrators also use separate invitation-only internal identities. Homeowners see their own communities, requests, bids, and schedule. Providers see their own bids, agreements, and visits. Bundleen admins are the only accounts with cross-community operational visibility, and even an admin identity needs an active, database-backed access grant — the account type alone is not enough.`,
   },
 ];

@@ -163,6 +163,7 @@ describe("awardBid", () => {
     state.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa", status: "active" };
     state.managerAssignment = {
       id: "assignment-1",
+      role: "hoa_manager",
       community: { id: "hoa-1", name: "Cedar Park HOA" },
     };
     state.request = {

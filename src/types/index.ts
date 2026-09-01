@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: "homeowner" | "provider" | "admin";
+  role: "homeowner" | "provider" | "hoa_staff" | "admin";
   neighborhood: string;
 }
 

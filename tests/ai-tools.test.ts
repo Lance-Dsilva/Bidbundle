@@ -36,13 +36,13 @@ vi.mock("@/lib/server/db", () => ({
       findFirst: async ({
         where,
       }: {
-        where: { userId: string; communityId: string; role: string; status: string };
+        where: { userId: string; communityId: string; role: string | { in: string[] }; status: string };
       }) => {
         const match = state.staffAssignments.find(
           (a) =>
             a.userId === where.userId &&
             a.communityId === where.communityId &&
-            a.role === where.role &&
+            (typeof where.role === "string" ? a.role === where.role : where.role.in.includes(a.role)) &&
             a.status === where.status,
         );
         return match
@@ -169,7 +169,7 @@ describe("get_hoa_overview", () => {
     }
   });
 
-  it("gives an HOA manager (a homeowner-role account with an active hoa_manager assignment) a grounded answer for the community they manage", async () => {
+  it("gives an HOA staff identity with an active hoa_manager assignment a grounded answer for the community they manage", async () => {
     state.memberships = [];
     state.staffAssignments = [{ userId: "mgr-1", communityId: "community-1", role: "hoa_manager", status: "active" }];
     state.requests = [
@@ -185,7 +185,7 @@ describe("get_hoa_overview", () => {
         createdAt: new Date(),
       },
     ];
-    const manager = { userId: "mgr-1", role: "homeowner" as const, isAdmin: false };
+    const manager = { userId: "mgr-1", role: "hoa_staff" as const, isAdmin: false };
     const result = await runTool("get_hoa_overview", manager, JSON.stringify({ communityId: "community-1" }));
     const data = result.data as { name: string; requestsByStatus: Record<string, number> };
     expect(data.name).toBe("Maple Ridge HOA");

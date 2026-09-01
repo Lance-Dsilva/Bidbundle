@@ -17,7 +17,8 @@ const HOA_AI_SUGGESTIONS = [
 export function HoaManagerShell({
   children,
   userName,
-}: Readonly<{ children: ReactNode; userName: string }>) {
+  roleLabel = "HOA manager",
+}: Readonly<{ children: ReactNode; userName: string; roleLabel?: string }>) {
   return (
     <div className="min-h-screen bg-[#f4f7f6] lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="border-b border-[#dce7e4] bg-white px-5 py-5 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-6 lg:py-7">
@@ -25,7 +26,7 @@ export function HoaManagerShell({
           <img src="/creative/icons/logo-house.svg" alt="" width={38} height={38} />
           <span>Bundleen HOA</span>
         </Link>
-        <nav className="mt-7 flex gap-2 overflow-x-auto lg:flex-col" aria-label="HOA manager navigation">
+        <nav className="mt-7 flex gap-2 overflow-x-auto lg:flex-col" aria-label="HOA staff navigation">
           <ManagerLink href="/app/hoa/dashboard" icon="home" label="Overview" />
           <ManagerLink href="/app/hoa/dashboard#residents" icon="users" label="Residents" />
           <ManagerLink href="/app/hoa/dashboard#requests" icon="clipboard" label="Service requests" />
@@ -35,7 +36,7 @@ export function HoaManagerShell({
           <ManagerLink href="/app/support" icon="chat" label="Support" />
         </nav>
         <div className="mt-8 hidden rounded-2xl border border-[#dce7e4] bg-[#f1faf7] p-4 lg:block">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f8f83]">Manager account</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f8f83]">HOA staff account</p>
           <p className="mt-2 text-sm font-semibold text-[#102a43]">Invitation-only access</p>
           <p className="mt-1 text-xs leading-5 text-[#64748b]">Your powers are limited to the HOA assigned by Bundleen.</p>
         </div>
@@ -50,7 +51,7 @@ export function HoaManagerShell({
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <strong className="block text-sm text-[#102a43]">{userName}</strong>
-              <span className="text-xs text-[#64748b]">HOA manager</span>
+              <span className="text-xs text-[#64748b]">{roleLabel}</span>
             </div>
             <UserButton appearance={{ elements: { avatarBox: "h-9 w-9" } }} />
           </div>
@@ -58,7 +59,7 @@ export function HoaManagerShell({
         <main className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 lg:px-8">{children}</main>
       </div>
 
-      <BundleenAiWidget suggestions={HOA_AI_SUGGESTIONS} subtitle="Scoped to the HOAs you manage" />
+      <BundleenAiWidget suggestions={HOA_AI_SUGGESTIONS} subtitle="Scoped to your assigned HOA" />
     </div>
   );
 }

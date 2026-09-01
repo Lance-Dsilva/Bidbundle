@@ -34,7 +34,7 @@ export default async function AcceptHoaInvitationPage({ params }: PageProps) {
           [identity.firstName, identity.lastName].filter(Boolean).join(" ") ||
           primaryEmail.emailAddress.split("@")[0],
       });
-      redirect(destination === "manager" ? "/app/hoa/dashboard" : "/app/homeowner/community");
+      redirect(destination === "staff" ? "/app/hoa/dashboard" : "/app/homeowner/community");
     } catch (caught) {
       // Next's redirect throws an internal control-flow value that must not be
       // converted into an error card.

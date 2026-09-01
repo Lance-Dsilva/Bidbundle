@@ -5,7 +5,8 @@ import { adminAccessGrantSchema } from "@/lib/validation/admin-access";
 
 describe("admin access validation", () => {
   it("normalizes an approved email", () => {
-    expect(adminAccessGrantSchema.parse({ email: "  STAFF@Example.com " })).toEqual({
+    expect(adminAccessGrantSchema.parse({ fullName: "  Ada Admin  ", email: "  STAFF@Example.com " })).toEqual({
+      fullName: "Ada Admin",
       email: "staff@example.com",
     });
   });
@@ -13,6 +14,7 @@ describe("admin access validation", () => {
   it("rejects extra privilege fields supplied by the browser", () => {
     expect(
       adminAccessGrantSchema.safeParse({
+        fullName: "Ada Admin",
         email: "staff@example.com",
         level: "owner",
         status: "active",
@@ -26,4 +28,3 @@ describe("admin access validation", () => {
     expect(isPrimaryAdminEmail("someone@example.com")).toBe(false);
   });
 });
-

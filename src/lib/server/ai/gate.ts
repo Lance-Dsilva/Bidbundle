@@ -10,7 +10,7 @@ export type AiGate = { ok: true; user: SessionUser } | { ok: false; response: Ne
 
 const MAX_AI_BODY_BYTES = 4 * 1024;
 
-/** Any signed-in, profiled user — homeowner, provider, or admin. */
+/** Any signed-in, profiled user, including invitation-only staff identities. */
 export async function requireAiUser(): Promise<AiGate> {
   const authorized = await authorizeRequest();
   return authorized.ok

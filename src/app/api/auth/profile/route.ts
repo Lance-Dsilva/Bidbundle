@@ -152,7 +152,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   let persistenceStage: PersistenceStage = "user";
 
   try {
-    let user: { id: string; role: "homeowner" | "provider" | "admin" } | undefined;
+    let user: { id: string; role: "homeowner" | "provider" | "hoa_staff" | "admin" } | undefined;
     let lastError: unknown;
 
     // Use one nested write rather than an interactive transaction. Prisma can

@@ -113,7 +113,7 @@ describe("identity and role helpers", () => {
     expect(normalizeEmail("  Ada@Example.COM ")).toBe("ada@example.com");
   });
 
-  it.each(["homeowner", "provider", "admin"])("recognizes application role %s", (role) => {
+  it.each(["homeowner", "provider", "hoa_staff", "admin"])("recognizes application role %s", (role) => {
     expect(isAppRole(role)).toBe(true);
   });
 
@@ -125,6 +125,7 @@ describe("identity and role helpers", () => {
     expect(DASHBOARD_BY_ROLE).toEqual({
       homeowner: "/app/homeowner/dashboard",
       provider: "/app/provider/dashboard",
+      hoa_staff: "/app/hoa/dashboard",
       admin: "/app/admin/dashboard",
     });
   });

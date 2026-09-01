@@ -37,7 +37,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const access = await grantAdminAccess({
       actorUserId: gate.user.id,
+      fullName: parsed.data.fullName,
       email: parsed.data.email,
+      requestUrl: request.url,
     });
     return NextResponse.json({ access }, { status: 201 });
   } catch (error) {

@@ -35,6 +35,11 @@ export const tabsByRole: Record<UserRole, TabDefinition[]> = {
     { href: "/app/provider/earnings", icon: "piggy-bank", label: "Earnings" },
     { href: "/app/provider/profile", icon: "profile", label: "Profile" },
   ],
+  hoa_staff: [
+    { href: "/app/hoa/dashboard", icon: "home", label: "Home" },
+    { href: "/app/hoa/amenities", icon: "calendar", legacyIcon: true, label: "Amenities" },
+    { href: "/app/support", icon: "chat", label: "Support" },
+  ],
   admin: [
     { href: "/app/admin/dashboard", icon: "home", label: "Home" },
     { href: "/app/admin/communities", icon: "neighbors", label: "Communities" },
@@ -55,6 +60,7 @@ export function TabIcon({ tab, size = 20 }: { tab: TabDefinition; size?: number 
 export function roleFromPathname(pathname: string): UserRole | null {
   if (pathname.startsWith("/app/provider")) return "provider";
   if (pathname.startsWith("/app/admin")) return "admin";
+  if (pathname.startsWith("/app/hoa")) return "hoa_staff";
   if (pathname.startsWith("/app/homeowner")) return "homeowner";
   return null;
 }

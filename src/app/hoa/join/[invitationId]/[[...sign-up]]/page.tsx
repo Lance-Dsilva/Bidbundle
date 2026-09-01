@@ -42,7 +42,11 @@ export default async function HoaInvitationPage({ params }: PageProps) {
         {usable ? (
           <div className="w-full max-w-md">
             <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[#0f8f83]">
-              {invitation.role === "hoa_manager" ? "HOA manager invitation" : "HOA resident invitation"}
+              {invitation.role === "hoa_manager"
+                ? "HOA manager invitation"
+                : invitation.role === "hoa_team"
+                  ? "HOA team invitation"
+                  : "HOA resident invitation"}
             </p>
             <ClerkFormGate context="invitation">
               <SignUp

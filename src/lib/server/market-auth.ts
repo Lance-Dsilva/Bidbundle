@@ -6,10 +6,10 @@ import { HoaWorkflowError } from "@/lib/server/hoa";
 /**
  * Who may drive one service request's lifecycle.
  *
- * The important design decision: `requireManagedHoa` is *not* weakened. It
- * keeps meaning exactly what it always meant — the scoped, active manager of a
- * real HOA — and this module sits beside it, choosing which authority applies
- * from the community's own type. An HOA request answers to an HOA manager; a
+ * The important design decision is that HOA authority remains scoped to an
+ * active staff assignment for that exact HOA. This module chooses which
+ * authority applies from the community's own type. An HOA request answers to
+ * its manager/team; a
  * neighborhood request answers to that neighborhood's one assigned
  * `neighborhood_manager`; a Bundleen admin has an audited recovery path over
  * both.
@@ -109,7 +109,7 @@ export async function loadRequestContext(requestId: string): Promise<RequestCont
 
 export type ManagerAuthority = {
   /** Which rule granted the authority. Recorded in every audit entry. */
-  via: "hoa_manager" | "neighborhood_manager" | "admin_recovery";
+  via: "hoa_manager" | "hoa_team" | "neighborhood_manager" | "admin_recovery";
   userId: string;
   communityId: string;
   communityName: string;
@@ -187,14 +187,14 @@ export async function requireCommunityManager(
         where: {
           userId,
           communityId,
-          role: "hoa_manager",
+          role: { in: ["hoa_manager", "hoa_team"] },
           status: "active",
         },
-        select: { id: true },
+        select: { id: true, role: true },
       });
       if (assignment) {
         return {
-          via: "hoa_manager",
+          via: assignment.role,
           userId,
           communityId: community.id,
           communityName: community.name,
@@ -224,7 +224,7 @@ export async function requireCommunityManager(
 
   throw new HoaWorkflowError(
     community.type === "hoa"
-      ? "You do not manage this HOA."
+      ? "You do not have active staff access to this HOA."
       : "Only your neighbourhood's assigned manager can do this.",
     403,
   );

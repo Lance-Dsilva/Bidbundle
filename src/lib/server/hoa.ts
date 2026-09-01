@@ -26,11 +26,17 @@ export class HoaWorkflowError extends Error {
   }
 }
 
-type InvitationRole = "hoa_manager" | "homeowner";
+type InvitationRole = "hoa_manager" | "hoa_team" | "homeowner";
+type HoaStaffInvitationRole = Exclude<InvitationRole, "homeowner">;
+
+function isHoaStaffInvitationRole(role: InvitationRole): role is HoaStaffInvitationRole {
+  return role === "hoa_manager" || role === "hoa_team";
+}
 
 export function serializeInvitation(row: {
   id: string;
   email: string;
+  inviteeName: string | null;
   role: InvitationRole;
   status: "pending" | "accepted" | "revoked";
   unitId: string | null;
@@ -42,6 +48,7 @@ export function serializeInvitation(row: {
   return {
     id: row.id,
     email: row.email,
+    inviteeName: row.inviteeName,
     role: row.role,
     status: row.status,
     unitId: row.unitId,
@@ -90,12 +97,12 @@ export function serializeSurvey(
   };
 }
 
-/** Returns true only for a live, scoped HOA-manager assignment. */
+/** Returns true for a live, scoped HOA manager or team assignment. */
 export async function isHoaManager(userId: string): Promise<boolean> {
   const assignment = await db.communityStaffAssignment.findFirst({
     where: {
       userId,
-      role: "hoa_manager",
+      role: { in: ["hoa_manager", "hoa_team"] },
       status: "active",
       community: { type: "hoa", status: "active" },
     },
@@ -104,12 +111,29 @@ export async function isHoaManager(userId: string): Promise<boolean> {
   return Boolean(assignment);
 }
 
+/** Display role for the HOA shell; manager wins when a person holds both. */
+export async function getHoaStaffRole(
+  userId: string,
+): Promise<"hoa_manager" | "hoa_team" | null> {
+  const assignments = await db.communityStaffAssignment.findMany({
+    where: {
+      userId,
+      role: { in: ["hoa_manager", "hoa_team"] },
+      status: "active",
+      community: { type: "hoa", status: "active" },
+    },
+    select: { role: true },
+  });
+  if (assignments.some((assignment) => assignment.role === "hoa_manager")) return "hoa_manager";
+  return assignments.some((assignment) => assignment.role === "hoa_team") ? "hoa_team" : null;
+}
+
 export async function requireManagedHoa(userId: string, communityId: string) {
   const assignment = await db.communityStaffAssignment.findFirst({
     where: {
       userId,
       communityId,
-      role: "hoa_manager",
+      role: { in: ["hoa_manager", "hoa_team"] },
       status: "active",
       community: { type: "hoa", status: "active" },
     },
@@ -166,6 +190,8 @@ function invitationRedirectOrigin(requestUrl: string): string {
 async function createClerkInvitation(input: {
   invitationId: string;
   email: string;
+  fullName: string | null;
+  role: InvitationRole;
   requestUrl: string;
 }) {
   const client = await clerkClient();
@@ -174,6 +200,11 @@ async function createClerkInvitation(input: {
     expiresInDays: INVITATION_LIFETIME_DAYS,
     ignoreExisting: true,
     notify: true,
+    publicMetadata: {
+      bundleenInvitationId: input.invitationId,
+      bundleenInvitationRole: input.role,
+      ...(input.fullName ? { bundleenInvitedName: input.fullName } : {}),
+    },
     redirectUrl: `${invitationRedirectOrigin(input.requestUrl)}/hoa/join/${input.invitationId}`,
   });
 }
@@ -183,6 +214,7 @@ async function createInvitation(input: {
   actorEmail: string;
   communityId: string;
   email: string;
+  fullName: string | null;
   role: InvitationRole;
   unitId: string | null;
   requestUrl: string;
@@ -259,8 +291,12 @@ async function createInvitation(input: {
     throw new HoaWorkflowError("A current invitation has already been sent to that email.");
   }
 
-  if (existingUser && existingUser.role !== "homeowner") {
-    throw new HoaWorkflowError("That email belongs to an account type that cannot join an HOA.");
+  if (
+    existingUser &&
+    ((isHoaStaffInvitationRole(input.role) && existingUser.role !== "hoa_staff") ||
+      (input.role === "homeowner" && existingUser.role !== "homeowner"))
+  ) {
+    throw new HoaWorkflowError("That email belongs to an account type that cannot accept this invitation.");
   }
   if (
     input.role === "homeowner" &&
@@ -271,12 +307,12 @@ async function createInvitation(input: {
     );
   }
   if (
-    input.role === "hoa_manager" &&
+    isHoaStaffInvitationRole(input.role) &&
     existingUser &&
     (existingUser.communityMemberships.length > 0 || existingUser.staffAssignments.length > 0)
   ) {
     throw new HoaWorkflowError(
-      "Use a separate account for the HOA manager rather than an existing resident or staff account.",
+      "Use a separate HOA staff account rather than an existing resident or staff account.",
     );
   }
 
@@ -313,6 +349,8 @@ async function createInvitation(input: {
     clerkInvitation = await createClerkInvitation({
       invitationId,
       email,
+      fullName: input.fullName,
+      role: input.role,
       requestUrl: input.requestUrl,
     });
   } catch {
@@ -330,6 +368,7 @@ async function createInvitation(input: {
           id: invitationId,
           communityId: community.id,
           email,
+          inviteeName: input.fullName,
           role: input.role,
           unitId: unit?.id ?? null,
           status: "pending",
@@ -340,6 +379,7 @@ async function createInvitation(input: {
         },
         update: {
           status: "pending",
+          inviteeName: input.fullName,
           unitId: unit?.id ?? null,
           clerkInvitationId: clerkInvitation.id,
           invitedByUserId: input.actorUserId,
@@ -366,12 +406,14 @@ async function createInvitation(input: {
               data: { onboardingStatus: "manager_invited" },
             }),
           ]
-        : [
+        : input.role === "homeowner"
+          ? [
             db.hoaProfile.updateMany({
               where: { communityId: community.id, onboardingStatus: "manager_active" },
               data: { onboardingStatus: "residents_inviting" },
             }),
-          ]),
+            ]
+          : []),
       db.adminAuditLog.create({
         data: buildAuditEntry({
           actorUserId: input.actorUserId,
@@ -397,6 +439,7 @@ async function createInvitation(input: {
   return {
     id: invitationId,
     email,
+    inviteeName: input.fullName,
     role: input.role,
     status: "pending",
     unitId: unit?.id ?? null,
@@ -413,9 +456,23 @@ export function inviteHoaManager(input: {
   actorEmail: string;
   communityId: string;
   email: string;
+  fullName: string;
   requestUrl: string;
 }) {
   return createInvitation({ ...input, role: "hoa_manager", unitId: null });
+}
+
+/** Bundleen staff invite either the manager or a scoped HOA team identity. */
+export function inviteHoaStaff(input: {
+  actorUserId: string;
+  actorEmail: string;
+  communityId: string;
+  email: string;
+  fullName: string;
+  role: HoaStaffInvitationRole;
+  requestUrl: string;
+}) {
+  return createInvitation({ ...input, unitId: null });
 }
 
 export async function listHoaManagerInvitations(
@@ -423,11 +480,12 @@ export async function listHoaManagerInvitations(
 ): Promise<HoaInvitationSummary[]> {
   await requireInvitableHoa(communityId);
   const rows = await db.communityInvitation.findMany({
-    where: { communityId, role: "hoa_manager" },
+    where: { communityId, role: { in: ["hoa_manager", "hoa_team"] } },
     orderBy: { invitedAt: "desc" },
     select: {
       id: true,
       email: true,
+      inviteeName: true,
       role: true,
       status: true,
       unitId: true,
@@ -450,7 +508,7 @@ export async function inviteHoaResident(input: {
   requestUrl: string;
 }) {
   await requireManagedHoa(input.actorUserId, input.communityId);
-  return createInvitation({ ...input, role: "homeowner" });
+  return createInvitation({ ...input, fullName: null, role: "homeowner" });
 }
 
 async function revokeInvitation(input: {
@@ -527,13 +585,31 @@ export async function revokeHoaManagerInvitation(input: {
   return revokeInvitation({ ...input, role: "hoa_manager" });
 }
 
+export async function revokeHoaStaffInvitation(input: {
+  actorUserId: string;
+  communityId: string;
+  invitationId: string;
+}) {
+  await requireInvitableHoa(input.communityId);
+  const invitation = await db.communityInvitation.findFirst({
+    where: {
+      id: input.invitationId,
+      communityId: input.communityId,
+      role: { in: ["hoa_manager", "hoa_team"] },
+    },
+    select: { role: true },
+  });
+  if (!invitation) throw new HoaWorkflowError("That invitation does not exist.", 404);
+  return revokeInvitation({ ...input, role: invitation.role });
+}
+
 export async function acceptHoaInvitation(input: {
   invitationId: string;
   clerkUserId: string;
   email: string;
   emailVerified: boolean;
   fullName: string;
-}): Promise<"manager" | "resident"> {
+}): Promise<"staff" | "resident"> {
   if (!input.emailVerified) {
     throw new HoaWorkflowError("Verify your email before accepting this invitation.", 403);
   }
@@ -543,6 +619,7 @@ export async function acceptHoaInvitation(input: {
     select: {
       id: true,
       email: true,
+      inviteeName: true,
       role: true,
       status: true,
       unitId: true,
@@ -562,7 +639,7 @@ export async function acceptHoaInvitation(input: {
     ) {
       throw new HoaWorkflowError("Sign in with the email address that accepted this invitation.", 403);
     }
-    return invitation.role === "hoa_manager" ? "manager" : "resident";
+    return isHoaStaffInvitationRole(invitation.role) ? "staff" : "resident";
   }
   if (invitation.status !== "pending") throw new HoaWorkflowError("This invitation is no longer active.");
   if (invitation.expiresAt && invitation.expiresAt <= new Date()) {
@@ -606,8 +683,13 @@ export async function acceptHoaInvitation(input: {
   if (byClerk && normalizeEmail(byClerk.email) !== email) {
     throw new HoaWorkflowError("This signed-in account does not match the invitation.", 403);
   }
-  if ((byClerk?.role ?? byEmail?.role) && (byClerk?.role ?? byEmail?.role) !== "homeowner") {
-    throw new HoaWorkflowError("This account type cannot accept an HOA invitation.", 409);
+  const existingRole = byClerk?.role ?? byEmail?.role;
+  if (
+    existingRole &&
+    ((isHoaStaffInvitationRole(invitation.role) && existingRole !== "hoa_staff") ||
+      (invitation.role === "homeowner" && existingRole !== "homeowner"))
+  ) {
+    throw new HoaWorkflowError("This account type cannot accept this HOA invitation.", 409);
   }
   if (
     invitation.role === "homeowner" &&
@@ -618,28 +700,33 @@ export async function acceptHoaInvitation(input: {
     );
   }
   if (
-    invitation.role === "hoa_manager" &&
+    isHoaStaffInvitationRole(invitation.role) &&
     byEmail &&
     (byEmail.communityMemberships.length > 0 || byEmail.staffAssignments.length > 0)
   ) {
-    throw new HoaWorkflowError("The HOA manager invitation requires a separate account.");
+    throw new HoaWorkflowError("The HOA staff invitation requires a separate account.");
   }
+
+  const acceptedName =
+    invitation.inviteeName || input.fullName || email.split("@")[0];
+  const isStaff = isHoaStaffInvitationRole(invitation.role);
 
   const user = await db.user.upsert({
     where: { clerkUserId: input.clerkUserId },
     create: {
       clerkUserId: input.clerkUserId,
       email,
-      fullName: input.fullName || email.split("@")[0],
-      role: "homeowner",
+      fullName: acceptedName,
+      role: isStaff ? "hoa_staff" : "homeowner",
       isVerified: true,
-      homeownerProfile: { create: {} },
+      ...(isStaff ? {} : { homeownerProfile: { create: {} } }),
     },
     update: {
       email,
-      fullName: input.fullName || undefined,
+      fullName: acceptedName,
+      role: isStaff ? "hoa_staff" : "homeowner",
       isVerified: true,
-      homeownerProfile: { upsert: { create: {}, update: {} } },
+      ...(isStaff ? {} : { homeownerProfile: { upsert: { create: {}, update: {} } } }),
     },
     select: { id: true },
   });
@@ -652,11 +739,11 @@ export async function acceptHoaInvitation(input: {
       kind: "invitation",
       title: `Welcome to ${invitation.community.name}`,
       body:
-        invitation.role === "hoa_manager"
-          ? "Your HOA manager invitation was accepted. Your manager dashboard is ready."
+        isHoaStaffInvitationRole(invitation.role)
+          ? `Your ${invitation.role === "hoa_manager" ? "HOA manager" : "HOA team"} invitation was accepted. Your HOA dashboard is ready.`
           : "Your HOA invitation was accepted. You can now view community services and updates.",
       linkPath:
-        invitation.role === "hoa_manager" ? "/app/hoa/dashboard" : "/app/homeowner/community",
+        isHoaStaffInvitationRole(invitation.role) ? "/app/hoa/dashboard" : "/app/homeowner/community",
       dedupeKey: `invitation-accepted:${invitation.id}:${user.id}`,
     },
     ...(invitation.invitedBy.id !== user.id
@@ -665,29 +752,31 @@ export async function acceptHoaInvitation(input: {
             userId: invitation.invitedBy.id,
             email: invitation.invitedBy.email,
             kind: "invitation" as const,
-            title: `${input.fullName || email} joined ${invitation.community.name}`,
-            body: `The ${invitation.role === "hoa_manager" ? "HOA manager" : "homeowner"} invitation was accepted.`,
-            linkPath: invitation.role === "hoa_manager" ? "/app/admin/communities" : "/app/hoa/dashboard",
+            title: `${acceptedName} joined ${invitation.community.name}`,
+            body: `The ${invitation.role === "hoa_manager" ? "HOA manager" : invitation.role === "hoa_team" ? "HOA team" : "homeowner"} invitation was accepted.`,
+            linkPath: isHoaStaffInvitationRole(invitation.role) ? "/app/admin/communities" : "/app/hoa/dashboard",
             dedupeKey: `invitation-accepted-sender:${invitation.id}:${invitation.invitedBy.id}`,
           },
         ]
       : []),
   ]);
-  if (invitation.role === "hoa_manager") {
-    const currentManager = await db.communityStaffAssignment.findFirst({
-      where: {
-        communityId: invitation.community.id,
-        role: "hoa_manager",
-        status: "active",
-      },
-      select: { id: true, userId: true },
-    });
-    if (currentManager && currentManager.userId !== user.id) {
-      throw new HoaWorkflowError("This HOA already has an active manager.");
+  if (isHoaStaffInvitationRole(invitation.role)) {
+    if (invitation.role === "hoa_manager") {
+      const currentManager = await db.communityStaffAssignment.findFirst({
+        where: {
+          communityId: invitation.community.id,
+          role: "hoa_manager",
+          status: "active",
+        },
+        select: { id: true, userId: true },
+      });
+      if (currentManager && currentManager.userId !== user.id) {
+        throw new HoaWorkflowError("This HOA already has an active manager.");
+      }
     }
 
     const previousAssignment = await db.communityStaffAssignment.findFirst({
-      where: { communityId: invitation.community.id, userId: user.id, role: "hoa_manager" },
+      where: { communityId: invitation.community.id, userId: user.id, role: invitation.role },
       orderBy: { assignedAt: "desc" },
       select: { id: true },
     });
@@ -710,7 +799,7 @@ export async function acceptHoaInvitation(input: {
               id: assignmentId,
               communityId: invitation.community.id,
               userId: user.id,
-              role: "hoa_manager",
+              role: invitation.role,
               status: "active",
               assignedByUserId: invitation.invitedByUserId,
               assignedAt: now,
@@ -720,13 +809,17 @@ export async function acceptHoaInvitation(input: {
         where: { id: invitation.id },
         data: { status: "accepted", acceptedByUserId: user.id, acceptedAt: now },
       }),
-      db.hoaProfile.updateMany({
-        where: {
-          communityId: invitation.community.id,
-          onboardingStatus: { in: ["draft", "manager_invited"] },
-        },
-        data: { onboardingStatus: "manager_active" },
-      }),
+      ...(invitation.role === "hoa_manager"
+        ? [
+            db.hoaProfile.updateMany({
+              where: {
+                communityId: invitation.community.id,
+                onboardingStatus: { in: ["draft", "manager_invited"] },
+              },
+              data: { onboardingStatus: "manager_active" },
+            }),
+          ]
+        : []),
       db.adminAuditLog.create({
         data: buildAuditEntry({
           actorUserId: user.id,
@@ -739,7 +832,7 @@ export async function acceptHoaInvitation(input: {
       }),
       ...acceptanceNotificationOps,
     ]);
-    return "manager";
+    return "staff";
   }
 
   const unitId = invitation.unitId as string;

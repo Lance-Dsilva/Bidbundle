@@ -242,18 +242,10 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
             }
           />
         )}
-        {community.status === "active" && community.type === "hoa" && community.manager === null && (
-          <HoaManagerInvitationPanel communityId={community.id} />
-        )}
-        {community.status === "active" && community.type === "hoa" && community.manager !== null && (
-          <AssignRoleForm
+        {community.status === "active" && community.type === "hoa" && (
+          <HoaManagerInvitationPanel
             communityId={community.id}
-            communityType={community.type}
-            managerRole={managerRole}
-            hasManager
-            teamOnly
-            busy={busyKey !== null}
-            onAssign={(body) => run("assign-team", () => assignStaffRole(community.id, body))}
+            hasManager={community.manager !== null}
           />
         )}
       </SectionCard>

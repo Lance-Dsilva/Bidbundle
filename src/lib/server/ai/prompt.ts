@@ -24,8 +24,10 @@ function describeScope(scope: AiCallerScope): string {
       return "a Bundleen operations admin with access to internal operational data across communities.";
     case "provider":
       return "a service provider, limited to their own account, bids, agreements, and visits — never another provider's.";
+    case "hoa_staff":
+      return "an HOA manager or team member, limited to the HOA communities where they hold an active staff assignment — never resident-private data or another community's data.";
     default:
-      return "a homeowner, limited to the HOA communities they belong to or manage — never another resident's private data or another community's.";
+      return "a homeowner, limited to the communities they belong to — never another resident's private data or another community's.";
   }
 }
 

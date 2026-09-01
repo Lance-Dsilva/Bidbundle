@@ -82,7 +82,7 @@ describe("assertCanAssignStaffRole", () => {
           actorUserId: ADMIN,
           role,
           community: hoa,
-          assignee: assignee({ membershipStatus: null }),
+          assignee: assignee({ role: "hoa_staff", membershipStatus: null }),
         }),
       ).not.toThrow();
     }
@@ -189,12 +189,14 @@ describe("primaryStaffRole", () => {
 describe("viewerRoleLabel", () => {
   it("labels a plain homeowner", () => {
     expect(viewerRoleLabel("homeowner", [])).toBe("Homeowner");
+    expect(viewerRoleLabel("hoa_staff", [])).toBe("HOA staff");
   });
 
   it("labels each scoped role", () => {
     expect(viewerRoleLabel("homeowner", ["neighborhood_manager"])).toBe("Neighborhood manager");
     expect(viewerRoleLabel("homeowner", ["hoa_manager"])).toBe("HOA manager");
     expect(viewerRoleLabel("homeowner", ["hoa_team"])).toBe("HOA team");
+    expect(viewerRoleLabel("hoa_staff", ["hoa_team"])).toBe("HOA team");
   });
 
   it("ignores scoped roles for providers and admins", () => {

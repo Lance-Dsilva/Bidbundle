@@ -10,7 +10,7 @@
 export const PUBLIC_ROLES = ["homeowner", "provider"] as const;
 
 /** Every role the application recognises, including ones only staff can hold. */
-export const ALL_ROLES = ["homeowner", "provider", "admin"] as const;
+export const ALL_ROLES = ["homeowner", "provider", "hoa_staff", "admin"] as const;
 
 export type PublicRole = (typeof PUBLIC_ROLES)[number];
 export type AppRole = (typeof ALL_ROLES)[number];
@@ -42,5 +42,6 @@ export function isAppRole(value: unknown): value is AppRole {
 export const DASHBOARD_BY_ROLE: Record<AppRole, string> = {
   homeowner: "/app/homeowner/dashboard",
   provider: "/app/provider/dashboard",
+  hoa_staff: "/app/hoa/dashboard",
   admin: "/app/admin/dashboard",
 };

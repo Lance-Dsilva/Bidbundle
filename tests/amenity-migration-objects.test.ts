@@ -191,11 +191,13 @@ describe("safety of the migration itself", () => {
     expect(creates.every((statement) => statement.includes("IF NOT EXISTS"))).toBe(true);
   });
 
-  it("is the newest migration, so it applies after the marketplace work", () => {
+  it("applies after the marketplace work", () => {
     const names = readdirSync(MIGRATIONS_DIR)
       .filter((entry) => /^\d{14}_/.test(entry))
       .sort();
-    expect(names.at(-1)).toBe(MIGRATION_NAME);
+    expect(names.indexOf(MIGRATION_NAME)).toBeGreaterThan(
+      names.indexOf("20260829090000_shared_marketplace_and_address_verification"),
+    );
   });
 });
 

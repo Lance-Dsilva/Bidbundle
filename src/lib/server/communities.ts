@@ -337,12 +337,9 @@ export async function getCommunityDetail(communityId: string): Promise<Community
 }
 
 /**
- * Homeowners the portal may legitimately offer for a given assignment.
- *
- * For a neighborhood manager the list is exactly the active residents of that
- * community, because nobody else is eligible. For HOA roles it is any
- * homeowner account, because HOA staff need not live there — so that branch is
- * search-driven and capped rather than enumerating the whole user table.
+ * Homeowners the portal may legitimately offer for a neighborhood-manager
+ * assignment. HOA staff are never selected from customer accounts; both HOA
+ * manager and team identities are created through the email invitation flow.
  */
 export async function listStaffCandidates(
   communityId: string,
@@ -351,6 +348,13 @@ export async function listStaffCandidates(
 ): Promise<StaffCandidate[]> {
   const community = await requireCommunity(communityId);
   assertStaffRoleMatchesCommunity(role, community);
+
+  if (role === "hoa_manager" || role === "hoa_team") {
+    throw new CommunityRuleError(
+      "hoa_staff_invitation_required",
+      "HOA staff must accept a separate staff-account invitation instead of being selected from an existing customer account.",
+    );
+  }
 
   const nameOrEmail: Prisma.UserWhereInput = search
     ? {
@@ -361,34 +365,16 @@ export async function listStaffCandidates(
       }
     : {};
 
-  if (role === "neighborhood_manager") {
-    const memberships = await db.communityMembership.findMany({
-      where: { communityId, status: "active", user: { role: "homeowner", ...nameOrEmail } },
-      select: { status: true, user: { select: personSelect } },
-      orderBy: { user: { fullName: "asc" } },
-      take: 50,
-    });
-
-    return memberships.map((membership) => ({
-      ...toPersonSummary(membership.user),
-      membershipStatus: membership.status as StaffCandidate["membershipStatus"],
-    }));
-  }
-
-  const users = await db.user.findMany({
-    where: { role: "homeowner", ...nameOrEmail },
-    select: {
-      ...personSelect,
-      communityMemberships: { where: { communityId }, select: { status: true } },
-    },
-    orderBy: { fullName: "asc" },
+  const memberships = await db.communityMembership.findMany({
+    where: { communityId, status: "active", user: { role: "homeowner", ...nameOrEmail } },
+    select: { status: true, user: { select: personSelect } },
+    orderBy: { user: { fullName: "asc" } },
     take: 50,
   });
 
-  return users.map((user) => ({
-    ...toPersonSummary(user),
-    membershipStatus:
-      (user.communityMemberships[0]?.status as StaffCandidate["membershipStatus"]) ?? null,
+  return memberships.map((membership) => ({
+    ...toPersonSummary(membership.user),
+    membershipStatus: membership.status as StaffCandidate["membershipStatus"],
   }));
 }
 
@@ -988,10 +974,10 @@ export async function assignStaffRole(
 ): Promise<{ assignmentId: string; replacedAssignmentId: string | null }> {
   const community = await requireCommunity(communityId);
 
-  if (input.role === "hoa_manager") {
+  if (input.role === "hoa_manager" || input.role === "hoa_team") {
     throw new CommunityRuleError(
-      "hoa_manager_invitation_required",
-      "HOA managers must accept the separate manager-account invitation instead of being assigned from an existing homeowner account.",
+      "hoa_staff_invitation_required",
+      "HOA staff must accept the separate staff-account invitation instead of being assigned from an existing customer account.",
     );
   }
 
@@ -1570,7 +1556,8 @@ export async function resolveViewerContext(user: {
     })),
     // Navigation only. Every management read and write re-derives this from
     // the same live assignments; hiding a link is not a permission check.
-    canManageCommunity: user.role === "homeowner" && assignments.length > 0,
+    canManageCommunity:
+      (user.role === "homeowner" || user.role === "hoa_staff") && assignments.length > 0,
   };
 }
 

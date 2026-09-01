@@ -7,7 +7,7 @@ import {
   requireAdminMutation,
   validationErrorResponse,
 } from "@/lib/server/admin-api";
-import { inviteHoaManager, listHoaManagerInvitations } from "@/lib/server/hoa";
+import { inviteHoaStaff, listHoaManagerInvitations } from "@/lib/server/hoa";
 import { hoaManagerInvitationCreateSchema } from "@/lib/validation/hoa";
 import { fieldErrors } from "@/lib/validation/profile";
 
@@ -38,11 +38,13 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
   const { communityId } = await context.params;
 
   try {
-    const invitation = await inviteHoaManager({
+    const invitation = await inviteHoaStaff({
       actorUserId: gate.user.id,
       actorEmail: gate.user.email,
       communityId,
+      fullName: parsed.data.fullName,
       email: parsed.data.email,
+      role: parsed.data.role,
       requestUrl: request.url,
     });
     return NextResponse.json({ invitation }, { status: 201 });

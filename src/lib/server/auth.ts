@@ -145,13 +145,13 @@ export async function requireRole(
 }
 
 /**
- * Page guard for the dedicated HOA operations portal. The global homeowner
- * role is intentionally insufficient: access exists only while a live,
- * community-scoped `hoa_manager` assignment exists in the database.
+ * Page guard for the dedicated HOA operations portal. The staff account type
+ * is intentionally insufficient by itself: access exists only while a live,
+ * community-scoped manager or team assignment exists in the database.
  */
 export async function requireHoaManager(callbackPath = "/app/hoa/dashboard"): Promise<SessionUser> {
-  const user = await requireRole(["homeowner"], callbackPath);
-  if (!(await isHoaManager(user.id))) redirect("/app/homeowner/dashboard");
+  const user = await requireRole(["hoa_staff", "homeowner"], callbackPath);
+  if (!(await isHoaManager(user.id))) redirect("/hoa/access-denied");
   return user;
 }
 

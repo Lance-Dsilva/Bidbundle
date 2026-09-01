@@ -41,7 +41,8 @@ export type VisitStatusValue =
 export type HoaInvitationSummary = {
   id: string;
   email: string;
-  role: "hoa_manager" | "homeowner";
+  inviteeName: string | null;
+  role: "hoa_manager" | "hoa_team" | "homeowner";
   status: "pending" | "accepted" | "revoked";
   unitId: string | null;
   unitLabel: string | null;

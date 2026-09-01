@@ -1477,7 +1477,7 @@ export async function listRequestBids(
         where: {
           userId: viewerUserId,
           communityId: request.communityId,
-          role: "hoa_manager",
+          role: { in: ["hoa_manager", "hoa_team"] },
           status: "active",
         },
         select: { id: true },
@@ -2337,7 +2337,7 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
   const assignments = await db.communityStaffAssignment.findMany({
     where: {
       userId,
-      role: "hoa_manager",
+      role: { in: ["hoa_manager", "hoa_team"] },
       status: "active",
       community: { type: "hoa", status: "active" },
     },
@@ -2381,6 +2381,7 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
             select: {
               id: true,
               email: true,
+              inviteeName: true,
               role: true,
               status: true,
               unitId: true,

@@ -31,7 +31,16 @@ vi.mock("@/lib/server/db", () => ({
     communityStaffAssignment: {
       findFirst: async (args: { where?: { role?: unknown } }) => {
         const role = args?.where?.role;
-        if (role === "hoa_manager") return state.hoaManagerAssignment;
+        if (
+          role === "hoa_manager" ||
+          (typeof role === "object" && role !== null && "in" in role &&
+            Array.isArray((role as { in?: unknown }).in) &&
+            (role as { in: unknown[] }).in.includes("hoa_manager"))
+        ) {
+          return state.hoaManagerAssignment
+            ? { role: "hoa_manager", ...state.hoaManagerAssignment }
+            : null;
+        }
         if (role === "neighborhood_manager") return state.neighborhoodManagerAssignment;
         return null;
       },
@@ -105,6 +114,16 @@ beforeEach(() => {
 });
 
 describe("HOA and neighbourhood authority do not cross", () => {
+  it("grants an HOA team member authority only through the scoped staff assignment", async () => {
+    state.community = { ...HOA };
+    state.hoaManagerAssignment = { id: "assignment-team", role: "hoa_team" };
+
+    await expect(requireCommunityManager("hoa-team", "hoa-1")).resolves.toMatchObject({
+      via: "hoa_team",
+      communityId: "hoa-1",
+    });
+  });
+
   it("an HOA manager cannot drive a neighbourhood request", async () => {
     state.community = { ...HOOD };
     // They genuinely manage an HOA — just not this community.

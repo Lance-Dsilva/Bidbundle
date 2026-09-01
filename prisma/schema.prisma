@@ -16,6 +16,7 @@ datasource db {
 enum UserRole {
   homeowner
   provider
+  hoa_staff
   admin
 }
 
@@ -160,6 +161,7 @@ enum AdminAuditTargetType {
 
 enum CommunityInvitationRole {
   hoa_manager
+  hoa_team
   homeowner
 }
 
@@ -446,7 +448,12 @@ model AdminAccessGrant {
 
   previousRole UserRole?
 
-  clerkInvitationId String? @unique
+  /// Name entered by the owner when the invitation is issued. It lets the
+  /// access list identify a pending invite before a Clerk user exists.
+  inviteeName String?
+
+  clerkInvitationId   String?   @unique
+  invitationExpiresAt DateTime?
 
   grantedByUserId String?
   grantedBy       User?     @relation("AdminAccessGrantor", fields: [grantedByUserId], references: [id], onDelete: SetNull)
@@ -698,9 +705,10 @@ model CommunityInvitation {
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
-  email  String
-  role   CommunityInvitationRole
-  status CommunityInvitationStatus @default(pending)
+  email       String
+  inviteeName String?
+  role        CommunityInvitationRole
+  status      CommunityInvitationStatus @default(pending)
 
   /// The specific home a homeowner invitation is bound to. Required for
   /// homeowner invitations, null for manager invitations (trigger-enforced).

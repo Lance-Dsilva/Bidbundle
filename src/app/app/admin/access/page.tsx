@@ -25,11 +25,10 @@ export default async function AdminAccessPage() {
     <div className="flex flex-col">
       <AppPageHeader title="Admin access" subtitle="Primary-owner controlled · database backed · fully auditable" />
       <div className="mx-auto w-full max-w-3xl px-4 py-7 pb-24">
-        <SectionCard title="Portal access" subtitle="Grant or remove access for an existing verified Bundleen account.">
+        <SectionCard title="Portal access" subtitle="Invite or remove standalone Bundleen staff accounts.">
           <AdminAccessManager initialAccess={await listAdminAccess()} />
         </SectionCard>
       </div>
     </div>
   );
 }
-

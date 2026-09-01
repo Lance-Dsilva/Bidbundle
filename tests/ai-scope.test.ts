@@ -21,13 +21,13 @@ vi.mock("@/lib/server/db", () => ({
       findFirst: async ({
         where,
       }: {
-        where: { userId: string; communityId: string; role: string; status: string };
+        where: { userId: string; communityId: string; role: string | { in: string[] }; status: string };
       }) => {
         const match = state.staffAssignments.find(
           (a) =>
             a.userId === where.userId &&
             a.communityId === where.communityId &&
-            a.role === where.role &&
+            (typeof where.role === "string" ? a.role === where.role : where.role.in.includes(a.role)) &&
             a.status === where.status,
         );
         if (!match) return null;
@@ -98,7 +98,7 @@ describe("resolveCommunityAccess", () => {
   it("grants manager access to an active hoa_manager assignment", async () => {
     state.staffAssignments.push({ userId: "mgr-1", communityId: "community-1", role: "hoa_manager", status: "active" });
     const access = await resolveCommunityAccess(
-      { userId: "mgr-1", role: "homeowner", isAdmin: false },
+      { userId: "mgr-1", role: "hoa_staff", isAdmin: false },
       "community-1",
     );
     expect(access.isManagerOrAdmin).toBe(true);

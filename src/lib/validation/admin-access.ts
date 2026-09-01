@@ -2,12 +2,18 @@ import { z } from "zod";
 
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { normalizeEmail } from "@/lib/validation/auth";
+import { MAX_NAME_LENGTH } from "@/lib/validation/auth";
 
 export const MAX_ADMIN_ACCESS_EMAIL_LENGTH = 254;
 
-/** The browser supplies only an email; level, status, and actor are server-owned. */
+/** The owner identifies a new staff member; level, status, and actor are server-owned. */
 export const adminAccessGrantSchema = z
   .object({
+    fullName: z
+      .string()
+      .trim()
+      .min(2, "Enter the administrator's full name.")
+      .max(MAX_NAME_LENGTH, "Name is too long."),
     email: z
       .string()
       .trim()

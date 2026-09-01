@@ -146,7 +146,7 @@ function contextMessage(context: TicketAiContext): string {
 /* ── Generation ──────────────────────────────────────────────────────────── */
 
 async function generate(
-  admin: { id: string; role: "homeowner" | "provider" | "admin" },
+  admin: { id: string; role: "homeowner" | "provider" | "hoa_staff" | "admin" },
   ticketId: string,
   kind: "reply" | "explanation",
 ): Promise<TicketAiDraftView> {
@@ -253,14 +253,14 @@ function classify(error: unknown): string {
 }
 
 export async function generateReplyDraft(
-  admin: { id: string; role: "homeowner" | "provider" | "admin" },
+  admin: { id: string; role: "homeowner" | "provider" | "hoa_staff" | "admin" },
   ticketId: string,
 ): Promise<TicketAiDraftView> {
   return generate(admin, ticketId, "reply");
 }
 
 export async function generateExplanation(
-  admin: { id: string; role: "homeowner" | "provider" | "admin" },
+  admin: { id: string; role: "homeowner" | "provider" | "hoa_staff" | "admin" },
   ticketId: string,
 ): Promise<TicketAiDraftView> {
   return generate(admin, ticketId, "explanation");

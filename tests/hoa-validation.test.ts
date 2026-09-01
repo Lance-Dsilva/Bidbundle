@@ -23,11 +23,18 @@ import {
 
 describe("HOA invitation validation", () => {
   it("normalizes a valid manager email and rejects extra authority fields", () => {
-    expect(hoaManagerInvitationCreateSchema.parse({ email: "  MANAGER@Example.com " })).toEqual({
+    expect(hoaManagerInvitationCreateSchema.parse({
+      fullName: "  Morgan Manager  ",
+      email: "  MANAGER@Example.com ",
+      role: "hoa_manager",
+    })).toEqual({
+      fullName: "Morgan Manager",
       email: "manager@example.com",
+      role: "hoa_manager",
     });
     expect(
       hoaManagerInvitationCreateSchema.safeParse({
+        fullName: "Morgan Manager",
         email: "manager@example.com",
         communityId: "client-selected",
         role: "hoa_manager",
