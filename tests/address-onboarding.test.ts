@@ -48,6 +48,7 @@ vi.mock("@/lib/server/db", () => ({
       findMany: async () => state.units,
       create: op("communityUnit", "create"),
       update: op("communityUnit", "update"),
+      delete: op("communityUnit", "delete"),
       createMany: op("communityUnit", "createMany"),
     },
     communityMembership: { findFirst: async () => null },
@@ -103,7 +104,7 @@ import {
   resolveForStorage,
 } from "@/lib/server/address-verification";
 import { GeocoderError } from "@/lib/server/geocoding";
-import { upsertHoaProfile } from "@/lib/server/hoa-units";
+import { removeUnusedUnit, upsertHoaProfile } from "@/lib/server/hoa-units";
 import { hoaProfileSchema, unitCreateSchema, unitUpdateSchema } from "@/lib/validation/hoa";
 
 const ENTERED = {
@@ -373,6 +374,15 @@ describe("upsertHoaProfile", () => {
     expect(update).not.toHaveProperty("addressVerificationStatus");
   });
 
+  it("never pre-populates the unit inventory from the declared home count", async () => {
+    geocoder.search.mockResolvedValue([candidate()]);
+
+    await upsertHoaProfile("admin-1", "hoa-1", { ...PROFILE_INPUT, totalHomes: 250 });
+
+    const writes = state.batches.flat();
+    expect(writes.some((entry) => entry.model === "communityUnit")).toBe(false);
+  });
+
   it("retries verification on every save while the address is unresolved", async () => {
     state.profile = {
       ...ENTERED,
@@ -401,6 +411,50 @@ describe("upsertHoaProfile", () => {
     state.community = { id: "hood-1", name: "Oakwood", type: "neighborhood", status: "active" };
     await expect(upsertHoaProfile("admin-1", "hood-1", PROFILE_INPUT)).rejects.toMatchObject({
       status: 404,
+    });
+    expect(state.batches).toHaveLength(0);
+  });
+});
+
+describe("explicit unit inventory", () => {
+  it("lets staff remove a legacy placeholder only when it has no history", async () => {
+    state.unit = {
+      id: "unit-1",
+      occupancyStatus: "vacant",
+      _count: {
+        memberships: 0,
+        invitations: 0,
+        participations: 0,
+        visits: 0,
+        amenityBookings: 0,
+      },
+    };
+
+    await removeUnusedUnit("admin-1", "hoa-1", "unit-1");
+
+    expect(state.batches[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ model: "communityUnit", action: "delete" }),
+        expect.objectContaining({ model: "adminAuditLog", action: "create" }),
+      ]),
+    );
+  });
+
+  it("preserves a unit with any resident or service history", async () => {
+    state.unit = {
+      id: "unit-1",
+      occupancyStatus: "vacant",
+      _count: {
+        memberships: 1,
+        invitations: 0,
+        participations: 0,
+        visits: 0,
+        amenityBookings: 0,
+      },
+    };
+
+    await expect(removeUnusedUnit("admin-1", "hoa-1", "unit-1")).rejects.toMatchObject({
+      status: 409,
     });
     expect(state.batches).toHaveLength(0);
   });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { Icon } from "@/components/ui/Icon";
 
 const HOA_AI_SUGGESTIONS = [
@@ -23,7 +24,7 @@ export function HoaManagerShell({
     <div className="min-h-screen bg-[#f4f7f6] lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="border-b border-[#dce7e4] bg-white px-5 py-5 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-6 lg:py-7">
         <Link className="flex items-center gap-3 text-xl font-bold text-[#102a43]" href="/app/hoa/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" width={38} height={38} />
+          <BundleenCompanyIcon size={38} />
           <span>Bundleen HOA</span>
         </Link>
         <nav className="mt-7 flex gap-2 overflow-x-auto lg:flex-col" aria-label="HOA staff navigation">

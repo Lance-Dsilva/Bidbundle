@@ -14,6 +14,8 @@ const state = vi.hoisted(() => ({
   role: "homeowner" as Role,
   /** Set to make one Prisma operation throw: `"model.operation"`. */
   failOn: null as { target: string; error: Error } | null,
+  /** What staff have already checked, so revocation can be exercised. */
+  verified: { license: null as Date | null, insurance: null as Date | null },
   calls: [] as Array<{ model: string; operation: string; args: unknown }>,
 }));
 
@@ -106,8 +108,8 @@ const client = {
         licenseState: PROVIDER_ROW.licenseState,
         insuranceProvider: PROVIDER_ROW.insuranceProvider,
         insurancePolicyNumber: PROVIDER_ROW.insurancePolicyNumber,
-        licenseVerifiedAt: PROVIDER_ROW.licenseVerifiedAt,
-        insuranceVerifiedAt: PROVIDER_ROW.insuranceVerifiedAt,
+        licenseVerifiedAt: state.verified.license,
+        insuranceVerifiedAt: state.verified.insurance,
         accountStatus: PROVIDER_ROW.accountStatus,
       };
     },
@@ -153,6 +155,7 @@ function signedInAs(role: Role) {
 beforeEach(() => {
   signedInAs("homeowner");
   state.failOn = null;
+  state.verified = { license: null, insurance: null };
   state.calls = [];
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -421,6 +424,130 @@ describe("PATCH /api/profile/provider", () => {
     );
     expect(response.status).toBe(400);
     expect(state.calls.some((call) => call.model === "providerProfile")).toBe(false);
+  });
+
+  it("revokes only the licence when a verified licence claim changes", async () => {
+    signedInAs("provider");
+    state.verified = { license: new Date("2026-02-01"), insurance: new Date("2026-02-01") };
+
+    const response = await providerRoute.PATCH(
+      patchRequest("https://bundleen.test/api/profile/provider", { licenseNumber: "LIC-2" }),
+    );
+    expect(response.status).toBe(200);
+
+    const update = state.calls.find(
+      (call) => call.model === "providerProfile" && call.operation === "update",
+    )!.args as { data: Record<string, unknown> };
+    expect(update.data).toMatchObject({ licenseVerifiedAt: null });
+    // The insurance the provider did not touch stays checked.
+    expect(update.data).not.toHaveProperty("insuranceVerifiedAt");
+
+    const audits = state.calls.filter((call) => call.model === "adminAuditLog");
+    expect(audits).toHaveLength(1);
+    expect(JSON.stringify(audits[0]!.args)).toContain("provider_license_revoked");
+  });
+
+  it("revokes only the insurance when a verified insurance claim changes", async () => {
+    signedInAs("provider");
+    state.verified = { license: new Date("2026-02-01"), insurance: new Date("2026-02-01") };
+
+    const response = await providerRoute.PATCH(
+      patchRequest("https://bundleen.test/api/profile/provider", {
+        insuranceProvider: "NewCo",
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    const update = state.calls.find(
+      (call) => call.model === "providerProfile" && call.operation === "update",
+    )!.args as { data: Record<string, unknown> };
+    expect(update.data).toMatchObject({ insuranceVerifiedAt: null });
+    expect(update.data).not.toHaveProperty("licenseVerifiedAt");
+
+    const audits = state.calls.filter((call) => call.model === "adminAuditLog");
+    expect(audits).toHaveLength(1);
+    expect(JSON.stringify(audits[0]!.args)).toContain("provider_insurance_revoked");
+  });
+
+  it("audits nothing when the changed claim was never verified", async () => {
+    signedInAs("provider");
+    state.verified = { license: null, insurance: null };
+
+    await providerRoute.PATCH(
+      patchRequest("https://bundleen.test/api/profile/provider", { licenseNumber: "LIC-3" }),
+    );
+    expect(state.calls.filter((call) => call.model === "adminAuditLog")).toHaveLength(0);
+  });
+
+  it("carries every editable field through one atomic save", async () => {
+    signedInAs("provider");
+    const business = {
+      companyName: "ProFix Plumbing",
+      bio: "Two decades of drains.",
+      trades: ["Plumbing", "HVAC"],
+      workingDays: ["mon", "wed"],
+      workingHoursStart: "08:00",
+      workingHoursEnd: "17:30",
+      licenseNumber: "LIC-9",
+      licenseState: "TX",
+      insuranceProvider: "Acme Mutual",
+      insurancePolicyNumber: "POL-9",
+    };
+
+    const response = await providerRoute.PUT(
+      new Request("https://bundleen.test/api/profile/provider", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          common: {
+            fullName: "Ada L.",
+            phone: "+1 512 555 0100",
+            address: "1 Oak St",
+            neighborhood: "North Austin",
+          },
+          provider: business,
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    // Everything the editor can change reaches the write, so a reload — which
+    // reads these same columns back — shows what was typed.
+    const providerUpdate = state.calls.find(
+      (call) => call.model === "providerProfile" && call.operation === "update",
+    )!.args as { data: Record<string, unknown> };
+    expect(providerUpdate.data).toMatchObject(business);
+
+    const userUpdate = state.calls.find(
+      (call) => call.model === "user" && call.operation === "update",
+    )!.args as { data: Record<string, unknown> };
+    expect(userUpdate.data).toMatchObject({
+      fullName: "Ada L.",
+      phone: "+1 512 555 0100",
+      address: "1 Oak St",
+      neighborhood: "North Austin",
+    });
+  });
+
+  it.each([
+    ["licenseVerifiedAt", new Date().toISOString()],
+    ["payoutStatus", "active"],
+    ["accountStatus", "active"],
+  ])("refuses a full save that smuggles %s into the provider half", async (field, value) => {
+    signedInAs("provider");
+    const response = await providerRoute.PUT(
+      new Request("https://bundleen.test/api/profile/provider", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          common: { fullName: "Ada L." },
+          provider: { companyName: "ProFix", [field]: value },
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    // Nothing partial: the common half is not written either.
+    expect(state.calls.some((call) => call.operation === "update")).toBe(false);
   });
 
   it("reports a database failure without quoting it", async () => {

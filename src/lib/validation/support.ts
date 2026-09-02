@@ -104,6 +104,24 @@ export type CustomerReplyInput = z.infer<typeof customerReplySchema>;
 /* ── Admin ───────────────────────────────────────────────────────────────── */
 
 /**
+ * Bundleen may start a support conversation with one provider from the
+ * provider CRM record. The provider identity and assigned admin are derived
+ * from the URL and verified session, never accepted from this body.
+ */
+export const adminProviderTicketCreateSchema = z
+  .object({
+    subject: ticketText(MAX_TICKET_SUBJECT_LENGTH, "Add a short subject."),
+    category: z.enum(SUPPORT_TICKET_CATEGORIES),
+    priority: z.enum(SUPPORT_TICKET_PRIORITIES).default("normal"),
+    message: ticketText(MAX_TICKET_MESSAGE_LENGTH, "Write the message to the provider."),
+  })
+  .strict();
+
+export type AdminProviderTicketCreateInput = z.infer<
+  typeof adminProviderTicketCreateSchema
+>;
+
+/**
  * Every admin mutation carries the `updatedAt` the admin was looking at.
  *
  * The update's `where` clause includes it, so a second admin acting on a stale

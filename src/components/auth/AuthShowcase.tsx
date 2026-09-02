@@ -1,3 +1,5 @@
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
+
 type Testimonial = {
   quote: string;
   name: string;
@@ -31,7 +33,7 @@ export function AuthShowcase(_props: AuthShowcaseProps) {
       <div className="pointer-events-none absolute inset-0 auth-showcase-glow" />
       <div className="relative z-10 flex min-h-screen flex-col px-[clamp(38px,5vw,58px)] py-12">
         <div className="flex items-center gap-3">
-          <img src="/modern/icons/logo.svg" alt="" className="h-9 w-9" />
+          <BundleenCompanyIcon size={36} className="h-9 w-9" />
           <span className="text-[22px] font-extrabold tracking-[-0.035em] text-[#0f1e32]">
             Bundleen
           </span>

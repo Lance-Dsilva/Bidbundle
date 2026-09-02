@@ -6,11 +6,16 @@ import { usePathname } from "next/navigation";
 
 import { roleLine, ViewerIdentity } from "@/components/layout/ViewerIdentity";
 import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
+import {
+  ProviderSessionProvider,
+  useProviderSession,
+  type ProviderSessionSeed,
+} from "@/components/provider/ProviderSessionContext";
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { Icon } from "@/components/ui/Icon";
 import { NotificationBell } from "@/components/ui/NotificationBell";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewerContext } from "@/hooks/useViewerContext";
-import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { initialsFromName } from "@/lib/display-name";
 
 const providerNavigation = [
@@ -27,16 +32,34 @@ type ProviderShellProps = Readonly<{
   children: ReactNode;
   /** Display name from the verified server session, not from client state. */
   userName: string;
+  /**
+   * Trading name, account status, and unread count, resolved once by the
+   * server layout. The shell deliberately fetches none of this itself: it used
+   * to call the dashboard and profile endpoints on every provider route,
+   * duplicating whatever the page below was already loading.
+   */
+  identity: ProviderSessionSeed;
 }>;
 
-export function ProviderShell({ children, userName }: ProviderShellProps) {
+export function ProviderShell({ children, userName, identity }: ProviderShellProps) {
+  return (
+    <ProviderSessionProvider seed={identity}>
+      <ProviderChrome userName={userName}>{children}</ProviderChrome>
+    </ProviderSessionProvider>
+  );
+}
+
+function ProviderChrome({
+  children,
+  userName,
+}: Readonly<{ children: ReactNode; userName: string }>) {
   const pathname = usePathname();
-  const { dashboard, profile } = useProviderDashboard();
+  const { companyName, unreadMessages } = useProviderSession();
   const { notifications, loading: notificationsLoading, markRead, dismiss } = useNotifications();
   // Account status is server-owned: a suspended provider is told so here, and
   // the provider write endpoints enforce it independently.
   const { context } = useViewerContext();
-  const providerName = profile?.company_name || userName || "Service Provider";
+  const providerName = companyName || userName || "Service Provider";
   const providerInitials = initialsFromName(providerName, "SP");
   const accountName = userName || providerName;
   const accountInitials = initialsFromName(accountName, "SP");
@@ -45,7 +68,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
     <div className="dash-shell provider-shell">
       <aside className="dash-sidebar" aria-label="Provider navigation">
         <Link className="dash-sidebar-brand" href="/app/provider/dashboard" aria-label="Bundleen provider home">
-          <img src="/creative/icons/logo-house.svg" alt="" />
+          <BundleenCompanyIcon size={36} />
           <span>Bundleen</span>
         </Link>
 
@@ -58,8 +81,10 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
             >
               <Icon name={item.icon} size={20} />
               <span>{item.label}</span>
-              {item.label === "Messages" && (dashboard?.unread_messages ?? 0) > 0 ? (
-                <b className="dash-nav-badge amber">{dashboard?.unread_messages}</b>
+              {/* Real count from the conversation tables, seeded server-side
+                  and cleared by the messages page as threads are opened. */}
+              {item.label === "Messages" && unreadMessages > 0 ? (
+                <b className="dash-nav-badge amber">{unreadMessages}</b>
               ) : null}
             </Link>
           ))}
@@ -73,14 +98,10 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
           </Link>
         </nav>
 
-        <section className="dash-invite-card provider-growth-card" aria-label="Grow your business">
-          <span>Grow your business</span>
-          <h3>Find nearby jobs without extra driving.</h3>
-          <p>Review neighborhood demand and bid on work that matches your services.</p>
-          <Link href="/app/provider/job-feed" className="bb-btn bb-btn-primary" style={{ height: 34, padding: "0 12px", fontSize: 12 }}>
-            <Icon name="search" size={14} /> Find jobs
-          </Link>
-        </section>
+        {/* The "Grow your business" promo card that sat here is gone: it
+            repeated the Job Feed link directly above it and pushed the account
+            block off the bottom of shorter viewports. `Job Feed` in the nav is
+            the one route to that work. */}
 
         <div className="dash-sidebar-profile">
           <div className="dash-avatar">{providerInitials}</div>
@@ -93,7 +114,7 @@ export function ProviderShell({ children, userName }: ProviderShellProps) {
 
       <div className="dash-mobile-topbar">
         <Link className="dash-mobile-topbar-brand" href="/app/provider/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
+          <BundleenCompanyIcon size={30} /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
           <NotificationBell notifications={notifications} loading={notificationsLoading} markRead={markRead} dismiss={dismiss} />

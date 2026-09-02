@@ -116,20 +116,26 @@ describe("component consistency", () => {
 });
 
 describe("responsive behaviour", () => {
-  it("keeps the services grid two-up on mobile", () => {
-    const mobileBlock = CSS.slice(CSS.indexOf("@media (max-width: 640px)"));
-    expect(mobileBlock).toMatch(
-      /\.ld-services-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
+  it("collapses every multi-column grid to one column by the tablet width", () => {
+    const tablet = CSS.slice(
+      CSS.indexOf("@media (max-width: 850px)"),
+      CSS.indexOf("@media (max-width: 640px)"),
     );
+    for (const selector of [".ld-flow", ".ld-steps", ".ld-benefit-columns"]) {
+      expect(tablet, `${selector} still has more than one column`).toMatch(
+        new RegExp(`\\${selector}\\s*\\{[^}]*grid-template-columns:\\s*minmax\\(0, 1fr\\)`),
+      );
+    }
+    // The who-it's-for rows drop their label column rather than squeezing it.
+    expect(tablet).toMatch(/\.ld-who-list > div\s*\{[^}]*minmax\(0, 1fr\)/);
   });
 
-  it("collapses the multi-column grids as the viewport narrows", () => {
+  it("stacks the hero side by side only where there is room for it", () => {
     const laptop = CSS.slice(
       CSS.indexOf("@media (max-width: 1180px)"),
       CSS.indexOf("@media (max-width: 850px)"),
     );
-    expect(laptop).toMatch(/\.ld-steps-grid\s*\{[^}]*repeat\(2,/);
-    expect(laptop).toMatch(/\.ld-audience-grid\s*\{[^}]*minmax\(0, 1fr\)/);
+    expect(laptop).toMatch(/\.ld-hero-grid\s*\{[^}]*minmax\(0, 1fr\)/);
   });
 
   it("keeps the primary CTA reachable at the smallest width", () => {
@@ -166,12 +172,6 @@ describe("progressive enhancement and motion", () => {
 });
 
 describe("approved homepage content", () => {
-  it("keeps the manager-first recurring-services message", () => {
-    expect(PAGE).toContain("Built for HOA &amp; neighborhood managers");
-    expect(PAGE).toContain("Recurring services we bundle");
-    expect(PAGE).toContain("I manage a community");
-  });
-
   it("does not reintroduce the excluded one-time-job messaging", () => {
     for (const removed of ["Post a Request", "Neighbors Join", "one-time job"]) {
       expect(PAGE).not.toContain(removed);

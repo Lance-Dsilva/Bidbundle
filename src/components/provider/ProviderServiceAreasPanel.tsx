@@ -163,6 +163,61 @@ export function ProviderServiceAreasPanel({
     [areas, selectedId, creating],
   );
 
+  /** Selecting an area is what "edit" means here: the editor follows it. */
+  const selectArea = (areaId: string) => {
+    setCreating(false);
+    setConfirmRemoveId(null);
+    setFeedback(null);
+    setSelectedId(areaId);
+  };
+
+  /**
+   * Whether the draft differs from the saved row.
+   *
+   * The previous version compared only `radiusMiles`, so moving the centre or
+   * renaming an area hid the Cancel button and left no way back to the saved
+   * values short of reloading.
+   */
+  const isDirty = useMemo(() => {
+    if (!selected || !draft) return false;
+    return (
+      draft.label !== selected.label ||
+      draft.centerLatitude !== selected.centerLatitude ||
+      draft.centerLongitude !== selected.centerLongitude ||
+      draft.radiusMiles !== selected.radiusMiles ||
+      draft.formattedAddress !== selected.formattedAddress ||
+      draft.locality !== selected.locality ||
+      draft.region !== selected.region ||
+      draft.postalCode !== selected.postalCode ||
+      draft.countryCode !== selected.countryCode
+    );
+  }, [draft, selected]);
+
+  const makePrimary = async () => {
+    if (!isServiceAreaDraftValid(draft) || !selectedId) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const response = await fetch(`/api/provider/service-areas/${selectedId}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draftPayload(draft, true)),
+      });
+      if (!response.ok) throw new Error("failed");
+      setFeedback({ tone: "success", message: "Primary area updated." });
+      await load({ keepSelection: true });
+      onAreasChanged?.();
+    } catch {
+      setFeedback({
+        tone: "error",
+        message: "We could not make this your primary area. Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startCreate = () => {
     setCreating(true);
     setConfirmRemoveId(null);
@@ -349,227 +404,215 @@ export function ProviderServiceAreasPanel({
           </button>
         </div>
       ) : (
-        <div className="mt-5 grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-          {/* ── List ─────────────────────────────────────────────────────── */}
-          <div className="min-w-0">
-            {areas.length === 0 && !creating ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
-                <p className="text-[13px] font-bold text-slate-800">No active service areas</p>
-                <p className="mx-auto mt-1 max-w-[220px] text-[12px] text-slate-500">
-                  Add one so Bundleen can match you with nearby work.
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-2">
-                {areas.map((area) => {
-                  const active = !creating && area.id === selectedId;
-                  return (
-                    <li key={area.id}>
-                      <div
-                        className={`rounded-xl border p-3 transition ${
-                          active
-                            ? "border-teal-500 bg-teal-50/60 ring-1 ring-inset ring-teal-200"
-                            : "border-slate-200 bg-white hover:border-slate-300"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          aria-current={active ? "true" : undefined}
-                          onClick={() => {
-                            setCreating(false);
-                            setConfirmRemoveId(null);
-                            setFeedback(null);
-                            setSelectedId(area.id);
-                          }}
-                          className="block w-full text-left"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="min-w-0 truncate text-[13px] font-bold text-slate-900">
-                              {area.label}
-                            </span>
-                            {area.isPrimary ? (
-                              <span className="shrink-0 rounded-md bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                                Primary
-                              </span>
-                            ) : null}
+        <div className="mt-5 space-y-4">
+          {/* ── Saved areas ──────────────────────────────────────────────
+              A compact wrapping rail, not a fixed 280px column: one area no
+              longer reserves a tall empty gutter beside the editor, and the
+              map below gets the full card width. */}
+          {areas.length === 0 && !creating ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
+              <p className="text-[13px] font-bold text-slate-800">No active service areas</p>
+              <p className="mx-auto mt-1 max-w-sm text-[12px] text-slate-500">
+                Add one so Bundleen can match you with nearby work.
+              </p>
+            </div>
+          ) : (
+            <ul className="flex flex-wrap gap-2.5">
+              {areas.map((area) => {
+                const active = !creating && area.id === selectedId;
+                const confirming = confirmRemoveId === area.id;
+                return (
+                  <li
+                    key={area.id}
+                    className={`min-w-[220px] flex-1 basis-[240px] rounded-xl border p-3 transition sm:max-w-[320px] ${
+                      active
+                        ? "border-teal-500 bg-teal-50/60 ring-1 ring-inset ring-teal-200"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      aria-current={active ? "true" : undefined}
+                      aria-label={`Edit ${area.label}`}
+                      onClick={() => selectArea(area.id)}
+                      className="block w-full text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="min-w-0 truncate text-[13px] font-bold text-slate-900">
+                          {area.label}
+                        </span>
+                        {area.isPrimary ? (
+                          <span className="shrink-0 rounded-md bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            Primary
                           </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-slate-500">
-                            {coverageListLabel({ radiusMiles: area.radiusMiles, place: area })}
-                          </span>
-                        </button>
+                        ) : null}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+                        {coverageListLabel({ radiusMiles: area.radiusMiles, place: area })}
+                      </span>
+                    </button>
 
-                        {confirmRemoveId === area.id ? (
-                          <div className="mt-3 rounded-lg bg-red-50 p-3">
-                            <p className="text-[12px] font-medium leading-5 text-red-800">
-                              {isLastArea
-                                ? "This is your only active area. Removing it stops every matched opportunity from reaching you until you add another."
-                                : `Remove “${area.label}”? Requests only inside this circle will stop reaching you.`}
-                            </p>
-                            <div className="mt-2 flex gap-2">
-                              <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => void remove(area.id)}
-                                className="h-8 rounded-lg bg-red-600 px-3 text-[12px] font-bold text-white disabled:opacity-40"
-                              >
-                                {saving ? "Removing…" : "Remove"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmRemoveId(null)}
-                                className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-[12px] font-semibold text-slate-700"
-                              >
-                                Keep it
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
+                    {confirming ? (
+                      <div className="mt-2.5 rounded-lg bg-red-50 p-2.5">
+                        <p className="text-[12px] font-medium leading-5 text-red-800">
+                          {isLastArea
+                            ? "This is your only active area. Removing it stops every matched opportunity from reaching you until you add another."
+                            : `Remove \u201C${area.label}\u201D? Requests only inside this circle will stop reaching you.`}
+                        </p>
+                        <div className="mt-2 flex gap-2">
                           <button
                             type="button"
                             disabled={saving}
-                            onClick={() => setConfirmRemoveId(area.id)}
-                            className="mt-2 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
+                            onClick={() => void remove(area.id)}
+                            className="h-11 rounded-lg bg-red-600 px-3 text-[12px] font-bold text-white disabled:opacity-40"
                           >
-                            Remove
+                            {saving ? "Removing\u2026" : "Remove"}
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemoveId(null)}
+                            className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-[12px] font-semibold text-slate-700"
+                          >
+                            Keep it
+                          </button>
+                        </div>
                       </div>
-                    </li>
-                  );
-                })}
-                {creating ? (
-                  <li className="rounded-xl border border-dashed border-teal-400 bg-teal-50/50 p-3">
-                    <p className="text-[13px] font-bold text-teal-900">New service area</p>
-                    <p className="mt-0.5 text-[11px] text-teal-700">Unsaved</p>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => selectArea(area.id)}
+                          className="text-[11px] font-bold text-teal-700 hover:underline"
+                        >
+                          {active ? "Editing" : "Edit"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => setConfirmRemoveId(area.id)}
+                          className="text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </li>
-                ) : null}
-              </ul>
-            )}
+                );
+              })}
+              {creating ? (
+                <li className="min-w-[220px] flex-1 basis-[240px] rounded-xl border border-dashed border-teal-400 bg-teal-50/50 p-3 sm:max-w-[320px]">
+                  <p className="text-[13px] font-bold text-teal-900">New service area</p>
+                  <p className="mt-0.5 text-[11px] text-teal-700">Unsaved</p>
+                </li>
+              ) : null}
+            </ul>
+          )}
 
-            {unmappable.length > 0 ? (
-              <div className="mt-4 rounded-xl bg-slate-50 p-3">
-                <p className="text-[12px] font-bold text-slate-700">Postal-code areas</p>
-                <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                  These were saved before the coverage map and have no circle to draw. They still
-                  match requests.
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {unmappable.map((area) => (
-                    <li
-                      key={area.id}
-                      className="flex items-center justify-between gap-2 text-[12px] text-slate-700"
+          {/* ── Editor ───────────────────────────────────────────────────── */}
+          {draft || creating ? (
+            <ProviderServiceAreaEditor
+              value={draft}
+              onChange={setDraft}
+              contextCircles={contextCircles}
+              disabled={saving}
+              layout="split"
+              actions={
+                <div className="space-y-3">
+                  {feedback ? (
+                    <p
+                      role={feedback.tone === "error" ? "alert" : "status"}
+                      className={`rounded-xl px-3.5 py-2.5 text-[13px] font-medium ${
+                        feedback.tone === "error"
+                          ? "bg-red-50 text-red-700"
+                          : "bg-emerald-50 text-emerald-800"
+                      }`}
                     >
-                      <span className="min-w-0 truncate">{area.label}</span>
+                      {feedback.message}
+                    </p>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={saving || !isServiceAreaDraftValid(draft)}
+                      onClick={() => void save()}
+                      className="h-11 flex-1 rounded-xl bg-teal-600 px-5 text-[13px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-40"
+                    >
+                      {saving ? "Saving\u2026" : creating ? "Save new area" : "Save changes"}
+                    </button>
+                    {creating || isDirty ? (
                       <button
                         type="button"
                         disabled={saving}
-                        onClick={() => void remove(area.id)}
-                        className="shrink-0 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
+                        onClick={cancelEdit}
+                        className="h-11 rounded-xl border border-slate-300 bg-white px-5 text-[13px] font-semibold text-slate-700"
                       >
-                        Remove
+                        Cancel
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
+                    ) : null}
+                  </div>
 
-          {/* ── Editor ───────────────────────────────────────────────────── */}
-          <div className="min-w-0">
-            {draft || creating ? (
-              <>
-                <ProviderServiceAreaEditor
-                  value={draft}
-                  onChange={setDraft}
-                  contextCircles={contextCircles}
-                  disabled={saving}
-                />
-
-                {feedback ? (
-                  <p
-                    role={feedback.tone === "error" ? "alert" : "status"}
-                    className={`mt-3 rounded-xl px-3.5 py-2.5 text-[13px] font-medium ${
-                      feedback.tone === "error"
-                        ? "bg-red-50 text-red-700"
-                        : "bg-emerald-50 text-emerald-800"
-                    }`}
-                  >
-                    {feedback.message}
-                  </p>
-                ) : null}
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={saving || !isServiceAreaDraftValid(draft)}
-                    onClick={() => void save()}
-                    className="h-11 rounded-xl bg-teal-600 px-5 text-[13px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-40"
-                  >
-                    {saving
-                      ? "Saving…"
-                      : creating
-                        ? "Save new area"
-                        : "Save changes"}
-                  </button>
-                  {creating || (selected && draft && selected.radiusMiles !== draft.radiusMiles) ? (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={cancelEdit}
-                      className="h-11 rounded-xl border border-slate-300 bg-white px-5 text-[13px] font-semibold text-slate-700"
-                    >
-                      Cancel
-                    </button>
-                  ) : null}
                   {!creating && selected && !selected.isPrimary ? (
                     <button
                       type="button"
                       disabled={saving || !isServiceAreaDraftValid(draft)}
-                      onClick={() => {
-                        if (!isServiceAreaDraftValid(draft) || !selectedId) return;
-                        setSaving(true);
-                        void fetch(`/api/provider/service-areas/${selectedId}`, {
-                          method: "PUT",
-                          credentials: "same-origin",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify(draftPayload(draft, true)),
-                        })
-                          .then(async (response) => {
-                            if (!response.ok) throw new Error("failed");
-                            setFeedback({ tone: "success", message: "Primary area updated." });
-                            await load({ keepSelection: true });
-                            onAreasChanged?.();
-                          })
-                          .catch(() =>
-                            setFeedback({
-                              tone: "error",
-                              message: "We could not make this your primary area. Please try again.",
-                            }),
-                          )
-                          .finally(() => setSaving(false));
-                      }}
-                      className="h-11 rounded-xl border border-teal-300 bg-teal-50 px-5 text-[13px] font-bold text-teal-800"
+                      onClick={() => void makePrimary()}
+                      className="h-11 w-full rounded-xl border border-teal-300 bg-teal-50 px-5 text-[13px] font-bold text-teal-800 disabled:opacity-40"
                     >
                       Make primary
                     </button>
                   ) : null}
-                </div>
 
-                {selected && !creating ? (
-                  <p className="mt-3 text-[12px] text-slate-500">
-                    Last saved: {coverageSummary({ radiusMiles: selected.radiusMiles, place: selected, label: selected.label })}.
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <div className="grid h-full min-h-[220px] place-items-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
-                <p className="max-w-xs text-[13px] text-slate-600">
-                  Add a service area to draw the region you cover on the map.
-                </p>
-              </div>
-            )}
-          </div>
+                  {selected && !creating ? (
+                    <p className="text-[12px] leading-5 text-slate-500">
+                      Last saved:{" "}
+                      {coverageSummary({
+                        radiusMiles: selected.radiusMiles,
+                        place: selected,
+                        label: selected.label,
+                      })}
+                      .
+                    </p>
+                  ) : null}
+                </div>
+              }
+            />
+          ) : (
+            <div className="grid min-h-[180px] place-items-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+              <p className="max-w-xs text-[13px] text-slate-600">
+                Add a service area to draw the region you cover on the map.
+              </p>
+            </div>
+          )}
+
+          {/* ── Legacy postal-code areas ─────────────────────────────────── */}
+          {unmappable.length > 0 ? (
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-[12px] font-bold text-slate-700">Postal-code areas</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+                These were saved before the coverage map and have no circle to draw. They still
+                match requests.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {unmappable.map((area) => (
+                  <li
+                    key={area.id}
+                    className="flex items-center justify-between gap-2 text-[12px] text-slate-700"
+                  >
+                    <span className="min-w-0 truncate">{area.label}</span>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void remove(area.id)}
+                      className="shrink-0 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

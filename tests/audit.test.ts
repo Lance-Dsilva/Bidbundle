@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { auditActionSummary, buildAuditEntry, redactAuditMetadata } from "@/lib/server/audit";
+import { buildAuditWhere } from "@/lib/server/audit-query";
+import { auditListQuerySchema } from "@/lib/validation/community";
 
 describe("redactAuditMetadata", () => {
   it("returns null for absent metadata", () => {
@@ -71,6 +73,34 @@ describe("redactAuditMetadata", () => {
       Array.from({ length: 50 }, (_, index) => [`key${index}`, index]),
     );
     expect(redactAuditMetadata(wide)).toEqual({});
+  });
+});
+
+describe("buildAuditWhere", () => {
+  it("combines actor, event, record, and age filters on the database query", () => {
+    const query = auditListQuerySchema.parse({
+      action: "provider_license_verified",
+      actorUserId: "admin-1",
+      related: "provider",
+      age: "7d",
+    });
+    const where = buildAuditWhere(query, new Date("2026-09-01T12:00:00.000Z"));
+
+    expect(where).toEqual({
+      action: "provider_license_verified",
+      actorUserId: "admin-1",
+      providerUserId: { not: null },
+      createdAt: { gte: new Date("2026-08-25T12:00:00.000Z") },
+    });
+  });
+
+  it("can isolate system-only internal events", () => {
+    const query = auditListQuerySchema.parse({ actorUserId: "system", related: "internal" });
+    expect(buildAuditWhere(query)).toMatchObject({
+      actorUserId: null,
+      communityId: null,
+      providerUserId: null,
+    });
   });
 });
 

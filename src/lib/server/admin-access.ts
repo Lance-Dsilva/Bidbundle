@@ -30,6 +30,7 @@ const accessSelect = {
   inviteeName: true,
   level: true,
   status: true,
+  isStaffAccount: true,
   permissions: true,
   invitationExpiresAt: true,
   grantedAt: true,
@@ -45,6 +46,7 @@ type AccessRow = {
   inviteeName: string | null;
   level: "owner" | "admin";
   status: "pending" | "active" | "revoked";
+  isStaffAccount: boolean;
   permissions: string[];
   invitationExpiresAt: Date | null;
   grantedAt: Date;
@@ -60,6 +62,7 @@ function serializeAccess(row: AccessRow): AdminAccessSummary {
     email: row.email,
     level: row.level,
     status: row.status,
+    isStaffAccount: row.isStaffAccount,
     fullName: row.user?.fullName ?? row.inviteeName,
     invitationExpiresAt: row.invitationExpiresAt?.toISOString() ?? null,
     grantedByName: row.grantedBy?.fullName ?? null,
@@ -108,11 +111,17 @@ export async function setAdminPermissions(input: {
 }): Promise<AdminAccessSummary> {
   const grant = await db.adminAccessGrant.findUnique({
     where: { id: input.grantId },
-    select: { id: true, level: true, status: true },
+    select: { id: true, level: true, status: true, isStaffAccount: true },
   });
   if (!grant) throw new AdminAccessError("That admin access record does not exist.", 404);
   if (grant.level === "owner") {
     throw new AdminAccessError("The Bundleen owner already holds every permission.", 400);
+  }
+  if (grant.isStaffAccount) {
+    throw new AdminAccessError(
+      "Ordinary staff accounts cannot be granted administrator permissions.",
+      403,
+    );
   }
   if (grant.status === "revoked") {
     throw new AdminAccessError("Restore this admin's access before changing permissions.", 409);
@@ -138,8 +147,14 @@ export async function setAdminPermissions(input: {
   return serializeAccess(updated);
 }
 
-export async function listAdminAccess(): Promise<AdminAccessSummary[]> {
+export async function listAdminAccess(
+  options: { isStaffAccount?: boolean } = {},
+): Promise<AdminAccessSummary[]> {
   const rows = await db.adminAccessGrant.findMany({
+    where:
+      typeof options.isStaffAccount === "boolean"
+        ? { isStaffAccount: options.isStaffAccount }
+        : undefined,
     select: accessSelect,
     orderBy: [{ level: "desc" }, { grantedAt: "asc" }],
   });
@@ -162,6 +177,7 @@ export async function activateApprovedAdminIdentity(input: {
       status: true,
       inviteeName: true,
       invitationExpiresAt: true,
+      isStaffAccount: true,
       previousRole: true,
       userId: true,
       grantedBy: { select: { id: true, email: true } },
@@ -222,8 +238,8 @@ export async function activateApprovedAdminIdentity(input: {
           email,
           emailPolicy: "required",
           kind: "security",
-          title: "Your Bundleen admin account is ready",
-          body: "Your verified staff identity now has access to the internal Bundleen portal.",
+          title: `Your Bundleen ${grant.isStaffAccount ? "staff" : "admin"} account is ready`,
+          body: "Your verified internal identity now has access to the Bundleen operations portal.",
           linkPath: "/app/admin/dashboard",
           dedupeKey: `admin-access-accepted:${grant.id}:${user.id}`,
         },
@@ -236,7 +252,7 @@ export async function activateApprovedAdminIdentity(input: {
                 kind: "security" as const,
                 title: `${acceptedName} accepted the admin invitation`,
                 body: "The invited Bundleen staff account is verified and now has portal access.",
-                linkPath: "/app/admin/access",
+                linkPath: grant.isStaffAccount ? "/app/admin/staff" : "/app/admin/access",
                 dedupeKey: `admin-access-accepted-owner:${grant.id}:${grant.grantedBy.id}`,
               },
             ]
@@ -286,6 +302,8 @@ export async function grantAdminAccess(input: {
   fullName: string;
   email: string;
   requestUrl: string;
+  /** Ordinary staff can be delegated; administrator grants stay owner-only. */
+  isStaffAccount?: boolean;
 }): Promise<AdminAccessSummary> {
   const email = normalizeEmail(input.email);
 
@@ -320,6 +338,7 @@ export async function grantAdminAccess(input: {
         previousRole: true,
         clerkInvitationId: true,
         invitationExpiresAt: true,
+        isStaffAccount: true,
       },
     }),
   ]);
@@ -338,13 +357,13 @@ export async function grantAdminAccess(input: {
     throw new AdminAccessError("The primary owner already has permanent admin access.");
   }
   if (existingGrant?.status === "active") {
-    throw new AdminAccessError("That account already has admin access.");
+    throw new AdminAccessError("That account already has portal access.");
   }
   if (
     existingGrant?.status === "pending" &&
     (!existingGrant.invitationExpiresAt || existingGrant.invitationExpiresAt > new Date())
   ) {
-    throw new AdminAccessError("A current admin invitation has already been sent to that email.");
+    throw new AdminAccessError("A current portal invitation has already been sent to that email.");
   }
 
   if (existingGrant?.clerkInvitationId) {
@@ -388,6 +407,8 @@ export async function grantAdminAccess(input: {
           inviteeName: input.fullName,
           level: "admin",
           status: "pending",
+          isStaffAccount: input.isStaffAccount ?? false,
+          permissions: input.isStaffAccount ? ["communications:draft"] : [],
           userId: target?.id ?? null,
           previousRole: existingGrant?.previousRole ?? null,
           clerkInvitationId: clerkInvitation.id,
@@ -398,6 +419,8 @@ export async function grantAdminAccess(input: {
         update: {
           inviteeName: input.fullName,
           status: "pending",
+          isStaffAccount: input.isStaffAccount ?? false,
+          permissions: input.isStaffAccount ? ["communications:draft"] : [],
           userId: target?.id ?? null,
           previousRole: existingGrant?.previousRole ?? null,
           clerkInvitationId: clerkInvitation.id,
@@ -415,7 +438,10 @@ export async function grantAdminAccess(input: {
           action: "admin_access_granted",
           targetType: "admin_access",
           targetId: grantId,
-          metadata: { nextStatus: "pending" },
+          metadata: {
+            nextStatus: "pending",
+            changedFields: [input.isStaffAccount ? "staff account" : "administrator account"],
+          },
         }),
       }),
     ]);
@@ -440,6 +466,8 @@ export async function grantAdminAccess(input: {
 export async function revokeAdminAccess(input: {
   actorUserId: string;
   grantId: string;
+  /** Prevents delegated staff management from crossing into admin grants. */
+  expectedStaffAccount?: boolean;
 }): Promise<AdminAccessSummary> {
   const grant = await db.adminAccessGrant.findUnique({
     where: { id: input.grantId },
@@ -451,15 +479,25 @@ export async function revokeAdminAccess(input: {
       userId: true,
       previousRole: true,
       clerkInvitationId: true,
+      isStaffAccount: true,
     },
   });
 
   if (!grant) throw new AdminAccessError("Admin access record not found.", 404);
+  if (
+    typeof input.expectedStaffAccount === "boolean" &&
+    grant.isStaffAccount !== input.expectedStaffAccount
+  ) {
+    throw new AdminAccessError("That account cannot be managed from this page.", 403);
+  }
   if (grant.level === "owner" || isPrimaryAdminEmail(grant.email)) {
     throw new AdminAccessError("The primary owner's access cannot be revoked.", 403);
   }
   if (grant.status === "revoked") {
     throw new AdminAccessError("That admin invitation or access is already revoked.");
+  }
+  if (grant.userId === input.actorUserId) {
+    throw new AdminAccessError("You cannot remove your own portal access.", 403);
   }
 
   const now = new Date();
@@ -470,8 +508,8 @@ export async function revokeAdminAccess(input: {
           email: grant.email,
           emailPolicy: "required",
           kind: "security",
-          title: "Bundleen admin access removed",
-          body: "Your internal Bundleen admin access was removed. If you did not expect this change, contact the primary owner immediately.",
+          title: `Bundleen ${grant.isStaffAccount ? "staff" : "admin"} access removed`,
+          body: "Your internal Bundleen portal access was removed. If you did not expect this change, contact the primary owner immediately.",
           linkPath: "/",
           dedupeKey: `admin-access-revoked:${grant.id}:${now.toISOString()}`,
         },

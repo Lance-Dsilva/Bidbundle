@@ -241,6 +241,24 @@ export const providerProfileUpdateSchema = z
         value.workingHoursStart >= value.workingHoursEnd
       ),
     { message: "Closing time must be after opening time.", path: ["workingHoursEnd"] },
+  )
+  // A credential detail with nothing to attach it to is not a claim an admin
+  // can check. Both halves are only compared when the body carries both, so a
+  // narrow PATCH of one field is still judged against what is already stored.
+  .refine(
+    (value) =>
+      !("licenseState" in value && "licenseNumber" in value) ||
+      !(value.licenseState && !value.licenseNumber),
+    { message: "Add the licence number this state belongs to.", path: ["licenseState"] },
+  )
+  .refine(
+    (value) =>
+      !("insurancePolicyNumber" in value && "insuranceProvider" in value) ||
+      !(value.insurancePolicyNumber && !value.insuranceProvider),
+    {
+      message: "Add the insurer this policy number belongs to.",
+      path: ["insurancePolicyNumber"],
+    },
   );
 
 export type ProviderProfileUpdate = z.infer<typeof providerProfileUpdateSchema>;

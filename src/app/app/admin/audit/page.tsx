@@ -1,11 +1,17 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { Icon } from "@/components/ui/Icon";
 import { serializeAuditEntry } from "@/lib/server/audit";
+import { buildAuditWhere } from "@/lib/server/audit-query";
 import { requireRole } from "@/lib/server/auth";
 import { auditSelect, toPersonSummary } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
-import { auditListQuerySchema, searchParamsToObject } from "@/lib/validation/community";
+import {
+  ADMIN_AUDIT_ACTIONS,
+  auditListQuerySchema,
+  searchParamsToObject,
+} from "@/lib/validation/community";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +23,15 @@ export default async function AdminAuditPage({ searchParams }: PageProps) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(resolved)) if (typeof value === "string") params.set(key, value);
   const query = auditListQuerySchema.parse(searchParamsToObject(params));
-  const where = {
-    ...(query.communityId ? { communityId: query.communityId } : {}),
-    ...(query.providerUserId ? { providerUserId: query.providerUserId } : {}),
-  };
-  const [total, rows] = await Promise.all([
+  const where = buildAuditWhere(query);
+  const [total, rows, actors] = await Promise.all([
     db.adminAuditLog.count({ where }),
     db.adminAuditLog.findMany({ where, select: auditSelect, orderBy: { createdAt: "desc" }, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+    db.user.findMany({
+      where: { auditLogEntries: { some: {} } },
+      select: { id: true, fullName: true, email: true },
+      orderBy: [{ fullName: "asc" }, { email: "asc" }],
+    }),
   ]);
   const entries = rows.map((row) => serializeAuditEntry(row, toPersonSummary));
   const lastPage = Math.max(1, Math.ceil(total / query.pageSize));
@@ -32,6 +40,11 @@ export default async function AdminAuditPage({ searchParams }: PageProps) {
     next.set("page", String(page));
     return `/app/admin/audit?${next.toString()}`;
   };
+  const hasFilters = Boolean(
+    query.communityId || query.providerUserId || query.action || query.actorUserId || query.related || query.age,
+  );
+  const actionLabel = (action: string) =>
+    action.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   return (
     <div className="px-4 py-6 md:px-6 xl:px-8 xl:py-7">
@@ -41,6 +54,36 @@ export default async function AdminAuditPage({ searchParams }: PageProps) {
           <h1 className="mt-1 text-[25px] font-extrabold tracking-[-0.035em] text-slate-950">Admin audit trail</h1>
           <p className="mt-1 text-[12px] text-slate-500">Immutable history of sensitive account, customer, and provider actions.</p>
         </div>
+        <form className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_minmax(200px,1fr)_minmax(170px,.8fr)_minmax(150px,.7fr)_auto]" method="get">
+          {query.communityId ? <input type="hidden" name="communityId" value={query.communityId} /> : null}
+          {query.providerUserId ? <input type="hidden" name="providerUserId" value={query.providerUserId} /> : null}
+          <AuditFilter label="Event type" name="action" defaultValue={query.action ?? ""}>
+            <option value="">All events</option>
+            {ADMIN_AUDIT_ACTIONS.map((action) => <option key={action} value={action}>{actionLabel(action)}</option>)}
+          </AuditFilter>
+          <AuditFilter label="Performed by" name="actorUserId" defaultValue={query.actorUserId ?? ""}>
+            <option value="">Anyone</option>
+            <option value="system">System</option>
+            {actors.map((actor) => <option key={actor.id} value={actor.id}>{actor.fullName} · {actor.email}</option>)}
+          </AuditFilter>
+          <AuditFilter label="Related record" name="related" defaultValue={query.related ?? ""}>
+            <option value="">Any record</option>
+            <option value="community">Community</option>
+            <option value="provider">Provider</option>
+            <option value="internal">Internal</option>
+          </AuditFilter>
+          <AuditFilter label="Date range" name="age" defaultValue={query.age ?? ""}>
+            <option value="">All time</option>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+          </AuditFilter>
+          <div className="flex items-end gap-2">
+            <button className="h-10 rounded-lg bg-slate-900 px-4 text-[11px] font-bold text-white hover:bg-slate-800" type="submit">Apply filters</button>
+            {hasFilters ? <Link className="grid h-10 place-items-center rounded-lg border border-slate-200 px-3 text-[11px] font-bold text-slate-600 hover:bg-slate-50" href="/app/admin/audit">Clear</Link> : null}
+          </div>
+        </form>
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div><h2 className="text-[13px] font-extrabold text-slate-900">Recorded events</h2><p className="text-[10px] text-slate-500">{total} append-only action{total === 1 ? "" : "s"}</p></div>
@@ -70,5 +113,21 @@ export default async function AdminAuditPage({ searchParams }: PageProps) {
         </section>
       </div>
     </div>
+  );
+}
+
+function AuditFilter({
+  label,
+  name,
+  defaultValue,
+  children,
+}: Readonly<{ label: string; name: string; defaultValue: string; children: ReactNode }>) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[9px] font-extrabold uppercase tracking-[0.13em] text-slate-500">{label}</span>
+      <select className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" defaultValue={defaultValue} name={name}>
+        {children}
+      </select>
+    </label>
   );
 }

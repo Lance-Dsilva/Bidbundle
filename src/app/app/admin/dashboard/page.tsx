@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Icon, type IconName } from "@/components/ui/Icon";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { getAdminCrmOverview, type CrmHoaAccount } from "@/lib/server/admin-crm";
 import { requireRole } from "@/lib/server/auth";
 import { getAdminOverview } from "@/lib/server/communities";
@@ -122,6 +123,12 @@ export default async function AdminDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {hasAdminPermission({ level: user.adminAccessLevel, permissions: user.adminPermissions }, "staff:manage") && (
+              <Link href="/app/admin/staff" className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-[12px] font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                <Icon name="users" size={15} />
+                Bundleen staff
+              </Link>
+            )}
             {user.adminAccessLevel === "owner" && (
               <Link href="/app/admin/access" className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-[12px] font-bold text-slate-700 shadow-sm hover:bg-slate-50">
                 <Icon name="users" size={15} />

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -376,8 +379,19 @@ describe("dashboard counters", () => {
 
     expect(summary.cold_start).toBe(false);
     expect(summary.active_requests).toBe(1);
-    expect(summary.unread_messages).toBe(2);
     expect(summary.total_saved_cents).toBe(0);
+  });
+
+  it("no longer reports unread notifications under a messages label", () => {
+    // The shell showed this as the "Messages" badge while it counted unread
+    // *notifications* — which the bell beside it already displays. The badge
+    // now comes from `countUnreadMessages`, and this field is gone rather than
+    // left to be misread again.
+    const source = readFileSync(
+      resolve(import.meta.dirname, "../src/lib/server/homeowner-requests.ts"),
+      "utf8",
+    );
+    expect(source).not.toContain("unread_messages");
   });
 });
 

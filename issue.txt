@@ -1,0 +1,1 @@
+Residual media risk, stated plainly: Vercel Blob on this plan issues public-if-known URLs. The URL is unguessable and never leaves the server, so exposure is "an attacker who can already read the database". readMediaBytes is the single function to change if private buckets become available.

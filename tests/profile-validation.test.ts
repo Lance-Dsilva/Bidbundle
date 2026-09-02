@@ -171,6 +171,64 @@ describe("providerProfileUpdateSchema", () => {
     );
   });
 
+  it("rejects a blank trade rather than silently dropping it", () => {
+    // A blank chip is a UI bug upstream; failing loudly is what surfaced it.
+    const parsed = providerProfileUpdateSchema.safeParse({ trades: ["Plumbing", "   "] });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects a licence state with no licence number to attach it to", () => {
+    const parsed = providerProfileUpdateSchema.safeParse({
+      licenseNumber: "",
+      licenseState: "TX",
+    });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(fieldErrors(parsed.error).licenseState).toMatch(/licence number/i);
+  });
+
+  it("rejects a policy number with no insurer to attach it to", () => {
+    const parsed = providerProfileUpdateSchema.safeParse({
+      insuranceProvider: null,
+      insurancePolicyNumber: "POL-9",
+    });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(fieldErrors(parsed.error).insurancePolicyNumber).toMatch(/insurer/i);
+  });
+
+  it("leaves a narrow patch of one credential half alone", () => {
+    // Only `licenseState` is sent, so the stored licence number is what it
+    // belongs to. Judging it against an absent key would break a real patch.
+    expect(providerProfileUpdateSchema.safeParse({ licenseState: "TX" }).success).toBe(true);
+    expect(
+      providerProfileUpdateSchema.safeParse({ insurancePolicyNumber: "POL-9" }).success,
+    ).toBe(true);
+  });
+
+  it("accepts clearing both halves of a credential together", () => {
+    expect(
+      providerProfileUpdateSchema.safeParse({ licenseNumber: "", licenseState: "" }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    "licenseVerifiedAt",
+    "insuranceVerifiedAt",
+    "licenseVerifiedByUserId",
+    "payoutStatus",
+    "payoutLast4",
+    "accountStatus",
+    "serviceRadiusMi",
+    "userId",
+  ])("has no %s field for a provider to set on themselves", (field) => {
+    const parsed = providerProfileUpdateSchema.safeParse({
+      companyName: "ProFix",
+      [field]: "anything",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("rejects an unknown weekday", () => {
     expect(providerProfileUpdateSchema.safeParse({ workingDays: ["funday"] }).success).toBe(false);
   });

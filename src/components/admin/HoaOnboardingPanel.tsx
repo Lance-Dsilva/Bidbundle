@@ -300,6 +300,18 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
     });
   };
 
+  const removeUnit = (unit: UnitSummary) => {
+    if (!window.confirm(`Remove ${unit.label} from this HOA's inventory? This is allowed only when it has no resident, invitation, service, or booking history.`)) return;
+    void act("Unused unit removed.", async () => {
+      await requestJson<{ removed: true }>(
+        "DELETE",
+        `/api/admin/communities/${communityId}/units/${unit.id}`,
+      );
+      setUnits((current) => current.filter((item) => item.id !== unit.id));
+      setEditingUnitId((current) => current === unit.id ? null : current);
+    });
+  };
+
   const runImport = (commit: boolean) => {
     void act(commit ? "Units imported." : "Dry run complete — nothing written yet.", async () => {
       const result = await requestJson<{ result: UnitImportResult }>(
@@ -462,6 +474,9 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
         <h3 className="text-sm font-semibold" style={{ color: "var(--ink-900)" }}>
           Unit inventory · {units.length} homes ({occupied} occupied, {invitePending} invite pending)
         </h3>
+        <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+          Units appear only after staff add or import them. The declared total-home count never creates inventory automatically.
+        </p>
         {units.length > 0 ? (
           <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border" style={{ borderColor: "var(--line)" }}>
             <table className="w-full text-left text-xs">
@@ -490,15 +505,28 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
                         {unit.residentName ?? unit.pendingInviteEmail ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <button
-                          className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-60"
-                          style={{ borderColor: "var(--line)", color: "var(--teal-800)" }}
-                          disabled={busy}
-                          onClick={() => setEditingUnitId((current) => current === unit.id ? null : unit.id)}
-                          type="button"
-                        >
-                          {editingUnitId === unit.id ? "Cancel" : "Edit"}
-                        </button>
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-60"
+                            style={{ borderColor: "var(--line)", color: "var(--teal-800)" }}
+                            disabled={busy}
+                            onClick={() => setEditingUnitId((current) => current === unit.id ? null : unit.id)}
+                            type="button"
+                          >
+                            {editingUnitId === unit.id ? "Cancel" : "Edit"}
+                          </button>
+                          {(unit.occupancyStatus === "vacant" || unit.occupancyStatus === "inactive") && !unit.pendingInviteEmail && !unit.residentName ? (
+                            <button
+                              className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold text-red-600 disabled:opacity-60"
+                              style={{ borderColor: "var(--line)" }}
+                              disabled={busy}
+                              onClick={() => removeUnit(unit)}
+                              type="button"
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </span>
                       </td>
                     </tr>
                     {editingUnitId === unit.id ? (
@@ -567,7 +595,7 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
             className="h-10 flex-1 rounded-xl border px-3 text-sm outline-none"
             style={{ borderColor: "var(--line)", background: "var(--paper)" }}
             name="label"
-            placeholder="Unit label (Home 1)"
+            placeholder="Unit label"
             required
           />
           <input
@@ -598,7 +626,7 @@ export function HoaOnboardingPanel({ communityId }: { communityId: string }) {
             className="mt-2 min-h-24 w-full rounded-lg border p-3 font-mono text-xs outline-none"
             style={{ borderColor: "var(--line)", background: "var(--paper)" }}
             onChange={(event) => setCsv(event.currentTarget.value)}
-            placeholder={"label,addressLine1\nHome 1,11801 Cedar Ln\nHome 2,11803 Cedar Ln"}
+            placeholder={"label,addressLine1"}
             value={csv}
           />
           <div className="mt-2 flex flex-wrap gap-2">

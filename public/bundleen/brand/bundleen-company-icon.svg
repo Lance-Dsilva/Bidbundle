@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Bundleen logo mark</title>
+  <desc id="desc">A rounded lowercase b embracing an amber roof and check mark.</desc>
+  <path
+    fill="#0F9D8A"
+    fill-rule="evenodd"
+    d="M22 7a8 8 0 0 1 8 8v10.6A34.7 34.7 0 0 1 49 20c19.3 0 35 15.7 35 35S68.3 90 49 90a34.8 34.8 0 0 1-19-5.6A8 8 0 0 1 14 83V15a8 8 0 0 1 8-8Zm27 29c-10.5 0-19 8.5-19 19s8.5 19 19 19 19-8.5 19-19-8.5-19-19-19Z"
+  />
+  <path
+    d="m38.5 56 10.5-9.5L59.5 56"
+    fill="none"
+    stroke="#F5A623"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="7"
+  />
+</svg>

@@ -28,6 +28,7 @@ const CUSTOMER_ROUTES = [
 
 const ADMIN_SUPPORT_ROUTES = [
   "src/app/api/admin/support/tickets/route.ts",
+  "src/app/api/admin/providers/[userId]/tickets/route.ts",
   "src/app/api/admin/support/tickets/[ticketId]/route.ts",
   "src/app/api/admin/support/tickets/[ticketId]/messages/route.ts",
   "src/app/api/admin/support/tickets/[ticketId]/ai-draft/route.ts",
@@ -113,6 +114,7 @@ describe("admin support endpoints", () => {
 
   it("applies the admin write limiter to state-changing handlers", () => {
     for (const path of [
+      "src/app/api/admin/providers/[userId]/tickets/route.ts",
       "src/app/api/admin/support/tickets/[ticketId]/route.ts",
       "src/app/api/admin/support/tickets/[ticketId]/messages/route.ts",
     ]) {

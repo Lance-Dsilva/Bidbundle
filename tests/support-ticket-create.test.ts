@@ -33,6 +33,13 @@ const state = vi.hoisted(() => ({
   transactionShouldFail: false,
   drainShouldThrow: false,
   ticketNumberSequence: 1000,
+  adminDuplicateId: null as string | null,
+  providerUser: {
+    id: "provider-1",
+    role: "provider",
+    email: "provider@example.com",
+    providerProfile: { userId: "provider-1" },
+  } as Record<string, unknown> | null,
 }));
 
 /**
@@ -57,7 +64,11 @@ const db = vi.hoisted(() => {
             ticket.subject === args.where?.subject &&
             ticket.category === args.where?.category,
         ),
-      findFirst: async () => ({
+      findFirst: async (args: { where?: { messages?: { some?: { kind?: string } } } }) => {
+        if (args.where?.messages?.some?.kind === "admin_reply") {
+          return state.adminDuplicateId ? { id: state.adminDuplicateId } : null;
+        }
+        return {
         id: "ticket-1",
         ticketNumber: "BDL-001000",
         subject: "Cannot sign in",
@@ -84,6 +95,35 @@ const db = vi.hoisted(() => {
         community: null,
         assignedAdmin: null,
         _count: { messages: 1 },
+        };
+      },
+      findUnique: async (args: { where: { id: string } }) => ({
+        id: args.where.id,
+        ticketNumber: "BDL-001000",
+        subject: "Updated insurance required",
+        category: "provider_issue",
+        status: "pending_customer",
+        priority: "high",
+        requesterUserId: "provider-1",
+        requesterRole: "provider",
+        communityId: null,
+        assignedAdminUserId: "admin-1",
+        relatedRequestId: null,
+        relatedBidId: null,
+        relatedVisitId: null,
+        reopenedFromTicketId: null,
+        firstAdminReplyAt: new Date(),
+        lastCustomerMessageAt: null,
+        lastAdminMessageAt: new Date(),
+        lastActivityAt: new Date(),
+        resolvedAt: null,
+        closedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        requester: { fullName: "Green Crew", email: "provider@example.com" },
+        community: null,
+        assignedAdmin: { fullName: "Bundleen Admin", email: "admin@bundleen.com" },
+        _count: { messages: 1 },
       }),
     },
     supportTicketMessage: {
@@ -101,7 +141,10 @@ const db = vi.hoisted(() => {
     },
     supportTicketEvent: {
       create: (args: unknown) => op("supportTicketEvent", "create", args),
+      findMany: async () => [],
     },
+    user: { findUnique: async () => state.providerUser },
+    adminAuditLog: { create: (args: unknown) => op("adminAuditLog", "create", args) },
     communityStaffAssignment: { findMany: async () => [] },
     homeownerProfile: { findMany: async () => [] },
     notification: {
@@ -160,6 +203,13 @@ beforeEach(() => {
   state.transactionShouldFail = false;
   state.drainShouldThrow = false;
   state.ticketNumberSequence = 1000;
+  state.adminDuplicateId = null;
+  state.providerUser = {
+    id: "provider-1",
+    role: "provider",
+    email: "provider@example.com",
+    providerProfile: { userId: "provider-1" },
+  };
 });
 
 describe("createSupportTicket", () => {
@@ -277,5 +327,70 @@ describe("ticket numbering", () => {
     expect(second.ticketNumber).toBe("BDL-001000");
     // Two distinct draws happened even though the read-back double is fixed.
     expect(state.ticketNumberSequence).toBe(1002);
+  });
+});
+
+describe("createAdminProviderTicket", () => {
+  const admin = { id: "admin-1", name: "Bundleen Admin" };
+  const adminInput = {
+    subject: "Updated insurance required",
+    category: "provider_issue" as const,
+    priority: "high" as const,
+    message: "Please upload your renewed insurance certificate by Friday.",
+  };
+
+  it("creates the assigned provider thread, opening admin message, audit, and notification atomically", async () => {
+    const { createAdminProviderTicket } = await import("@/lib/server/support");
+    await createAdminProviderTicket(admin, "provider-1", adminInput);
+
+    expect(state.batches).toHaveLength(1);
+    const batch = state.batches[0]!;
+    const models = batch.map((entry) => `${entry.model}.${entry.action}`);
+    expect(models).toContain("supportTicket.create");
+    expect(models).toContain("supportTicketMessage.create");
+    expect(models).toContain("supportTicketEvent.create");
+    expect(models).toContain("adminAuditLog.create");
+    expect(models).toContain("notification.createMany");
+    expect(models).toContain("outboxEvent.createMany");
+
+    const ticket = batch.find((entry) => entry.model === "supportTicket")!;
+    expect((ticket.args as { data: Record<string, unknown> }).data).toMatchObject({
+      requesterUserId: "provider-1",
+      requesterRole: "provider",
+      assignedAdminUserId: "admin-1",
+      status: "pending_customer",
+      priority: "high",
+    });
+    const firstMessage = batch.find((entry) => entry.model === "supportTicketMessage")!;
+    expect((firstMessage.args as { data: Record<string, unknown> }).data).toMatchObject({
+      authorUserId: "admin-1",
+      kind: "admin_reply",
+      body: adminInput.message,
+    });
+  });
+
+  it("rejects a customer account that is not a provider", async () => {
+    state.providerUser = {
+      id: "homeowner-1",
+      role: "homeowner",
+      email: "owner@example.com",
+      providerProfile: null,
+    };
+    const { createAdminProviderTicket } = await import("@/lib/server/support");
+
+    await expect(
+      createAdminProviderTicket(admin, "homeowner-1", adminInput),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(state.batches).toHaveLength(0);
+  });
+
+  it("returns a recent identical admin-started thread instead of emailing twice", async () => {
+    state.adminDuplicateId = "existing-admin-ticket";
+    const { createAdminProviderTicket } = await import("@/lib/server/support");
+
+    const ticket = await createAdminProviderTicket(admin, "provider-1", adminInput);
+    expect(ticket.id).toBe("existing-admin-ticket");
+    expect(state.batches).toHaveLength(0);
+    expect(state.ticketNumberSequence).toBe(1000);
   });
 });

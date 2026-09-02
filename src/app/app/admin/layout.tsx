@@ -24,6 +24,7 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
       userName={user.name}
       userEmail={user.email}
       accessLevel={user.adminAccessLevel}
+      isStaffAccount={user.adminIsStaffAccount}
       permissions={user.adminPermissions}
       openTicketCount={stats?.awaitingReply ?? 0}
     >

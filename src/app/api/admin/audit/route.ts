@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { AuditListResult } from "@/lib/community-types";
 import { serializeAuditEntry } from "@/lib/server/audit";
+import { buildAuditWhere } from "@/lib/server/audit-query";
 import { adminErrorResponse, requireAdmin } from "@/lib/server/admin-api";
 import { auditSelect, toPersonSummary } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
@@ -26,10 +27,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const url = new URL(request.url);
     const query = auditListQuerySchema.parse(searchParamsToObject(url.searchParams));
 
-    const where = {
-      ...(query.communityId ? { communityId: query.communityId } : {}),
-      ...(query.providerUserId ? { providerUserId: query.providerUserId } : {}),
-    };
+    const where = buildAuditWhere(query);
 
     const [total, rows] = await Promise.all([
       db.adminAuditLog.count({ where }),

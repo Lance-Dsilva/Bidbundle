@@ -6,7 +6,7 @@ import {
   requireAdminMutation,
   validationErrorResponse,
 } from "@/lib/server/admin-api";
-import { updateUnit } from "@/lib/server/hoa-units";
+import { removeUnusedUnit, updateUnit } from "@/lib/server/hoa-units";
 import { unitUpdateSchema } from "@/lib/validation/hoa";
 import { fieldErrors } from "@/lib/validation/profile";
 
@@ -29,5 +29,18 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
     return NextResponse.json({ unit });
   } catch (error) {
     return adminErrorResponse("unit update", error);
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext): Promise<NextResponse> {
+  const gate = await requireAdminMutation();
+  if (!gate.ok) return gate.response;
+  const { communityId, unitId } = await context.params;
+
+  try {
+    await removeUnusedUnit(gate.user.id, communityId, unitId);
+    return NextResponse.json({ removed: true });
+  } catch (error) {
+    return adminErrorResponse("unit removal", error);
   }
 }

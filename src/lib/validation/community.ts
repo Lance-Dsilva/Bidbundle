@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { AdminAuditAction as GeneratedAdminAuditAction } from "@/generated/prisma/enums";
 import { COMMUNITY_RADIUS_MI } from "@/lib/validation/profile";
 
 /**
@@ -351,9 +352,20 @@ export const providerListQuerySchema = z.object({
 
 export type ProviderListQuery = z.infer<typeof providerListQuerySchema>;
 
+export const ADMIN_AUDIT_ACTIONS = Object.values(GeneratedAdminAuditAction) as [
+  (typeof GeneratedAdminAuditAction)[keyof typeof GeneratedAdminAuditAction],
+  ...(typeof GeneratedAdminAuditAction)[keyof typeof GeneratedAdminAuditAction][],
+];
+export const ADMIN_AUDIT_RELATED_FILTERS = ["community", "provider", "internal"] as const;
+export const ADMIN_AUDIT_AGE_FILTERS = ["24h", "7d", "30d", "90d"] as const;
+
 export const auditListQuerySchema = z.object({
   communityId: z.string().trim().max(64).nullable().catch(null),
   providerUserId: z.string().trim().max(64).nullable().catch(null),
+  action: z.enum(ADMIN_AUDIT_ACTIONS).nullable().catch(null),
+  actorUserId: z.string().trim().max(64).nullable().catch(null),
+  related: z.enum(ADMIN_AUDIT_RELATED_FILTERS).nullable().catch(null),
+  age: z.enum(ADMIN_AUDIT_AGE_FILTERS).nullable().catch(null),
   page: pageParam,
   pageSize: pageSizeParam,
 });

@@ -91,6 +91,7 @@ const RESIDENT = {
   role: "homeowner" as const,
   isVerified: true,
   adminAccessLevel: null,
+  adminIsStaffAccount: false,
   adminPermissions: [],
 };
 

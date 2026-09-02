@@ -20,6 +20,8 @@ export type AdminAccessSummary = {
   email: string;
   level: AdminAccessLevel;
   status: AdminAccessStatus;
+  /** True only for ordinary staff managed outside the owner-only access page. */
+  isStaffAccount: boolean;
   fullName: string | null;
   invitationExpiresAt: string | null;
   grantedByName: string | null;

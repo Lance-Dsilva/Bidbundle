@@ -23,10 +23,26 @@ const API_ROOT = resolve(ROOT, "src/app/api");
 const CLIENT_SOURCES = [
   "src/app/app/homeowner/request/page.tsx",
   "src/app/app/homeowner/dashboard/page.tsx",
+  "src/app/app/homeowner/chat/page.tsx",
+  "src/app/app/homeowner/bids/page.tsx",
   "src/hooks/useHomeownerRequests.ts",
   "src/hooks/useHomeownerDashboard.ts",
+  "src/hooks/useHomeownerInbox.ts",
+  "src/hooks/useNeighbourhood.ts",
   "src/components/support/SupportCenter.tsx",
   "src/lib/auth.ts",
+] as const;
+
+/**
+ * The homeowner endpoints that answered 404 in production. The chat page called
+ * all three on mount, and `useNeighbourhoodSummary` re-polled two of them every
+ * 15 seconds from the dashboard.
+ */
+const OBSOLETE_ENDPOINTS = [
+  "/api/homeowner/conversations",
+  "/api/homeowner/channels",
+  "/api/neighbourhood/channel",
+  "/api/homeowner/groups",
 ] as const;
 
 function read(relativePath: string): string {
@@ -36,6 +52,21 @@ function read(relativePath: string): string {
 /** Drops block and line comments so prose about old APIs is not read as code. */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
+/** Every `.ts`/`.tsx` file under `src`, so the sweep cannot miss a new caller. */
+function sourceFiles(directory = resolve(ROOT, "src")): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(directory)) {
+    const full = resolve(directory, entry);
+    if (statSync(full).isDirectory()) {
+      if (entry === "generated") continue;
+      found.push(...sourceFiles(full));
+    } else if (entry.endsWith(".ts") || entry.endsWith(".tsx")) {
+      found.push(full.slice(ROOT.length + 1));
+    }
+  }
+  return found;
 }
 
 /** Every `route.ts` in the tree, as a URL path with its dynamic segments. */
@@ -71,22 +102,45 @@ function matches(route: string, path: string): boolean {
  * `apiFetch("/...")`, which prefixes `/api` itself. Template placeholders
  * collapse to a single segment so a dynamic route can match them.
  */
+/** Every literal a template can produce, for the interpolations we can read. */
+function expandInterpolations(literal: string): string[] {
+  const ternary = /\$\{[^}]*\?\s*["'`]([^"'`]*)["'`]\s*:\s*["'`]([^"'`]*)["'`]\s*\}/;
+  const match = ternary.exec(literal);
+  if (match) {
+    return [match[1]!, match[2]!].flatMap((branch) =>
+      expandInterpolations(literal.replace(ternary, branch)),
+    );
+  }
+  return [literal.replace(/\$\{[^}]*\}/g, "x")];
+}
+
 function calledPaths(source: string): string[] {
+  const body = stripComments(source);
   const paths = new Set<string>();
 
-  for (const match of source.matchAll(/fetch\(\s*[`"']\/api(\/[^`"'?)]*)/g)) {
-    paths.add(`/api${match[1]!}`);
-  }
-  for (const match of source.matchAll(/apiFetch<[^>]*>\(\s*[`"'](\/[^`"'?)]*)/g)) {
-    paths.add(`/api${match[1]!}`);
-  }
-  for (const match of source.matchAll(/apiFetch\(\s*[`"'](\/[^`"'?)]*)/g)) {
-    paths.add(`/api${match[1]!}`);
-  }
+  /**
+   * Reads the literal that opens a call, up to its own closing quote.
+   *
+   * Interpolations are resolved before the string is cut, so a `${…}` holding
+   * quotes does not look like the end of it. A ternary picking between two
+   * literal segments — `` `/api/x/${reply ? "a" : "b"}` `` — expands to both
+   * real paths rather than to an unresolvable placeholder; anything else
+   * collapses to one wildcard segment for a `[param]` route to match.
+   */
+  const collect = (pattern: RegExp) => {
+    for (const match of body.matchAll(pattern)) {
+      for (const variant of expandInterpolations(match[2]!)) {
+        const path = `/api${variant.split(/["'`?]/)[0]!}`.replace(/\/$/, "");
+        if (path !== "/api") paths.add(path);
+      }
+    }
+  };
 
-  return [...paths]
-    .map((path) => path.replace(/\$\{[^}]*\}/g, "x").replace(/\/$/, ""))
-    .filter((path) => path !== "/api");
+  collect(/fetch\(\s*(["'`])\/api(\/[^\n]*)/g);
+  collect(/apiFetch(?:<[^>]*>)?\(\s*(["'`])(\/[^\n]*)/g);
+  collect(/useConversationInbox\(\s*(")(\/[^"]*)"/g);
+
+  return [...paths];
 }
 
 describe("homeowner and support API contract", () => {
@@ -112,6 +166,44 @@ describe("homeowner and support API contract", () => {
         `${relativePath} calls ${path}, which has no route handler`,
       ).toBe(true);
     }
+  });
+
+  it.each(OBSOLETE_ENDPOINTS)("nothing in src calls %s", (endpoint) => {
+    const offenders = sourceFiles().filter((file) =>
+      calledPaths(read(file)).includes(endpoint),
+    );
+    expect(offenders, `${endpoint} is called by ${offenders.join(", ")}`).toEqual([]);
+  });
+
+  it.each(OBSOLETE_ENDPOINTS)("no route was invented to answer %s", (endpoint) => {
+    expect(ROUTES).not.toContain(endpoint);
+  });
+
+  it("the hooks built on those endpoints are deleted, not kept as shims", () => {
+    for (const hook of [
+      "src/hooks/useHomeownerChat.ts",
+      "src/hooks/useNeighbourhoodSummary.ts",
+      "src/hooks/useHomeownerGroups.ts",
+    ]) {
+      expect(existsSync(resolve(ROOT, hook)), `${hook} still exists`).toBe(false);
+    }
+  });
+
+  /**
+   * The whole client tree, not just the files listed above.
+   *
+   * Every 404 this repo has shipped came from a call site nobody thought to
+   * check. Sweeping `src` means a new one fails the moment it is written, in
+   * whatever file it appears.
+   */
+  it("no file anywhere in src calls an endpoint that has no handler", () => {
+    const dead: string[] = [];
+    for (const file of sourceFiles()) {
+      for (const path of calledPaths(read(file))) {
+        if (!ROUTES.some((route) => matches(route, path))) dead.push(`${file} → ${path}`);
+      }
+    }
+    expect(dead).toEqual([]);
   });
 
   it("no longer calls the endpoints that returned 404 in production", () => {
@@ -146,5 +238,29 @@ describe("homeowner and support API contract", () => {
     // message a customer sees.
     expect(source).not.toMatch(/setFormError\((?:err|error)\b/);
     expect(source).toMatch(/payload\?\.error/);
+  });
+});
+describe("the homeowner shell and its pages do not fetch the same resource", () => {
+  const SHELL = "src/components/layout/HomeownerShell.tsx";
+
+  it("the shell loads no page data at all", () => {
+    // `/api/homeowner/dashboard` was fetched here *and* by the dashboard page
+    // underneath — two requests for one payload on every homeowner route.
+    const shellPaths = calledPaths(read(SHELL));
+    expect(shellPaths.filter((path) => path.startsWith("/api/homeowner/"))).toEqual([]);
+    expect(read(SHELL)).not.toContain("useHomeownerDashboard");
+  });
+
+  it("the unread badge comes from the server layout and means messages", () => {
+    const layout = read("src/app/app/homeowner/layout.tsx");
+    expect(layout).toContain("countUnreadMessages");
+    // The badge used to render the unread *notification* count, which the bell
+    // beside it already shows.
+    expect(read(SHELL)).not.toContain("unread_messages");
+    expect(read(SHELL)).toContain("useHomeownerSession");
+  });
+
+  it("the chat page keeps that badge honest as it clears threads", () => {
+    expect(read("src/app/app/homeowner/chat/page.tsx")).toContain("setUnreadMessages");
   });
 });

@@ -4,9 +4,9 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { CategoryTile } from "@/components/ui/CategoryArt";
 import { useCountUp } from "@/hooks/useCountUp";
-import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
-import { useProviderMessages } from "@/hooks/useProviderMessages";
+import { useProviderOverview } from "@/hooks/useProviderOverview";
+import { initialsFromName } from "@/lib/display-name";
 
 const cardStyle: CSSProperties = {
   background: "var(--bg-card)",
@@ -253,6 +253,15 @@ function formatClock(date: string) {
   return new Date(date).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/** `2026-04` → `Apr`, for the revenue chart's axis. */
+function monthLabel(month: string) {
+  const [year, index] = month.split("-").map(Number);
+  return new Date(Date.UTC(year ?? 1970, (index ?? 1) - 1, 1)).toLocaleDateString([], {
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
 function formatDistance(distance: number | null | undefined) {
   if (typeof distance !== "number" || !Number.isFinite(distance) || distance <= 0) return "";
   return `${distance} mi away`;
@@ -287,9 +296,11 @@ function SmallStatCard(props: { eyebrow: string; big: string; sub: string | JSX.
 }
 
 export default function ProviderDashboardPage() {
-  const { dashboard, profile, loading } = useProviderDashboard();
-  const animatedRevenue = useCountUp(Math.round((dashboard?.revenue_30d_cents ?? 0) / 100));
-  const { conversations, loading: messagesLoading } = useProviderMessages();
+  // Two reads back this page and nothing else: the aggregate metrics, and the
+  // marketplace. The shell fetches neither, so a navigation here makes exactly
+  // one request per resource.
+  const { overview, loading, error, refresh } = useProviderOverview();
+  const animatedRevenue = useCountUp(Math.round((overview?.revenue30dCents ?? 0) / 100));
   // One marketplace read backs the feed, the bid chips, and the schedule strip,
   // so this dashboard cannot show a job as un-bid that My Bids shows as quoted.
   const { workspace, loading: marketLoading } = useProviderMarketplace();
@@ -335,14 +346,39 @@ export default function ProviderDashboardPage() {
     .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
     .slice(0, 3);
 
-  const recentConversations = [...conversations]
-    .sort((a, b) => new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime())
-    .slice(0, 3);
+  // Already ordered by last activity on the server.
+  const recentConversations = overview?.recentThreads ?? [];
+  const unreadMessages = overview?.unreadMessages ?? 0;
+  const monthlyPeak = Math.max(0, ...(overview?.monthlyRevenue ?? []).map((point) => point.cents));
 
-  if (loading || marketLoading || messagesLoading) {
+  if (loading || marketLoading) {
     return (
       <div style={{ background: "var(--bg-app)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ color: "var(--ink-400)", fontSize: 14 }}>Loading your dashboard…</div>
+      </div>
+    );
+  }
+
+  // A genuine server failure is stated once, with a way out. Nothing retries
+  // on its own: a failing endpoint must not turn into a request loop.
+  if (error || !overview) {
+    return (
+      <div style={{ background: "var(--bg-app)", minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+        <div role="alert" style={{ ...cardStyle, padding: 28, maxWidth: 420, textAlign: "center" }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--ink-900)" }}>
+            Dashboard unavailable
+          </div>
+          <p style={{ margin: "8px 0 18px", fontSize: 14, color: "var(--ink-500)", lineHeight: 1.5 }}>
+            {error ?? "We could not load your dashboard."}
+          </p>
+          <button
+            type="button"
+            style={{ ...primaryButtonStyle, width: "100%", justifyContent: "center" }}
+            onClick={() => void refresh()}
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -352,17 +388,17 @@ export default function ProviderDashboardPage() {
       <div className="flex flex-col gap-4 px-4 pb-4 pt-6 md:flex-row md:items-end md:justify-between md:px-9 md:pb-5 md:pt-7">
         <div>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 500, fontSize: "clamp(24px, 6vw, 30px)", letterSpacing: "-0.02em", margin: "0 0 4px", color: "var(--ink-900)" }}>
-            Good morning{profile?.company_name ? `, ${profile.company_name}` : ""}
+            Good morning{overview.companyName ? `, ${overview.companyName}` : ""}
           </h1>
           <p style={{ margin: 0, color: "var(--ink-500)", fontSize: 14 }}>
-            {liveJobs.length} nearby group job{liveJobs.length !== 1 ? "s" : ""} in your feed · {dashboard?.unread_messages ?? 0} unread message{(dashboard?.unread_messages ?? 0) !== 1 ? "s" : ""}
+            {liveJobs.length} nearby group job{liveJobs.length !== 1 ? "s" : ""} in your feed · {unreadMessages} unread message{unreadMessages !== 1 ? "s" : ""}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Link href="/app/provider/messages" style={{ ...ghostButtonStyle, textDecoration: "none" }}>
             <PIconInbox />
             Messages
-            <span style={{ ...toneChipStyle("terracotta"), height: 18, padding: "0 8px", marginLeft: 4 }}>{dashboard?.unread_messages ?? 0}</span>
+            <span style={{ ...toneChipStyle("terracotta"), height: 18, padding: "0 8px", marginLeft: 4 }}>{unreadMessages}</span>
           </Link>
           <Link href="/app/provider/job-feed" style={{ ...primaryButtonStyle, textDecoration: "none" }}>
             <IconPlus />
@@ -560,55 +596,65 @@ export default function ProviderDashboardPage() {
             <div style={{ ...cardStyle, padding: 22, background: "linear-gradient(160deg, var(--cream-100), var(--cream-200))" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
                 <div style={eyebrowStyle}>Revenue · last 30 days</div>
-                <span style={toneChipStyle("sage")}>+18% vs last mo</span>
+                {/* Stated only when there is a previous period to compare
+                    against. No prior revenue means no percentage, not "+0%". */}
+                {overview.revenueChangePct !== null ? (
+                  <span style={toneChipStyle(overview.revenueChangePct >= 0 ? "sage" : "gold")}>
+                    {overview.revenueChangePct >= 0 ? "+" : ""}
+                    {overview.revenueChangePct}% vs prior 30 days
+                  </span>
+                ) : null}
               </div>
               <div style={{ ...numeralStyle, fontSize: 38, marginTop: 8, color: "var(--terracotta-600)" }}>
                 ${animatedRevenue.toLocaleString()}
               </div>
               <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                {dashboard?.jobs_completed ?? 0} jobs completed this period
+                {overview.jobsCompleted} job{overview.jobsCompleted !== 1 ? "s" : ""} completed all time
               </div>
-              <div style={{ marginTop: 18, height: 110, position: "relative" }}>
-                {(dashboard?.revenue_30d_cents ?? 0) > 0 ? (
-                  <svg viewBox="0 0 300 110" width="100%" height="110" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="ph-grad" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" style={{ stopColor: "var(--orange-500)" }} stopOpacity="0.32" />
-                        <stop offset="100%" style={{ stopColor: "var(--orange-500)" }} stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path d="M0 80 L25 70 L50 75 L75 55 L100 60 L125 45 L150 50 L175 35 L200 38 L225 25 L250 30 L275 18 L300 22 L300 110 L0 110 Z" fill="url(#ph-grad)" />
-                    <path d="M0 80 L25 70 L50 75 L75 55 L100 60 L125 45 L150 50 L175 35 L200 38 L225 25 L250 30 L275 18 L300 22" fill="none" style={{ stroke: "var(--orange-600)" }} strokeWidth="2" strokeLinejoin="round" />
-                    <circle cx="300" cy="22" r="4" style={{ fill: "var(--orange-600)" }} />
-                    <circle cx="300" cy="22" r="8" style={{ fill: "var(--orange-600)" }} fillOpacity="0.18" />
-                  </svg>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: "100%", paddingTop: 12 }}>
-                    {[18, 0, 30, 46, 22, 36].map((h, i) => (
-                      <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: "100%", height: Math.max(h, 4), background: h > 0 ? "var(--cream-300)" : "var(--cream-200)", borderRadius: 4 }} />
-                        <div style={{ fontSize: 10, color: "var(--ink-300)" }}>{["J","F","M","A","M","J"][i]}</div>
+              {/* Six real months of completed work. The bars used to be a
+                  hard-coded array and the line a fixed SVG path, so the chart
+                  said the same thing to every provider on Bundleen. */}
+              <div style={{ marginTop: 18, height: 110, position: "relative" }} aria-hidden>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: "100%", paddingTop: 12 }}>
+                  {overview.monthlyRevenue.map((point) => {
+                    const ratio = monthlyPeak > 0 ? point.cents / monthlyPeak : 0;
+                    return (
+                      <div key={point.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: `${Math.max(ratio * 100, 3)}%`,
+                            background: point.cents > 0 ? "var(--orange-500)" : "var(--cream-200)",
+                            borderRadius: 4,
+                          }}
+                        />
+                        <div style={{ fontSize: 10, color: "var(--ink-300)" }}>{monthLabel(point.month)}</div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--ink-400)" }}>
+                {monthlyPeak > 0
+                  ? "Completed agreements by month"
+                  : "No completed agreements in the last six months yet."}
               </div>
               <div style={{ borderTop: "1px solid var(--border-warm)", paddingTop: 12, marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                <MiniStat big={`$${Math.round((dashboard?.revenue_total_cents ?? 0) / 100).toLocaleString()}`} sub="Total earned" />
-                <MiniStat big={dashboard?.win_rate_pct ? `${dashboard.win_rate_pct}%` : "—"} sub="Win rate" accent />
-                <MiniStat big={`${dashboard?.active_bids ?? 0}`} sub="Active bids" noBorder />
+                <MiniStat big={`$${Math.round(overview.revenueTotalCents / 100).toLocaleString()}`} sub="Total earned" />
+                <MiniStat big={overview.winRatePct !== null ? `${overview.winRatePct}%` : "—"} sub="Win rate" accent />
+                <MiniStat big={`${overview.activeBids}`} sub="Active bids" noBorder />
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <SmallStatCard eyebrow="Jobs completed" big={String(dashboard?.jobs_completed ?? 0)} sub="all time" tone="sage" />
+              <SmallStatCard eyebrow="Jobs completed" big={String(overview.jobsCompleted)} sub="all time" tone="sage" />
               <SmallStatCard
                 eyebrow="Avg. rating"
-                big={dashboard?.avg_rating ? String(dashboard.avg_rating) : "—"}
+                big={overview.averageRating !== null ? String(overview.averageRating) : "—"}
                 sub={
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     <IconStar color="var(--gold-500)" />
-                    {dashboard?.reviews_count ?? 0} reviews
+                    {overview.reviewsCount} review{overview.reviewsCount !== 1 ? "s" : ""}
                   </span>
                 }
                 tone="gold"
@@ -618,16 +664,17 @@ export default function ProviderDashboardPage() {
             <div style={{ ...cardStyle, background: "linear-gradient(180deg, white, var(--terracotta-50))", borderColor: "var(--terracotta-100)" }}>
               <div style={{ padding: "16px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={eyebrowStyle}>Recent messages</div>
-                <span style={toneChipStyle("terracotta")}>{dashboard?.unread_messages ?? 0} unread</span>
+                <span style={toneChipStyle("terracotta")}>{unreadMessages} unread</span>
               </div>
               <div style={{ borderTop: "1px solid var(--border-warm)" }}>
                 {recentConversations.length === 0 ? (
                   <div style={{ padding: "18px 22px", fontSize: 13, color: "var(--ink-500)" }}>
                     Homeowner replies land here after your first bid.
                   </div>
-                ) : recentConversations.map((message, index) => (
-                  <div
-                    key={message.id}
+                ) : recentConversations.map((thread, index) => (
+                  <Link
+                    key={thread.id}
+                    href="/app/provider/messages"
                     style={{
                       padding: "12px 22px",
                       display: "grid",
@@ -635,6 +682,8 @@ export default function ProviderDashboardPage() {
                       gap: 12,
                       alignItems: "center",
                       borderTop: index === 0 ? 0 : "1px solid var(--border-warm)",
+                      textDecoration: "none",
+                      color: "inherit",
                     }}
                   >
                     <div
@@ -650,17 +699,17 @@ export default function ProviderDashboardPage() {
                         fontWeight: 600,
                       }}
                     >
-                      {message.other_user_name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()}
+                      {initialsFromName(thread.otherPartyName, "??")}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-900)" }}>{message.other_user_name}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-500)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{message.last_message ?? "No messages yet"}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-900)" }}>{thread.otherPartyName}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-500)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.lastMessagePreview ?? "No messages yet"}</div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                      <div style={{ fontSize: 11, color: "var(--ink-400)" }}>{message.last_message_at ? formatClock(message.last_message_at) : "—"}</div>
-                      {message.unread_count > 0 ? <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--terracotta-500)" }} /> : null}
+                      <div style={{ fontSize: 11, color: "var(--ink-400)" }}>{thread.lastMessageAt ? formatClock(thread.lastMessageAt) : "—"}</div>
+                      {thread.unreadCount > 0 ? <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--terracotta-500)" }} /> : null}
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>

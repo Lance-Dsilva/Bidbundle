@@ -18,6 +18,7 @@ import {
   type NotificationIntent,
 } from "@/lib/server/notifications";
 import type {
+  AdminProviderTicketCreateInput,
   AdminTicketMessageInput,
   AdminTicketQuery,
   AdminTicketUpdateInput,
@@ -476,6 +477,26 @@ function ticketOpenedNotification(input: {
   };
 }
 
+/** Required operational email when Bundleen starts the conversation. */
+function providerActionNotification(input: {
+  ticketId: string;
+  ticketNumber: string;
+  subject: string;
+  providerUserId: string;
+  providerEmail: string;
+}): NotificationIntent {
+  return {
+    userId: input.providerUserId,
+    email: input.providerEmail,
+    emailPolicy: "required",
+    kind: "account",
+    title: `Action requested by Bundleen · ${input.ticketNumber}`,
+    body: `Bundleen opened “${input.subject}” for your account. Open the secure ticket in Bundleen to read the message and reply about any requested documents or account issue — this mailbox is not monitored.`,
+    linkPath: ticketLinkForCustomer(input.ticketId),
+    dedupeKey: `support-admin-created:${input.ticketId}`,
+  };
+}
+
 export async function createSupportTicket(
   requester: { id: string; role: UserRole; email: string; name: string | null },
   input: CreateTicketInput,
@@ -558,6 +579,150 @@ export async function createSupportTicket(
     // The write committed, so this is a read-back failure, not a lost ticket.
     throw new SupportError(
       "Your request was saved but could not be displayed. Reload the support centre to see it.",
+      500,
+    );
+  }
+  return detail;
+}
+
+/**
+ * Starts a provider-facing support thread from the internal provider record.
+ *
+ * The provider remains the ticket requester so the existing customer support
+ * APIs automatically scope the thread to that account. The opening line is an
+ * `admin_reply`, the initiating admin owns the ticket, and the provider gets a
+ * required operational email plus the ordinary in-app notification.
+ */
+export async function createAdminProviderTicket(
+  admin: { id: string; name: string | null },
+  providerUserId: string,
+  input: AdminProviderTicketCreateInput,
+): Promise<AdminTicketDetail> {
+  const provider = await db.user.findUnique({
+    where: { id: providerUserId },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      providerProfile: { select: { userId: true } },
+    },
+  });
+  if (!provider || provider.role !== "provider" || !provider.providerProfile) {
+    throw new SupportError("That provider account does not exist.", 404);
+  }
+
+  // Network retries and impatient double-clicks must return the same thread,
+  // not send the provider the same operational request twice.
+  const duplicate = await db.supportTicket.findFirst({
+    where: {
+      requesterUserId: provider.id,
+      subject: input.subject,
+      category: input.category,
+      createdAt: { gte: new Date(Date.now() - DUPLICATE_SUBMISSION_WINDOW_MS) },
+      messages: {
+        some: {
+          authorUserId: admin.id,
+          kind: "admin_reply",
+          body: input.message,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (duplicate) {
+    const existing = await getAdminTicket(admin.id, duplicate.id);
+    if (existing) return existing;
+  }
+
+  const ticketId = randomUUID();
+  const ticketNumber = await nextTicketNumber();
+  const messageId = randomUUID();
+  const now = new Date();
+  const notificationOps = await buildPreferenceAwareNotificationOps([
+    providerActionNotification({
+      ticketId,
+      ticketNumber,
+      subject: input.subject,
+      providerUserId: provider.id,
+      providerEmail: provider.email,
+    }),
+  ]);
+
+  await db.$transaction([
+    db.supportTicket.create({
+      data: {
+        id: ticketId,
+        ticketNumber,
+        requesterUserId: provider.id,
+        requesterRole: "provider",
+        subject: input.subject,
+        category: input.category,
+        status: "pending_customer",
+        priority: input.priority,
+        assignedAdminUserId: admin.id,
+        firstAdminReplyAt: now,
+        lastAdminMessageAt: now,
+        lastActivityAt: now,
+      },
+    }),
+    db.supportTicketMessage.create({
+      data: {
+        id: messageId,
+        ticketId,
+        authorUserId: admin.id,
+        kind: "admin_reply",
+        body: input.message,
+      },
+    }),
+    db.supportTicketEvent.create({
+      data: {
+        id: randomUUID(),
+        ticketId,
+        actorUserId: admin.id,
+        type: "created",
+        toValue: "pending_customer",
+      },
+    }),
+    db.supportTicketEvent.create({
+      data: {
+        id: randomUUID(),
+        ticketId,
+        actorUserId: admin.id,
+        type: "assigned",
+        toValue: admin.id,
+      },
+    }),
+    db.supportTicketEvent.create({
+      data: {
+        id: randomUUID(),
+        ticketId,
+        actorUserId: admin.id,
+        type: "admin_replied",
+      },
+    }),
+    db.adminAuditLog.create({
+      data: buildAuditEntry({
+        actorUserId: admin.id,
+        action: "support_ticket_created",
+        targetType: "support_ticket",
+        targetId: ticketId,
+        providerUserId: provider.id,
+        metadata: {
+          category: input.category,
+          status: "pending_customer",
+        },
+      }),
+    }),
+    ...(notificationOps as Prisma.PrismaPromise<unknown>[]),
+  ]);
+
+  scheduleOutboxDrain();
+
+  const detail = await getAdminTicket(admin.id, ticketId);
+  if (!detail) {
+    throw new SupportError(
+      "The provider ticket was saved but could not be displayed. Open the support queue to find it.",
       500,
     );
   }

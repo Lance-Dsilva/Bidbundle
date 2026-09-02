@@ -1,178 +1,148 @@
 import Link from "next/link";
 
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { LandingInteractions } from "@/components/marketing/LandingInteractions";
 
 import "./landing.css";
 
-type MarketingIconName =
-  | "clipboard"
-  | "sparkle"
-  | "handshake"
-  | "approve"
-  | "lawn"
-  | "cleaning"
-  | "gutter"
-  | "window"
-  | "power"
-  | "landscape"
-  | "pool"
-  | "snow"
-  | "yard"
-  | "pressure";
+/**
+ * The public homepage.
+ *
+ * One story, told once: neighbors with the same need become a single request,
+ * local providers offer on the grouped work, and the community's manager picks
+ * one. Everything that did not serve that story — the dashboard mockup, the
+ * proof band, ten service cards, three audience sales panels with their own
+ * mockups and CTAs — is gone rather than shrunk.
+ *
+ * Every number this page used to state (savings percentages, timelines, star
+ * ratings, per-visit prices, contract sizes) was illustrative, and one of them
+ * carried a code comment saying so. None of it is repeated here: where there is
+ * no evidence, the page says what is true qualitatively instead.
+ */
 
-function MarketingIcon({ name }: { name: MarketingIconName }) {
-  const common = {
-    fill: "none",
-    stroke: "currentColor",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    strokeWidth: 1.8,
-  };
+const managerCta = "/get-started?intent=community-manager";
+const providerCta = "/get-started?role=provider";
 
+/** Three links, each pointing at a section that exists. */
+const navigation = [
+  { href: "#how-it-works", label: "How it works" },
+  { href: "#who-its-for", label: "Who it's for" },
+  { href: "#services", label: "Services" },
+];
+
+const steps = [
+  {
+    title: "Residents say what they need",
+    body: "Everyone shares which recurring service they want and how often they want it.",
+  },
+  {
+    title: "Providers offer on the whole group",
+    body: "Bundleen combines the homes into one request that local providers can offer on.",
+  },
+  {
+    title: "You choose, and everyone follows along",
+    body: "Compare the offers, pick one, and the community can see the schedule and each visit.",
+  },
+];
+
+const benefits = [
+  {
+    title: "Better pricing from grouped work",
+    body: "One request covering many nearby homes is worth more to a provider than one house at a time.",
+  },
+  {
+    title: "Offers you can actually compare",
+    body: "Every offer arrives in the same shape, so choosing one is a decision rather than an investigation.",
+  },
+  {
+    title: "Less coordination for the community",
+    body: "The request, the offers, the schedule, and what happened on each visit all live in one place.",
+  },
+];
+
+const audiences = [
+  {
+    who: "Managers",
+    body: "Organize the community's recurring services and choose the provider.",
+  },
+  {
+    who: "Residents",
+    body: "See the price, the schedule, and the progress of each visit.",
+  },
+  {
+    who: "Providers",
+    body: "Find grouped jobs close together, with less travel between homes.",
+  },
+];
+
+const serviceExamples = [
+  "Lawn care",
+  "Cleaning",
+  "Pool care",
+  "Landscaping",
+  "Gutters",
+  "Seasonal maintenance",
+];
+
+/** A single house glyph, repeated to show a group. Decorative. */
+function HouseGlyph() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...common}>
-      {name === "clipboard" && (
-        <>
-          <path d="M9 5.2H6.8A1.8 1.8 0 0 0 5 7v12a1.8 1.8 0 0 0 1.8 1.8h10.4A1.8 1.8 0 0 0 19 19V7a1.8 1.8 0 0 0-1.8-1.8H15" />
-          <rect x="8.5" y="3.2" width="7" height="4" rx="1.4" />
-          <path d="m8.2 12 1.2 1.2 2-2.2M13.5 12h2.5m-7.8 4.5 1.2 1.2 2-2.2m2.1 1h2.5" />
-        </>
-      )}
-      {name === "sparkle" && (
-        <>
-          <path d="M12 2.8c.7 3.8 2.6 5.7 6.4 6.4-3.8.7-5.7 2.6-6.4 6.4-.7-3.8-2.6-5.7-6.4-6.4C9.4 8.5 11.3 6.6 12 2.8Z" />
-          <path d="M18.8 15.2c.3 1.8 1.2 2.7 3 3-1.8.3-2.7 1.2-3 3-.3-1.8-1.2-2.7-3-3 1.8-.3 2.7-1.2 3-3ZM5 15.5l-1.8 1.8M5 18.8 3.2 17" />
-        </>
-      )}
-      {name === "handshake" && (
-        <>
-          <path d="m4.2 13.5-2-2 4.2-4.2 2 2m7.2 0 2-2 4.2 4.2-2 2" />
-          <path d="m8 9.6 2.2-2.2c.8-.8 2-.8 2.8 0l1 1 1.1 1.1 3.5 3.5a1.5 1.5 0 0 1-2.1 2.1l-2.8-2.8 2.2 2.2a1.5 1.5 0 0 1-2.1 2.1l-2.2-2.2 1.6 1.6a1.5 1.5 0 0 1-2.1 2.1L7 14l-1.6-1.6" />
-          <path d="m9.8 9.8 1.4 1.4c.6.6 1.6.6 2.2 0l1.4-1.4" />
-        </>
-      )}
-      {name === "approve" && (
-        <>
-          <path d="M3.5 12.5 9 18l11.5-12" />
-          <path d="M19.4 11.2a8.2 8.2 0 1 1-4.8-6.7" opacity=".45" />
-        </>
-      )}
-      {name === "lawn" && (
-        <>
-          <path d="M4 19.5h16M6 19.2c0-5 2.2-8.2 6-10.2-.1 4.7-2 8-6 10.2Z" />
-          <path d="M11.5 19.2c.2-3.7 2.4-6.4 6.5-7.9-.1 3.8-2.3 6.4-6.5 7.9ZM12 9V4.5" />
-        </>
-      )}
-      {name === "cleaning" && (
-        <>
-          <path d="M7.2 11.3 9 4.2h6l1.8 7.1M5 20h14l-1.5-8H6.5L5 20Z" />
-          <path d="M9.2 15.5h5.6M12 4.2V2.5" />
-        </>
-      )}
-      {name === "gutter" && (
-        <>
-          <path d="m3 9 9-5 9 5M5.2 9v3.4h13.6V9" />
-          <path d="M7 12.4v2.2c0 2.8 1.6 4.6 4.5 5.4M17 12.4v6.8" />
-        </>
-      )}
-      {name === "window" && (
-        <>
-          <rect x="4" y="3.5" width="16" height="17" rx="1.5" />
-          <path d="M12 3.5v17M4 12h16M7 8l2-2m6 11 2-2" />
-        </>
-      )}
-      {name === "power" && (
-        <>
-          <path d="M7.5 4.5h9v6.8a4.5 4.5 0 0 1-9 0V4.5Z" />
-          <path d="M10 2v2.5M14 2v2.5M12 15.8V22M8.5 22h7" />
-        </>
-      )}
-      {name === "landscape" && (
-        <>
-          <path d="M12 21V9M12 13c-4 0-6.5-2.2-7-6 4 0 6.5 2 7 6ZM12 16c4 0 6.5-2.2 7-6-4 0-6.5 2-7 6Z" />
-          <path d="M5 21h14" />
-        </>
-      )}
-      {name === "pool" && (
-        <>
-          <path d="M4 8.5h11a3 3 0 0 1 3 3v1.2M7 8.5V5.8A2.8 2.8 0 0 1 9.8 3" />
-          <path d="M3 15.5c1.5 1.2 3 1.2 4.5 0s3-1.2 4.5 0 3 1.2 4.5 0 3-1.2 4.5 0M3 19c1.5 1.2 3 1.2 4.5 0s3-1.2 4.5 0 3 1.2 4.5 0 3-1.2 4.5 0" />
-        </>
-      )}
-      {name === "snow" && (
-        <>
-          <path d="M12 2.8v18.4M4 7.4l16 9.2M4 16.6l16-9.2" />
-          <path d="m9 5.2 3 2 3-2M9 18.8l3-2 3 2M5.4 10.7 8.7 11l-1.4 3M18.6 13.3l-3.3-.3 1.4-3" />
-        </>
-      )}
-      {name === "yard" && (
-        <>
-          <path d="M4 19.5h16M7 19.5c0-3.8-1.4-6.6-4-8.3 4.7-.1 7.7 2.7 8.8 8.3M17 19.5c0-3 1.2-5.2 3.6-6.7-4-.1-6.5 2.1-7.5 6.7" />
-          <path d="M12 13V4m-3 3 3-3 3 3" />
-        </>
-      )}
-      {name === "pressure" && (
-        <>
-          <path d="M4 17.5h8.5a3.5 3.5 0 0 0 0-7H9.2" />
-          <path d="m5.5 7.5 3.7 3-3.7 3M15.5 5.5l4-2M16.5 9l4.5-.2M15.5 12.5l4 2" />
-        </>
-      )}
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M3.5 10.6 12 4l8.5 6.6V20a.9.9 0 0 1-.9.9h-4.4v-5.6H8.8v5.6H4.4a.9.9 0 0 1-.9-.9Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }
 
-const steps: Array<{
-  title: string;
-  description: string;
-  icon: MarketingIconName;
-  note?: string;
-}> = [
-  {
-    title: "Manager runs a quick survey",
-    description:
-      "Residents say which recurring services they need, how often, and what they pay today. Takes 3 minutes.",
-    icon: "clipboard",
-  },
-  {
-    title: "AI builds the bundle",
-    description:
-      "Once enough homes are in, Bundleen's AI analyzes costs, property sizes, and frequency — and drafts a professional request automatically.",
-    icon: "sparkle",
-    note: "Manager always reviews before anything is posted.",
-  },
-  {
-    title: "Verified providers bid",
-    description:
-      "Only vetted, 4.0★+ providers in your area see the request. They compete on clear per-visit or per-sq-ft pricing.",
-    icon: "handshake",
-  },
-  {
-    title: "Manager approves, everyone saves",
-    description:
-      "Manager picks the best bid in one click. Residents are auto-enrolled and notified with their exact savings.",
-    icon: "approve",
-  },
-];
+/**
+ * The one hero visual.
+ *
+ * Deliberately built from real HTML text rather than a fixed-viewBox SVG or a
+ * scaled-down product screenshot: the labels reflow and stay at the page's own
+ * type sizes at every width, so nothing here becomes texture on a phone the way
+ * the old 11px dashboard mockup did. The three offer bars differ in length to
+ * show that offers differ — they carry no prices, because Bundleen has no
+ * published pricing evidence to quote.
+ */
+function GroupRequestFigure() {
+  return (
+    <figure className="ld-flow" aria-label="How one community request works">
+      <div className="ld-flow-stage">
+        <div className="ld-flow-homes" aria-hidden="true">
+          <HouseGlyph />
+          <HouseGlyph />
+          <HouseGlyph />
+          <HouseGlyph />
+          <HouseGlyph />
+        </div>
+        <p className="ld-flow-label">Homes that want the same service</p>
+      </div>
 
-const services: Array<{
-  name: string;
-  frequency: string;
-  icon: MarketingIconName;
-}> = [
-  { name: "Lawn Care", frequency: "Weekly / bi-weekly", icon: "lawn" },
-  { name: "House Cleaning", frequency: "Monthly / seasonal", icon: "cleaning" },
-  { name: "Gutter Cleaning", frequency: "Semi-annual / annual", icon: "gutter" },
-  { name: "Window Cleaning", frequency: "Quarterly", icon: "window" },
-  { name: "Power Washing", frequency: "Annual", icon: "power" },
-  { name: "Landscape Maintenance", frequency: "Seasonal", icon: "landscape" },
-  { name: "Pool Maintenance", frequency: "Weekly / bi-weekly", icon: "pool" },
-  { name: "Snow Removal", frequency: "Seasonal", icon: "snow" },
-  { name: "Yard Cleanup", frequency: "Seasonal", icon: "yard" },
-  { name: "Pressure Washing", frequency: "Regular", icon: "pressure" },
-];
+      <div className="ld-flow-arrow" aria-hidden="true" />
 
-const managerCta = "/get-started?intent=community-manager";
-const providerCta = "/get-started?role=provider";
+      <div className="ld-flow-stage">
+        <div className="ld-flow-request">One community request</div>
+        <p className="ld-flow-label">Combined into a single job</p>
+      </div>
+
+      <div className="ld-flow-arrow" aria-hidden="true" />
+
+      <div className="ld-flow-stage">
+        <ul className="ld-flow-offers">
+          <li><span aria-hidden="true" style={{ width: "58%" }} />Offer</li>
+          <li className="is-chosen">
+            <span aria-hidden="true" style={{ width: "42%" }} />Offer
+            <b>Chosen</b>
+          </li>
+          <li><span aria-hidden="true" style={{ width: "72%" }} />Offer</li>
+        </ul>
+        <p className="ld-flow-label">Providers compete, you pick one</p>
+      </div>
+    </figure>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -180,16 +150,16 @@ export default function HomePage() {
       <header className="ld-header">
         <div className="ld-shell ld-header-inner">
           <Link className="ld-brand" href="/" aria-label="Bundleen home">
-            <img src="/modern/icons/logo.svg" alt="" width={42} height={42} />
+            <BundleenCompanyIcon size={36} />
             <span>Bundleen</span>
           </Link>
 
-          <nav className="ld-desktop-nav" aria-label="Primary navigation">
-            <a href="#how-it-works">How it works</a>
-            <a href="#services">Services</a>
-            <a href="#managers">For Managers</a>
-            <a href="#residents">For Residents</a>
-            <a href="#providers">For Providers</a>
+          <nav className="ld-desktop-nav" aria-label="Primary">
+            {navigation.map((item) => (
+              <a href={item.href} key={item.href}>
+                {item.label}
+              </a>
+            ))}
           </nav>
 
           <div className="ld-header-actions">
@@ -204,6 +174,7 @@ export default function HomePage() {
               type="button"
               aria-label="Open menu"
               aria-expanded="false"
+              aria-controls="mobile-menu"
               data-menu-button=""
             >
               <span />
@@ -213,317 +184,182 @@ export default function HomePage() {
           </div>
         </div>
 
-        <nav className="ld-mobile-menu" aria-label="Mobile navigation" data-mobile-menu="" hidden>
-          <a href="#how-it-works">How it works</a>
-          <a href="#services">Services</a>
-          <a href="#managers">For Managers</a>
-          <a href="#residents">For Residents</a>
-          <a href="#providers">For Providers</a>
+        <nav
+          className="ld-mobile-menu"
+          id="mobile-menu"
+          aria-label="Mobile"
+          data-mobile-menu=""
+          hidden
+        >
+          {navigation.map((item) => (
+            <a href={item.href} key={item.href}>
+              {item.label}
+            </a>
+          ))}
           <Link href="/sign-in">Log in</Link>
-          <Link className="ld-mobile-menu-cta" href={managerCta}>Get started</Link>
+          <Link className="ld-mobile-menu-cta" href={managerCta}>
+            Get started
+          </Link>
         </nav>
       </header>
 
       <main id="home">
+        {/* ── Hero ───────────────────────────────────────────────────────── */}
         <section className="ld-hero ld-section-pad" aria-labelledby="hero-title">
-          <div className="ld-hero-glow ld-hero-glow-left" aria-hidden="true" />
-          <div className="ld-hero-glow ld-hero-glow-right" aria-hidden="true" />
           <div className="ld-shell ld-hero-grid">
-            <div className="ld-hero-copy ld-reveal-up">
-              <div className="ld-eyebrow">
-                <MarketingIcon name="sparkle" />
-                <span>Built for HOA &amp; neighborhood managers</span>
-              </div>
-
+            <div className="ld-hero-copy">
               <h1 id="hero-title">
-                Your whole neighborhood, <span>one better price.</span>
+                Group your community&apos;s home services into <span>one request</span>.
               </h1>
 
               <p className="ld-hero-lede">
-                Bundleen helps HOA and neighborhood managers bundle recurring home services — lawn care, cleaning,
-                gutters and more — so every resident saves 20–35% without lifting a finger.
+                When neighbors need the same service, Bundleen combines them into one request.
+                Local providers offer on the grouped work, and you choose the one that suits your
+                community.
               </p>
 
               <div className="ld-hero-actions">
                 <Link className="ld-btn ld-btn-primary" href={managerCta}>
-                  I manage a community
+                  Set up your community
                   <span aria-hidden="true">→</span>
                 </Link>
-                <a className="ld-btn ld-btn-secondary" href="#residents">
-                  I&apos;m a resident
-                </a>
               </div>
 
-              <Link className="ld-provider-link" href={providerCta}>
-                Are you a service provider? <span>Join the provider network →</span>
-              </Link>
-
-              <div className="ld-trust-row" aria-label="Platform highlights">
-                <span><img src="/modern/icons/shield.svg" alt="" />Verified providers</span>
-                <span><MarketingIcon name="approve" />Manager-controlled</span>
-                <span><img src="/modern/icons/savings.svg" alt="" />Transparent savings</span>
-              </div>
+              <p className="ld-hero-aside">
+                Residents join through their own community — ask your manager about Bundleen.{" "}
+                <Link className="ld-text-link" href={providerCta}>
+                  Run a service business? Join as a provider
+                </Link>
+              </p>
             </div>
 
-            <div className="ld-dashboard-mock ld-reveal-scale" aria-label="Bundleen manager dashboard preview">
-              <div className="ld-mock-topbar">
-                <div className="ld-mock-brand">
-                  <img src="/modern/icons/logo.svg" alt="" />
-                  <span>Community overview</span>
-                </div>
-                <span className="ld-mock-avatar">AJ</span>
-              </div>
-
-              <div className="ld-mock-body">
-                <aside className="ld-mock-sidebar" aria-hidden="true">
-                  <span className="is-active"><i />Overview</span>
-                  <span><i />Surveys</span>
-                  <span><i />Bundles</span>
-                  <span><i />Residents</span>
-                </aside>
-
-                <div className="ld-mock-main">
-                  <div className="ld-mock-heading">
-                    <div>
-                      <small>GREENVIEW ESTATES</small>
-                      <strong>Good morning, Alex</strong>
-                    </div>
-                    <span className="ld-mock-action">Review bundle</span>
-                  </div>
-
-                  <article className="ld-ai-alert">
-                    <div className="ld-ai-alert-icon"><MarketingIcon name="sparkle" /></div>
-                    <div>
-                      <span>AI ALERT</span>
-                      <strong>Lawn Care bundle ready</strong>
-                      <p>7 residents interested · AI analysis complete</p>
-                    </div>
-                    <span className="ld-ready-pill">Ready</span>
-                  </article>
-
-                  <div className="ld-mock-metrics">
-                    <article>
-                      <span>Projected annual savings</span>
-                      <strong>$6,720</strong>
-                      <small>Across 7 homes</small>
-                    </article>
-                    <article>
-                      <span>Survey response</span>
-                      <strong>7 / 12</strong>
-                      <div className="ld-response-bar"><i /></div>
-                    </article>
-                  </div>
-
-                  <article className="ld-mock-bundle-row">
-                    <span className="ld-lawn-symbol"><MarketingIcon name="lawn" /></span>
-                    <div><strong>Bi-weekly lawn care</strong><small>3 verified bids received</small></div>
-                    <div className="ld-mini-avatars"><span>7</span><small>homes</small></div>
-                    <strong className="ld-mock-saving">24% less</strong>
-                  </article>
-                </div>
-              </div>
-
-              <div className="ld-floating-saving" aria-hidden="true">
-                <span>Community savings</span>
-                <strong>+$960</strong>
-                <small>per home / year</small>
-              </div>
-            </div>
+            <GroupRequestFigure />
           </div>
         </section>
 
-        <section className="ld-how-section ld-section-pad" id="how-it-works" aria-labelledby="how-title">
+        {/* ── Three steps ────────────────────────────────────────────────── */}
+        <section className="ld-how ld-section-pad" id="how-it-works" aria-labelledby="how-title">
           <div className="ld-shell">
-            <div className="ld-centered-heading ld-reveal-up">
-              <span className="ld-section-kicker">A smarter path to community pricing</span>
-              <h2 id="how-title">How Bundleen works</h2>
-              <p>From resident input to an approved recurring-service plan—without adding work to a manager&apos;s day.</p>
-            </div>
+            <h2 id="how-title">How it works</h2>
 
-            <div className="ld-steps-grid">
+            <ol className="ld-steps">
               {steps.map((step, index) => (
-                <article className="ld-step-card ld-reveal-up" key={step.title}>
-                  <span className="ld-step-index">{index + 1}</span>
-                  <div className="ld-step-icon"><MarketingIcon name={step.icon} /></div>
+                <li key={step.title}>
+                  <span className="ld-step-number" aria-hidden="true">
+                    {index + 1}
+                  </span>
                   <h3>{step.title}</h3>
-                  <p>{step.description}</p>
-                  {step.note ? <small>{step.note}</small> : null}
-                </article>
+                  <p>{step.body}</p>
+                </li>
               ))}
-            </div>
-
-            {/* Illustrative placeholder metrics until verified production data is available. */}
-            <div className="ld-proof-band ld-reveal-up" aria-label="Illustrative Bundleen outcomes">
-              <article><strong>20–35%</strong><span>Average savings vs. individual rates</span></article>
-              <article><strong>~3 weeks</strong><span>Survey to first service</span></article>
-              <article><strong>1 click</strong><span>For a manager to approve a bundle</span></article>
-              <article><strong>4.0★+</strong><span>Minimum provider rating</span></article>
-            </div>
-
-            <aside className="ld-example-callout ld-reveal-up">
-              <span className="ld-example-label">Example</span>
-              <p>7 homes · bi-weekly lawn care · was $400/mo each → bundled at $320/mo.</p>
-              <strong>$960 saved per home per year.</strong>
-            </aside>
+            </ol>
           </div>
         </section>
 
-        <section className="ld-services-section ld-section-pad" id="services" aria-labelledby="services-title">
+        {/* ── Benefits ───────────────────────────────────────────────────── */}
+        <section className="ld-benefits ld-section-pad" aria-labelledby="benefits-title">
           <div className="ld-shell">
-            <div className="ld-centered-heading ld-reveal-up">
-              <span className="ld-section-kicker">Built for repeatable work</span>
-              <h2 id="services-title">Recurring services we bundle</h2>
-              <p>Predictable, repeatable services are where bulk pricing actually works.</p>
-            </div>
+            <h2 id="benefits-title">Why communities use it</h2>
 
-            <div className="ld-services-grid">
-              {services.map((service) => (
-                <article className="ld-service-card ld-reveal-up" key={service.name}>
-                  <span className="ld-service-icon"><MarketingIcon name={service.icon} /></span>
-                  <h3>{service.name}</h3>
-                  <span className="ld-frequency-pill">{service.frequency}</span>
-                </article>
+            <div className="ld-benefit-columns">
+              {benefits.map((benefit) => (
+                <div key={benefit.title}>
+                  <h3>{benefit.title}</h3>
+                  <p>{benefit.body}</p>
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="ld-audiences-section ld-section-pad" aria-labelledby="audiences-title">
+        {/* ── Who it's for ───────────────────────────────────────────────── */}
+        <section className="ld-who ld-section-pad" id="who-its-for" aria-labelledby="who-title">
           <div className="ld-shell">
-            <div className="ld-centered-heading ld-reveal-up">
-              <span className="ld-section-kicker">One platform, aligned incentives</span>
-              <h2 id="audiences-title">Built for the whole community</h2>
-              <p>Managers stay in control, residents see the value, and providers gain efficient recurring work.</p>
-            </div>
+            <h2 id="who-title">Who it&apos;s for</h2>
 
-            <div className="ld-audience-grid">
-              <article className="ld-audience-card ld-manager-card ld-reveal-up" id="managers">
-                <div className="ld-audience-label">For HOA &amp; Neighborhood Managers</div>
-                <h3>Deliver real savings. Do almost nothing.</h3>
-                <ul>
-                  <li>AI handles analysis, request writing, and bid ranking — you just approve</li>
-                  <li>Filter providers by rating and verification; you keep governance</li>
-                  <li>Live savings dashboard for your community</li>
-                  <li>Fewer resident complaints, one platform for everything</li>
-                </ul>
-
-                <div className="ld-bid-preview" aria-label="AI-ranked bid comparison preview">
-                  <div className="ld-bid-preview-head"><span>AI bid comparison</span><small>3 verified bids</small></div>
-                  <div className="ld-preview-bid is-recommended"><span>GreenLine Lawn</span><b>$38 / visit</b><small>Recommended</small></div>
-                  <div className="ld-preview-bid"><span>Oak &amp; Stone</span><b>$42 / visit</b><small>4.8 ★</small></div>
-                  <div className="ld-preview-bid"><span>FreshCut Co.</span><b>$45 / visit</b><small>4.7 ★</small></div>
+            <dl className="ld-who-list">
+              {audiences.map((audience) => (
+                <div key={audience.who}>
+                  <dt>{audience.who}</dt>
+                  <dd>{audience.body}</dd>
                 </div>
-
-                <Link className="ld-card-cta" href={managerCta}>Start a community survey <span>→</span></Link>
-              </article>
-
-              <article className="ld-audience-card ld-resident-card ld-reveal-up" id="residents">
-                <div className="ld-audience-label">For Residents</div>
-                <h3>Same services, 20–35% less.</h3>
-                <ul>
-                  <li>No research, no haggling — your manager and AI do it</li>
-                  <li>Pre-vetted providers with ratings and guarantees</li>
-                  <li>See exactly what you save vs. what you pay now</li>
-                  <li>Auto-enrolled if you surveyed, 48-hour opt-out window</li>
-                </ul>
-
-                <div className="ld-phone-preview" aria-label="Resident bundle approval notification preview">
-                  <div className="ld-phone-speaker" />
-                  <div className="ld-notification-app"><img src="/modern/icons/logo.svg" alt="" /><span>Bundleen</span><small>now</small></div>
-                  <strong>✓ Your Lawn Care Bundle is Approved</strong>
-                  <p>Service begins May 12. You save <b>$960/year.</b></p>
-                  <span className="ld-opt-out-pill">48-hour opt-out window</span>
-                </div>
-
-                <a
-                  className="ld-card-cta"
-                  href="mailto:?subject=Ask%20your%20manager%20about%20Bundleen&body=Bundleen%20helps%20communities%20save%20on%20recurring%20home%20services.%20Learn%20more%20at%20https%3A%2F%2Fbundleen.com"
-                >
-                  Ask your manager about Bundleen <span>→</span>
-                </a>
-              </article>
-
-              <article className="ld-audience-card ld-provider-card ld-reveal-up" id="providers">
-                <div className="ld-audience-label">For Service Providers</div>
-                <h3>Guaranteed volume. Zero marketing.</h3>
-                <ul>
-                  <li>5–10 homes per contract, 8–12 month terms</li>
-                  <li>All homes in one neighborhood — minimal travel</li>
-                  <li>Pre-qualified leads, standardized per-visit / per-sq-ft pricing</li>
-                </ul>
-
-                <div className="ld-neighborhood-preview" aria-label="One provider serving a cluster of nearby homes">
-                  <img src="/modern/illustrations/neighborhood.svg" alt="Seven homes grouped into one efficient service route" />
-                  <div className="ld-route-line" aria-hidden="true"><i /><i /><i /><i /></div>
-                  <div className="ld-provider-truck"><span>Bundle route</span><i /></div>
-                </div>
-
-                <Link className="ld-card-cta" href={providerCta}>Become a verified provider <span>→</span></Link>
-              </article>
-            </div>
+              ))}
+            </dl>
           </div>
         </section>
 
-        <section className="ld-final-cta ld-section-pad" aria-labelledby="final-cta-title">
+        {/* ── Service examples ───────────────────────────────────────────── */}
+        <section className="ld-services ld-section-pad" id="services" aria-labelledby="services-title">
           <div className="ld-shell">
-            <div className="ld-final-cta-card ld-reveal-up">
-              <div>
-                <span className="ld-section-kicker">Bring your community together</span>
-                <h2 id="final-cta-title">Better recurring services start with one quick survey.</h2>
-                <p>See what your community needs, let AI organize the details, and approve the best value.</p>
-              </div>
-              <div className="ld-final-cta-actions">
-                <Link className="ld-btn ld-btn-primary" href={managerCta}>I manage a community <span>→</span></Link>
-                <a className="ld-btn ld-btn-secondary" href="mailto:hello@bundleen.com?subject=Bundleen%20community%20demo">Book a demo</a>
-              </div>
+            <h2 id="services-title">Services communities book again and again</h2>
+            <p className="ld-lead">
+              Grouping works best for work that repeats. These are common examples, not a fixed
+              list.
+            </p>
+
+            <ul className="ld-service-list">
+              {serviceExamples.map((service) => (
+                <li key={service}>{service}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* ── Final CTA ──────────────────────────────────────────────────── */}
+        <section className="ld-final ld-section-pad" aria-labelledby="final-title">
+          <div className="ld-shell ld-final-inner">
+            <h2 id="final-title">Bring your community&apos;s services together.</h2>
+            <div className="ld-final-actions">
+              <Link className="ld-btn ld-btn-primary" href={managerCta}>
+                Set up your community
+                <span aria-hidden="true">→</span>
+              </Link>
+              <Link className="ld-text-link" href={providerCta}>
+                Join as a provider
+              </Link>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="ld-footer" aria-labelledby="footer-heading">
+      <footer className="ld-footer">
         <div className="ld-shell ld-footer-grid">
           <div className="ld-footer-brand-column">
             <Link className="ld-footer-brand" href="/" aria-label="Bundleen home">
-              <img src="/modern/icons/logo.svg" alt="" width={48} height={48} />
+              <BundleenCompanyIcon size={36} />
               <span>Bundleen</span>
             </Link>
-            <p id="footer-heading">Better home services and better prices, built around the power of your neighborhood.</p>
-            <strong>Recurring home services, bundled by community.</strong>
+            <p>Recurring home services, grouped by community.</p>
           </div>
 
-          <div className="ld-footer-column">
-            <h3>Platform</h3>
+          <nav className="ld-footer-column" aria-label="Product">
+            <h2>Product</h2>
             <a href="#how-it-works">How it works</a>
-            <a href="#services">Recurring services</a>
-            <a href="#managers">For managers</a>
-            <a href="#residents">For residents</a>
-            <a href="#providers">For providers</a>
-          </div>
+            <a href="#who-its-for">Who it&apos;s for</a>
+            <a href="#services">Services</a>
+          </nav>
+
+          {/* Only destinations that exist. `/help`, `/privacy`, `/terms`,
+              `/safety`, `/faq`, and `/accessibility` had no route behind them
+              and answered 404 — see the completion notes. */}
+          <nav className="ld-footer-column" aria-label="Help">
+            <h2>Help</h2>
+            <Link href="/help/how-bidding-works">How bidding works</Link>
+            <Link href="/help/hoa-onboarding">Getting set up</Link>
+            <Link href="/help/provider-verification">Provider verification</Link>
+          </nav>
 
           <div className="ld-footer-column">
-            <h3>Support</h3>
-            <Link href="/help">Help center</Link>
-            <Link href="/safety">Safety and trust</Link>
-            <Link href="/faq">Frequently asked questions</Link>
-            <a href="mailto:support@bundleen.com">Contact support</a>
-          </div>
-
-          <div className="ld-footer-column ld-footer-contact">
-            <h3>Contact</h3>
-            <a href="mailto:hello@bundleen.com"><img src="/modern/icons/mail.svg" alt="" /> hello@bundleen.com</a>
-            <a href="mailto:support@bundleen.com"><img src="/modern/icons/mail.svg" alt="" /> support@bundleen.com</a>
-            <span><img src="/modern/icons/map-pin.svg" alt="" /> Austin, Texas</span>
+            <h2>Contact</h2>
+            <a href="mailto:hello@bundleen.com">hello@bundleen.com</a>
+            <a href="mailto:support@bundleen.com">support@bundleen.com</a>
+            <span>Austin, Texas</span>
           </div>
         </div>
 
         <div className="ld-shell ld-footer-bottom">
-          <span>© 2026 Bundleen Corp. All rights reserved.</span>
-          <div className="ld-footer-legal">
-            <Link href="/privacy">Privacy Policy</Link>
-            <Link href="/terms">Terms of Service</Link>
-            <Link href="/accessibility">Accessibility</Link>
-          </div>
+          <span>© 2026 Bundleen Corp.</span>
+          <Link href="/sign-in">Log in</Link>
         </div>
       </footer>
 

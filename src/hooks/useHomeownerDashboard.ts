@@ -18,7 +18,6 @@ export interface HomeownerDashboard {
   active_requests: number;
   active_bids: number;
   total_saved_cents: number;
-  unread_messages: number;
 }
 
 export function useHomeownerDashboard() {

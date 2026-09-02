@@ -604,6 +604,62 @@ export async function updateUnit(
   return serializeUnit(updated, ready);
 }
 
+/**
+ * Removes only an entirely unused inventory row.
+ *
+ * Historical units are records, not form clutter: a membership, invitation,
+ * service participation/visit, or amenity booking makes deletion unsafe and
+ * is rejected. This gives admins a safe way to clear legacy placeholders
+ * without silently erasing resident or service history.
+ */
+export async function removeUnusedUnit(
+  actorUserId: string,
+  communityId: string,
+  unitId: string,
+): Promise<void> {
+  const community = await requireHoaCommunity(communityId);
+  const unit = await db.communityUnit.findFirst({
+    where: { id: unitId, communityId: community.id },
+    select: {
+      id: true,
+      occupancyStatus: true,
+      _count: {
+        select: {
+          memberships: true,
+          invitations: true,
+          participations: true,
+          visits: true,
+          amenityBookings: true,
+        },
+      },
+    },
+  });
+  if (!unit) throw new HoaWorkflowError("That unit does not exist.", 404);
+  const linkedRecords = Object.values(unit._count).reduce((sum, count) => sum + count, 0);
+  if (
+    !["vacant", "inactive"].includes(unit.occupancyStatus) ||
+    linkedRecords > 0
+  ) {
+    throw new HoaWorkflowError(
+      "This unit has resident, invitation, service, or booking history and cannot be removed.",
+      409,
+    );
+  }
+
+  await db.$transaction([
+    db.communityUnit.delete({ where: { id: unit.id } }),
+    db.adminAuditLog.create({
+      data: buildAuditEntry({
+        actorUserId,
+        action: "hoa_unit_removed",
+        targetType: "hoa_unit",
+        targetId: unit.id,
+        communityId: community.id,
+      }),
+    }),
+  ]);
+}
+
 /* ── CSV import ──────────────────────────────────────────────────────────── */
 
 /**

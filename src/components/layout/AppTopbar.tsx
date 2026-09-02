@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { isTabActive, tabsByRole, useAppRole } from "@/components/layout/AppBottomNav";
 import { roleLine } from "@/components/layout/ViewerIdentity";
 import { CreativeIcon } from "@/components/ui/CreativeIcon";
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { useViewerContext } from "@/hooks/useViewerContext";
 
 export function AppTopbar() {
@@ -23,7 +24,7 @@ export function AppTopbar() {
     <header className="bb-topbar">
       <div className="bb-container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
         <Link href={`/app/${role}/dashboard`} className="bb-brand" aria-label="Bundleen home">
-          <img src="/creative/icons/logo-house.svg" alt="" width={38} height={38} />
+          <BundleenCompanyIcon size={38} />
           <span>Bundleen</span>
         </Link>
 

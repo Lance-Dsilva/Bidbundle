@@ -457,7 +457,6 @@ export type HomeownerDashboardSummary = {
   active_requests: number;
   active_bids: number;
   total_saved_cents: number;
-  unread_messages: number;
 };
 
 /** Statuses in which a request is still working for the homeowner. */
@@ -481,7 +480,7 @@ const ACTIVE_REQUEST_STATUSES = [
 export async function getHomeownerDashboard(
   ownerUserId: string,
 ): Promise<HomeownerDashboardSummary> {
-  const [totalRequests, activeRequests, activeBids, awarded, unreadMessages] =
+  const [totalRequests, activeRequests, activeBids, awarded] =
     await Promise.all([
       db.hoaServiceRequest.count({ where: { createdByUserId: ownerUserId } }),
       db.hoaServiceRequest.count({
@@ -507,7 +506,6 @@ export async function getHomeownerDashboard(
           agreement: { select: { amountCents: true } },
         },
       }),
-      db.notification.count({ where: { userId: ownerUserId, readAt: null } }),
     ]);
 
   const totalSavedCents = awarded.reduce((sum, row) => {
@@ -521,6 +519,5 @@ export async function getHomeownerDashboard(
     active_requests: activeRequests,
     active_bids: activeBids,
     total_saved_cents: totalSavedCents,
-    unread_messages: unreadMessages,
   };
 }

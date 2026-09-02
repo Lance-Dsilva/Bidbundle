@@ -1,9 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
+import { apiFetch } from "@/lib/api";
+import type { ConversationThread } from "@/lib/server/conversations";
 
 /**
  * Provider "My Bids": every quote this account has submitted, with its real
@@ -36,9 +39,40 @@ function money(cents: number): string {
   return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+/** A live quote is what entitles a provider to message the customer. */
+const CONTACTABLE = new Set(["submitted", "accepted"]);
+
 export default function ProviderBidsPage() {
   const { workspace, loading, error } = useProviderMarketplace();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
+  const router = useRouter();
+  const [opening, setOpening] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  /**
+   * Opens the thread for one request and goes to it.
+   *
+   * The body names the *request*, never the customer: the server reads who
+   * that is and confirms this account actually quoted it. There is no path
+   * here that could address an arbitrary account.
+   */
+  async function messageCustomer(requestId: string) {
+    if (opening) return;
+    setOpening(requestId);
+    setOpenError(null);
+    try {
+      const payload = await apiFetch<{ thread: ConversationThread }>("/provider/inbox", {
+        method: "POST",
+        body: JSON.stringify({ requestId }),
+      });
+      router.push(`/app/provider/messages?thread=${payload.thread.id}`);
+    } catch (caught) {
+      setOpenError(
+        caught instanceof Error ? caught.message : "We could not open that conversation.",
+      );
+      setOpening(null);
+    }
+  }
 
   // The feed already carries each open request's title; agreements carry the
   // rest. Titles are looked up from what the same payload returned rather than
@@ -106,6 +140,12 @@ export default function ProviderBidsPage() {
         ))}
       </div>
 
+      {openError ? (
+        <p className="mb-4 rounded-xl px-4 py-3 text-sm" role="alert" style={{ background: "#fef2f2", color: "#b91c1c" }}>
+          {openError}
+        </p>
+      ) : null}
+
       {bids.length === 0 ? (
         <EmptyState
           ctaHref="/app/provider/job-feed"
@@ -139,6 +179,17 @@ export default function ProviderBidsPage() {
               <p className="mt-2 text-xs" style={{ color: "var(--ink-700)" }}>
                 {bid.scope}
               </p>
+              {CONTACTABLE.has(bid.status) ? (
+                <button
+                  className="mt-3 rounded-full px-3 py-1 text-xs font-semibold"
+                  disabled={opening === bid.requestId}
+                  onClick={() => void messageCustomer(bid.requestId)}
+                  style={{ background: "var(--cream-100)", color: "var(--ink-900)" }}
+                  type="button"
+                >
+                  {opening === bid.requestId ? "Opening…" : "Message customer"}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

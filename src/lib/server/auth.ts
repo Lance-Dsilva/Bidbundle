@@ -33,6 +33,8 @@ export type SessionUser = {
   isVerified: boolean;
   /** Present only for an active, database-backed admin allow-list entry. */
   adminAccessLevel: "owner" | "admin" | null;
+  /** Distinguishes ordinary operations staff from delegated administrators. */
+  adminIsStaffAccount: boolean;
   /**
    * Named capabilities beyond portal access, from the same active grant.
    * Empty for everyone else — including an ordinary admin who has been granted
@@ -52,7 +54,7 @@ async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null
       role: true,
       isVerified: true,
       adminAccess: {
-        select: { email: true, level: true, status: true, permissions: true },
+        select: { email: true, level: true, status: true, permissions: true, isStaffAccount: true },
       },
     },
   });
@@ -81,6 +83,7 @@ async function findBundleenUser(clerkUserId: string): Promise<SessionUser | null
     role: currentUser.role,
     isVerified: currentUser.isVerified,
     adminAccessLevel: adminAccess,
+    adminIsStaffAccount: activeGrant?.isStaffAccount ?? false,
     adminPermissions,
   };
 }

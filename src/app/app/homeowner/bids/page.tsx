@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useHomeownerBids } from "@/hooks/useHomeownerBids";
 import { useNeighbourhood } from "@/hooks/useNeighbourhood";
+import { apiFetch } from "@/lib/api";
+import type { ConversationThread } from "@/lib/server/conversations";
 
 /**
  * Homeowner "My Bids": the quotes providers have sent for requests this
@@ -30,6 +33,9 @@ const STATUS_TONES: Record<string, CSSProperties> = {
   rejected: { background: "#fee2e2", color: "#b91c1c" },
 };
 
+/** A live quote is what entitles a customer to message the provider. */
+const CONTACTABLE = new Set(["submitted", "accepted"]);
+
 function money(cents: number): string {
   return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
@@ -38,6 +44,9 @@ export default function HomeownerBidsPage() {
   const { bids, loading, error, refresh } = useHomeownerBids();
   const { act, busy, missingAddresses, error: actionError } = useNeighbourhood();
   const [filter, setFilter] = useState<"all" | "submitted" | "accepted">("all");
+  const router = useRouter();
+  const [opening, setOpening] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   const visible = useMemo(
     () => bids.filter((bid) => filter === "all" || bid.status === filter),
@@ -47,6 +56,31 @@ export default function HomeownerBidsPage() {
   const award = async (requestId: string, bidId: string) => {
     const ok = await act({ kind: "award", requestId, bidId });
     if (ok) await refresh();
+  };
+
+  /**
+   * Opens the thread for one quote and goes to it.
+   *
+   * The body names the *bid*, never the provider: the server reads who quoted
+   * it and confirms the quote sits on a request this account created. There is
+   * no path here that could address an arbitrary account.
+   */
+  const messageProvider = async (bidId: string) => {
+    if (opening) return;
+    setOpening(bidId);
+    setOpenError(null);
+    try {
+      const payload = await apiFetch<{ thread: ConversationThread }>("/homeowner/inbox", {
+        method: "POST",
+        body: JSON.stringify({ bidId }),
+      });
+      router.push(`/app/homeowner/chat?thread=${payload.thread.id}`);
+    } catch (caught) {
+      setOpenError(
+        caught instanceof Error ? caught.message : "We could not open that conversation.",
+      );
+      setOpening(null);
+    }
   };
 
   if (loading) {
@@ -70,9 +104,9 @@ export default function HomeownerBidsPage() {
         </p>
       </header>
 
-      {error || actionError ? (
+      {error || actionError || openError ? (
         <p className="mb-4 rounded-xl px-4 py-3 text-sm" role="alert" style={{ background: "#fef2f2", color: "#b91c1c" }}>
-          {error ?? actionError}
+          {error ?? actionError ?? openError}
         </p>
       ) : null}
 
@@ -138,17 +172,30 @@ export default function HomeownerBidsPage() {
               <p className="mt-2 text-xs" style={{ color: "var(--ink-700)" }}>
                 {bid.scope}
               </p>
-              {bid.canAward ? (
-                <button
-                  className="mt-3 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                  disabled={busy}
-                  onClick={() => void award(bid.requestId, bid.id)}
-                  style={{ background: "var(--terracotta-600)" }}
-                  type="button"
-                >
-                  Award this provider
-                </button>
-              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {bid.canAward ? (
+                  <button
+                    className="rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => void award(bid.requestId, bid.id)}
+                    style={{ background: "var(--terracotta-600)" }}
+                    type="button"
+                  >
+                    Award this provider
+                  </button>
+                ) : null}
+                {CONTACTABLE.has(bid.status) ? (
+                  <button
+                    className="rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                    disabled={opening === bid.id}
+                    onClick={() => void messageProvider(bid.id)}
+                    style={{ background: "var(--cream-100)", color: "var(--ink-900)" }}
+                    type="button"
+                  >
+                    {opening === bid.id ? "Opening…" : "Message provider"}
+                  </button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

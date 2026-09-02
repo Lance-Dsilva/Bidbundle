@@ -14,6 +14,7 @@ import {
 } from "@/lib/validation/communications";
 import {
   MAX_TICKET_MESSAGE_LENGTH,
+  adminProviderTicketCreateSchema,
   adminTicketMessageSchema,
   adminTicketQuerySchema,
   adminTicketUpdateSchema,
@@ -78,6 +79,36 @@ describe("createTicketSchema", () => {
       { ticketNumber: "BDL-000001" },
     ]) {
       expect(createTicketSchema.safeParse({ ...valid, ...forged }).success).toBe(false);
+    }
+  });
+});
+
+describe("adminProviderTicketCreateSchema", () => {
+  const valid = {
+    subject: "Updated insurance required",
+    category: "provider_issue",
+    priority: "high",
+    message: "Please upload the renewed insurance certificate by Friday.",
+  };
+
+  it("accepts a complete provider communication and defaults priority", () => {
+    expect(adminProviderTicketCreateSchema.safeParse(valid).success).toBe(true);
+    const defaulted = adminProviderTicketCreateSchema.safeParse({
+      subject: valid.subject,
+      category: valid.category,
+      message: valid.message,
+    });
+    expect(defaulted.success && defaulted.data.priority).toBe("normal");
+  });
+
+  it("does not allow the browser to choose provider, sender, status, or assignee", () => {
+    for (const forged of [
+      { providerUserId: "provider-2" },
+      { requesterUserId: "provider-2" },
+      { assignedAdminUserId: "admin-2" },
+      { status: "resolved" },
+    ]) {
+      expect(adminProviderTicketCreateSchema.safeParse({ ...valid, ...forged }).success).toBe(false);
     }
   });
 });

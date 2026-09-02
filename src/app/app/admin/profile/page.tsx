@@ -59,7 +59,7 @@ export default async function AdminProfilePage() {
       <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-7 pb-24">
         <SectionCard
           title="Account"
-          action={<StatusPill label={user.adminAccessLevel === "owner" ? "Primary owner" : "Bundleen admin"} tone="info" withDot={false} />}
+          action={<StatusPill label={user.adminAccessLevel === "owner" ? "Primary owner" : user.adminIsStaffAccount ? "Bundleen staff" : "Bundleen admin"} tone="info" withDot={false} />}
         >
           <PersonLine
             person={person}

@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
       level: "owner" | "admin";
       status: "pending" | "active" | "revoked";
       permissions: string[];
+      isStaffAccount: boolean;
     };
   },
 }));
@@ -60,6 +61,7 @@ function signedInAs(role: AppRole) {
             level: "owner",
             status: "active",
             permissions: [],
+            isStaffAccount: false,
           }
         : null,
   };
@@ -83,7 +85,22 @@ describe("getSessionUser", () => {
       role: "homeowner",
       isVerified: true,
       adminAccessLevel: null,
+      adminIsStaffAccount: false,
       adminPermissions: [],
+    });
+  });
+
+  it("keeps ordinary staff distinct from delegated administrators", async () => {
+    signedInAs("admin");
+    state.databaseUser!.adminAccess!.level = "admin";
+    state.databaseUser!.adminAccess!.isStaffAccount = true;
+    state.databaseUser!.adminAccess!.permissions = ["communications:draft"];
+
+    await expect(getSessionUser()).resolves.toMatchObject({
+      role: "admin",
+      adminAccessLevel: "admin",
+      adminIsStaffAccount: true,
+      adminPermissions: ["communications:draft"],
     });
   });
 

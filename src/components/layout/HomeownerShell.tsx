@@ -6,9 +6,13 @@ import { usePathname } from "next/navigation";
 
 import { roleLine, ViewerIdentity } from "@/components/layout/ViewerIdentity";
 import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { Icon } from "@/components/ui/Icon";
 import { NotificationBell } from "@/components/ui/NotificationBell";
-import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
+import {
+  HomeownerSessionProvider,
+  useHomeownerSession,
+} from "@/components/homeowner/HomeownerSessionContext";
 import { useViewerContext } from "@/hooks/useViewerContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { initialsFromName } from "@/lib/display-name";
@@ -25,11 +29,29 @@ type HomeownerShellProps = Readonly<{
   children: ReactNode;
   /** Display name from the verified server session, not from client state. */
   userName: string;
+  /**
+   * Unread conversation messages, counted once by the server layout. The shell
+   * deliberately does not fetch this: it used to read the dashboard payload the
+   * page below was already loading, and showed the notification count under a
+   * "Messages" label.
+   */
+  unreadMessages: number;
 }>;
 
-export function HomeownerShell({ children, userName }: HomeownerShellProps) {
+export function HomeownerShell({ children, userName, unreadMessages }: HomeownerShellProps) {
+  return (
+    <HomeownerSessionProvider unreadMessages={unreadMessages}>
+      <HomeownerChrome userName={userName}>{children}</HomeownerChrome>
+    </HomeownerSessionProvider>
+  );
+}
+
+function HomeownerChrome({
+  children,
+  userName,
+}: Readonly<{ children: ReactNode; userName: string }>) {
   const pathname = usePathname();
-  const { dashboard, user } = useHomeownerDashboard();
+  const { unreadMessages } = useHomeownerSession();
   const { notifications, loading: notificationsLoading, markRead, dismiss } = useNotifications();
   // Live scoped-role context. The "Community" link below appears from this,
   // but the page behind it re-derives the same assignments server-side — a
@@ -39,7 +61,8 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
     (community) => community.communityType === "hoa" && community.status === "active",
   );
 
-  const displayName = userName || user?.full_name || "Homeowner";
+  // The verified server session already named them; nothing to re-fetch.
+  const displayName = userName || "Homeowner";
   const initials = initialsFromName(displayName);
 
   const isActive = (href: string) => pathname === href;
@@ -48,7 +71,7 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
     <div className="dash-shell">
       <aside className="dash-sidebar" aria-label="Homeowner navigation">
         <Link className="dash-sidebar-brand" href="/app/homeowner/dashboard" aria-label="Bundleen home">
-          <img src="/creative/icons/logo-house.svg" alt="" />
+          <BundleenCompanyIcon size={36} />
           <span>Bundleen</span>
         </Link>
 
@@ -57,8 +80,10 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
             <Link className={`dash-nav-item${isActive(item.href) ? " is-active" : ""}`} href={item.href} key={item.label}>
               <Icon name={item.icon} size={20} />
               <span>{item.label}</span>
-              {item.label === "Messages" && (dashboard?.unread_messages ?? 0) > 0 ? (
-                <b className="dash-nav-badge amber">{dashboard?.unread_messages}</b>
+              {/* Real conversation messages, seeded server-side and cleared
+                  by the chat page as threads are opened. */}
+              {item.label === "Messages" && unreadMessages > 0 ? (
+                <b className="dash-nav-badge amber">{unreadMessages}</b>
               ) : null}
             </Link>
           ))}
@@ -125,7 +150,7 @@ export function HomeownerShell({ children, userName }: HomeownerShellProps) {
 
       <div className="dash-mobile-topbar">
         <Link className="dash-mobile-topbar-brand" href="/app/homeowner/dashboard">
-          <img src="/creative/icons/logo-house.svg" alt="" /><span>Bundleen</span>
+          <BundleenCompanyIcon size={30} /><span>Bundleen</span>
         </Link>
         <div className="dash-mobile-topbar-actions">
           <NotificationBell notifications={notifications} loading={notificationsLoading} markRead={markRead} dismiss={dismiss} />

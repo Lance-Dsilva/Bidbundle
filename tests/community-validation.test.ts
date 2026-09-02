@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  auditListQuerySchema,
   communityCreateSchema,
   communityListQuerySchema,
   communityUpdateSchema,
@@ -182,5 +183,28 @@ describe("list queries", () => {
       search: "oak",
       page: 3,
     });
+  });
+
+  it("keeps valid audit dropdown filters and drops unknown values", () => {
+    const valid = auditListQuerySchema.parse(
+      searchParamsToObject(
+        new URLSearchParams(
+          "action=provider_license_verified&actorUserId=admin-1&related=provider&age=30d",
+        ),
+      ),
+    );
+    expect(valid).toMatchObject({
+      action: "provider_license_verified",
+      actorUserId: "admin-1",
+      related: "provider",
+      age: "30d",
+    });
+
+    const invalid = auditListQuerySchema.parse(
+      searchParamsToObject(new URLSearchParams("action=delete_everything&related=secret&age=forever")),
+    );
+    expect(invalid.action).toBeNull();
+    expect(invalid.related).toBeNull();
+    expect(invalid.age).toBeNull();
   });
 });

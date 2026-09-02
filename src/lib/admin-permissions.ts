@@ -11,6 +11,8 @@
  */
 
 export const ADMIN_PERMISSIONS = [
+  /** Invite and remove ordinary Bundleen operations staff, never admins. */
+  "staff:manage",
   /** Compose, preview, and test-send a broadcast. No global delivery. */
   "communications:draft",
   /** Send a broadcast to real customers. The high-risk one. */
@@ -20,11 +22,14 @@ export const ADMIN_PERMISSIONS = [
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
 export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
+  "staff:manage": "Manage Bundleen staff",
   "communications:draft": "Draft operational broadcasts",
   "communications:send_global": "Send global operational emails",
 };
 
 export const ADMIN_PERMISSION_DESCRIPTIONS: Record<AdminPermission, string> = {
+  "staff:manage":
+    "Invite and remove ordinary operations staff. Cannot grant admin access or change permissions.",
   "communications:draft":
     "Write and preview platform-wide messages, and send a test to themselves. Cannot deliver to customers.",
   "communications:send_global":

@@ -10,7 +10,6 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { useHomeownerDashboard } from "@/hooks/useHomeownerDashboard";
 import { ACTIVE_REQUEST_STATUSES, useHomeownerRequests } from "@/hooks/useHomeownerRequests";
 import { useNeighbourhood } from "@/hooks/useNeighbourhood";
-import { useNeighbourhoodSummary } from "@/hooks/useNeighbourhoodSummary";
 
 /** Server lifecycle values, in the words a homeowner would use for them. */
 const REQUEST_STATUS_LABELS: Record<string, string> = {
@@ -41,7 +40,11 @@ export default function HomeownerDashboard() {
   // it, so this panel had nothing to show even when neighbours were active.
   const { hub, loading: nbRequestsLoading } = useNeighbourhood();
   const nbRequests = hub?.requests ?? [];
-  const { otherMembers, neighbourhoodName, neighborCount } = useNeighbourhoodSummary();
+  // Neighbour facts come from the hub this page already loads. They used to
+  // come from `useNeighbourhoodSummary`, which polled two endpoints that had no
+  // Route Handler every 15 seconds — so the count was permanently zero and the
+  // network panel filled with 404s.
+  const neighborCount = hub?.activeNeighbourCount ?? 0;
   const totalSaved = Math.round((dashboard?.total_saved_cents ?? 0) / 100);
   const animatedSavings = useCountUp(totalSaved);
   const groupCount = requests.filter((r) => r.status === "collecting_interest").length;
@@ -86,16 +89,10 @@ export default function HomeownerDashboard() {
     ownRecommendedRequest.budgetMaxCents != null
       ? Math.max(0, ownRecommendedRequest.budgetMaxCents - ownRecommendedRequest.bestBidCents)
       : 0;
+  // Only real activity: a "joined your neighbourhood" row needs a member
+  // roster, and no endpoint has ever returned one.
   const neighbourhoodPulse = [
-    ...otherMembers.slice(0, 2).map((member) => ({
-      key: `member-${member.user_id}`,
-      who: member.full_name,
-      initials: member.full_name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
-      what: "joined your neighbourhood",
-      highlight: neighbourhoodName,
-      when: new Date(member.joined_at).toLocaleDateString([], { month: "short", day: "numeric" }),
-    })),
-    ...nbRequests.filter((request) => !request.isOwner).slice(0, 2).map((request) => ({
+    ...nbRequests.filter((request) => !request.isOwner).slice(0, 3).map((request) => ({
       key: `request-${request.id}`,
       who: request.createdByName,
       initials: request.createdByName.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(),

@@ -487,6 +487,11 @@ html[data-theme="dark"] .bb-nav-links { color: var(--ink-700); }
   background: linear-gradient(90deg, var(--teal-600), var(--amber-500)); border-radius: 99px;
 }
 
+/* The company icon is square artwork; `contain` keeps it that way even when a
+   brand container hands it a non-square box. Sizing itself stays with the
+   surrounding rules so responsive breakpoints keep working. */
+.bundleen-company-icon { object-fit: contain; }
+
 .bb-brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 22px; letter-spacing: -.03em; color: var(--ink-900); }
 .bb-brand img { width: 38px; height: 38px; }
 
@@ -852,7 +857,11 @@ html[data-theme="dark"] .dash-nav-item { color: var(--ink-700); }
 .provider-route-content > * { min-height: auto !important; }
 .provider-route-content > * > :first-child { padding-top: 0; }
 .provider-opportunity-link { color: inherit; text-decoration: none; }
-.provider-growth-card { background: linear-gradient(145deg, var(--teal-50), var(--paper) 62%, var(--amber-50)); }
+/* The provider sidebar has no promo card, so the account block takes over the
+   anchoring `.dash-invite-card`'s `margin-top: auto` used to provide. Scoped to
+   `.provider-shell` so the homeowner sidebar, which still has the card, does
+   not end up with two auto margins splitting the free space between them. */
+.provider-shell .dash-sidebar-profile { margin-top: auto; }
 
 /* Reused by the notification bell popover (dash-rail-* predates the removed
    dashboard right rail; kept as the shared "list of updates" row styling). */

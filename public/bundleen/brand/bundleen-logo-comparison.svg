@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Three Bundleen logo concepts</title>
+  <desc id="desc">A side-by-side comparison of Bundle Check, Community Weave, and Shared Street.</desc>
+  <rect width="1200" height="760" fill="#F2F6F9"/>
+  <text x="72" y="72" fill="#102A43" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="32" font-weight="700">Bundleen logo directions</text>
+  <text x="72" y="104" fill="#667085" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="16">Three distinct ways to express homes working better together.</text>
+
+  <g transform="translate(60 145)">
+    <rect width="1080" height="165" rx="24" fill="#FFFFFF"/>
+    <text x="32" y="38" fill="#667085" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="13" font-weight="700" letter-spacing="1.6">01 · BUNDLE CHECK</text>
+    <g transform="translate(32 50)">
+      <path fill="#0F9D8A" fill-rule="evenodd" d="M22 7a8 8 0 0 1 8 8v10.6A34.7 34.7 0 0 1 49 20c19.3 0 35 15.7 35 35S68.3 90 49 90a34.8 34.8 0 0 1-19-5.6A8 8 0 0 1 14 83V15a8 8 0 0 1 8-8Zm27 29c-10.5 0-19 8.5-19 19s8.5 19 19 19 19-8.5 19-19-8.5-19-19-19Z"/>
+      <path d="m38.5 56 10.5-9.5L59.5 56" fill="none" stroke="#F5A623" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+    </g>
+    <text x="148" y="126" fill="#102A43" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="64" font-weight="700" letter-spacing="-2.2">Bundleen</text>
+    <text x="730" y="91" fill="#365A78" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="16">A home/check protected inside a memorable “b”.</text>
+  </g>
+
+  <g transform="translate(60 330)">
+    <rect width="1080" height="165" rx="24" fill="#FFFFFF"/>
+    <text x="32" y="38" fill="#667085" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="13" font-weight="700" letter-spacing="1.6">02 · COMMUNITY WEAVE</text>
+    <g transform="translate(32 50)">
+      <path d="m19 31 29-17 29 17" fill="none" stroke="#102A43" stroke-linecap="round" stroke-linejoin="round" stroke-width="12"/>
+      <path d="M77 31v33L48 82" fill="none" stroke="#0F9D8A" stroke-linecap="round" stroke-linejoin="round" stroke-width="12"/>
+      <path d="M48 82 19 64V31" fill="none" stroke="#35B7A5" stroke-linecap="round" stroke-linejoin="round" stroke-width="12"/>
+      <circle cx="48" cy="48" r="7" fill="#F5A623"/>
+    </g>
+    <text x="148" y="126" fill="#102A43" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="64" font-weight="700" letter-spacing="-2.2">Bundleen</text>
+    <text x="730" y="91" fill="#365A78" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="16">Three community ribbons focus value in one place.</text>
+  </g>
+
+  <g transform="translate(60 515)">
+    <rect width="1080" height="165" rx="24" fill="#FFFFFF"/>
+    <text x="32" y="38" fill="#667085" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="13" font-weight="700" letter-spacing="1.6">03 · SHARED STREET</text>
+    <g transform="translate(28 50)">
+      <path d="M8 68V47l14-14 14 14v21M36 68V47l14-14 14 14v21M64 68V47l14-14 18 18v17" fill="none" stroke="#102A43" stroke-linecap="round" stroke-linejoin="round" stroke-width="9"/>
+      <path d="M8 72h88" fill="none" stroke="#0F9D8A" stroke-linecap="round" stroke-width="11"/>
+      <circle cx="50" cy="72" r="7" fill="#F5A623"/>
+    </g>
+    <text x="148" y="126" fill="#102A43" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="64" font-weight="700" letter-spacing="-2.2">Bundleen</text>
+    <text x="730" y="91" fill="#365A78" font-family="Avenir Next, Avenir, Inter, system-ui, sans-serif" font-size="16">Several homes connected by one shared foundation.</text>
+  </g>
+</svg>

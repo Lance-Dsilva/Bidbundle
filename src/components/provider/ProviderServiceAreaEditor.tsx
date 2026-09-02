@@ -1,7 +1,7 @@
 "use client";
 
 import type { Circle, Map as LeafletMap, Marker } from "leaflet";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   SERVICE_RADIUS_DEFAULT_MILES,
@@ -67,6 +67,24 @@ type EditorProps = {
   /** Rendered under the radius control; explains what the circle controls. */
   helpText?: string;
   mapHeightClassName?: string;
+  /**
+   * How the search, map, and settings are arranged.
+   *
+   * - `stacked` — one narrow column, top to bottom. What onboarding needs,
+   *   where the editor sits inside a step card.
+   * - `split` — a full-width search row, then a large map beside a compact
+   *   settings column on wide screens, collapsing to one column below `lg`.
+   *   The settings and the map both get real width instead of the map being
+   *   squeezed into whatever is left beside a fixed list.
+   *
+   * Same component and same state either way: there is one coverage editor.
+   */
+  layout?: "stacked" | "split";
+  /**
+   * Save/cancel controls, rendered with the area name so the thing being
+   * named and the button that saves it are not separated by the whole map.
+   */
+  actions?: ReactNode;
 };
 
 const ATTRIBUTION =
@@ -115,7 +133,9 @@ export function ProviderServiceAreaEditor({
   contextCircles = [],
   disabled = false,
   helpText,
-  mapHeightClassName = "h-[260px] sm:h-[320px]",
+  mapHeightClassName,
+  layout = "stacked",
+  actions,
 }: EditorProps) {
   const reactId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -433,28 +453,19 @@ export function ProviderServiceAreaEditor({
     }
   };
 
+  // A split layout gives the map most of the width, so it earns more height
+  // too; stacked keeps the compact onboarding proportions.
+  const mapHeight =
+    mapHeightClassName ??
+    (layout === "split" ? "h-[300px] sm:h-[380px] lg:h-[460px]" : "h-[260px] sm:h-[320px]");
+
   const searchInputId = `${reactId}-address`;
   const radiusInputId = `${reactId}-radius`;
   const labelInputId = `${reactId}-label`;
   const summaryId = `${reactId}-summary`;
 
-  if (!configured) {
-    return (
-      <div
-        role="status"
-        className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-600"
-      >
-        <p className="font-semibold text-slate-800">Map lookup is not configured</p>
-        <p className="mx-auto mt-1 max-w-sm text-[13px]">
-          Set <code className="rounded bg-white px-1">NEXT_PUBLIC_GEOAPIFY_API_KEY</code> to enable
-          address search and the coverage map.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
+  const searchBlock = (
+    <div>
       {/* ── Address search ─────────────────────────────────────────────── */}
       <div
         className="relative"
@@ -537,9 +548,14 @@ export function ProviderServiceAreaEditor({
         ) : null}
       </div>
 
+    </div>
+  );
+
+  const mapBlock = (
+    <div>
       {/* ── Map ─────────────────────────────────────────────────────────── */}
       <div
-        className={`relative overflow-hidden rounded-2xl border border-slate-200 ${mapHeightClassName}`}
+        className={`relative overflow-hidden rounded-2xl border border-slate-200 ${mapHeight}`}
       >
         <div ref={containerRef} className="h-full w-full" />
         {!mapReady ? (
@@ -566,17 +582,22 @@ export function ProviderServiceAreaEditor({
       </div>
 
       {offline ? (
-        <p role="alert" className="text-[12px] font-medium text-amber-700">
+        <p role="alert" className="mt-2 text-[12px] font-medium text-amber-700">
           You appear to be offline. Address search and map tiles will not load until your
           connection returns; anything already on the map is still safe.
         </p>
       ) : null}
       {lookupError ? (
-        <p role="alert" className="text-[12px] font-medium text-red-600">
+        <p role="alert" className="mt-2 text-[12px] font-medium text-red-600">
           {lookupError}
         </p>
       ) : null}
 
+    </div>
+  );
+
+  const settingsBlock = (
+    <div className="space-y-4">
       {/* ── Radius ──────────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -667,6 +688,58 @@ export function ProviderServiceAreaEditor({
           </p>
         </div>
       ) : null}
+
+      {actions ? <div>{actions}</div> : null}
+    </div>
+  );
+
+  /**
+   * Without a Geoapify key there is no search and no map — but the radius, the
+   * area name, and the save controls do not depend on either, so they stay.
+   * Hiding them would leave a provider on a self-hosted deployment unable to
+   * rename or save an area they already have.
+   */
+  const unconfiguredNotice = (
+    <div
+      role="status"
+      className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-600"
+    >
+      <p className="font-semibold text-slate-800">Map lookup is not configured</p>
+      <p className="mx-auto mt-1 max-w-sm text-[13px]">
+        Set <code className="rounded bg-white px-1">NEXT_PUBLIC_GEOAPIFY_API_KEY</code> to enable
+        address search and the coverage map.
+      </p>
+    </div>
+  );
+
+  const geography = configured ? (
+    <>
+      {searchBlock}
+      {mapBlock}
+    </>
+  ) : (
+    unconfiguredNotice
+  );
+
+  if (layout === "split") {
+    return (
+      <div className="space-y-4">
+        {configured ? searchBlock : null}
+        {/* The map takes the width; the settings column stays compact but never
+            narrower than its controls need. Below `lg` they stack, so the
+            radius slider sits directly under the map it changes. */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          {configured ? mapBlock : unconfiguredNotice}
+          {settingsBlock}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {geography}
+      {settingsBlock}
     </div>
   );
 }

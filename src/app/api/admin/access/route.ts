@@ -19,7 +19,7 @@ export async function GET(): Promise<NextResponse> {
   if (!gate.ok) return gate.response;
 
   try {
-    return NextResponse.json({ access: await listAdminAccess() });
+    return NextResponse.json({ access: await listAdminAccess({ isStaffAccount: false }) });
   } catch (error) {
     return adminErrorResponse("admin access list", error);
   }

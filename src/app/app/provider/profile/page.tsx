@@ -4,15 +4,20 @@ import { SignOutButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 
-import { AvatarField } from "@/components/profile/AvatarField";
+import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
 import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
-import { useProviderDashboard } from "@/hooks/useProviderDashboard";
 import { useProviderEarnings } from "@/hooks/useProviderEarnings";
+import { useProviderOverview } from "@/hooks/useProviderOverview";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
-import { useProviderReviews } from "@/hooks/useProviderReviews";
+import { useProviderRatings } from "@/hooks/useProviderRatings";
+import { initialsFromName } from "@/lib/display-name";
 import type { ProviderProfile } from "@/lib/profile-types";
-import { MAX_BIO_LENGTH, WEEKDAYS, type Weekday } from "@/lib/validation/profile";
+import type {
+  CommonProfileUpdate,
+  ProviderProfileUpdate,
+  Weekday,
+} from "@/lib/validation/profile";
 
 const cardStyle: CSSProperties = {
   background: "var(--bg-card)",
@@ -74,18 +79,6 @@ const numeralStyle: CSSProperties = {
   fontFamily: "var(--font-display)",
   fontWeight: 500,
   letterSpacing: "-0.02em",
-};
-
-const inputStyle: CSSProperties = {
-  height: 40,
-  width: "100%",
-  borderRadius: 12,
-  border: "1px solid var(--border-warm)",
-  padding: "0 12px",
-  fontSize: 14,
-  color: "var(--ink-900)",
-  fontFamily: "var(--font-body)",
-  background: "var(--bg-card)",
 };
 
 const DAY_LABELS: Record<Weekday, string> = {
@@ -165,41 +158,6 @@ function fmtMoney(cents: number) {
   return `$${Math.round(cents / 100).toLocaleString()}`;
 }
 
-/** Every field the edit dialog may write, across both endpoints. */
-type EditForm = {
-  fullName: string;
-  phone: string;
-  address: string;
-  neighborhood: string;
-  companyName: string;
-  bio: string;
-  trades: string;
-  workingDays: Weekday[];
-  workingHoursStart: string;
-  workingHoursEnd: string;
-  licenseNumber: string;
-  licenseState: string;
-  insuranceProvider: string;
-  insurancePolicyNumber: string;
-};
-
-const EMPTY_FORM: EditForm = {
-  fullName: "",
-  phone: "",
-  address: "",
-  neighborhood: "",
-  companyName: "",
-  bio: "",
-  trades: "",
-  workingDays: [],
-  workingHoursStart: "",
-  workingHoursEnd: "",
-  licenseNumber: "",
-  licenseState: "",
-  insuranceProvider: "",
-  insurancePolicyNumber: "",
-};
-
 export default function ProviderProfilePage() {
   const {
     profile,
@@ -215,61 +173,38 @@ export default function ProviderProfilePage() {
     changeAvatar,
     clearAvatar,
   } = useProviderProfile();
-  const { avgRating, reviews } = useProviderReviews();
-  const { dashboard } = useProviderDashboard();
+  // Identity and business details come from the canonical profile endpoints;
+  // the rating and the console metrics each come from their own one endpoint.
+  // Nothing here reads a "provider me" aggregate.
+  const { reviews, summary: ratings } = useProviderRatings(4);
+  const { overview } = useProviderOverview();
   const { earnings } = useProviderEarnings();
   // One marketplace payload, shared with the feed/bids/schedule pages.
   const { workspace } = useProviderMarketplace();
   const bids = workspace?.bids ?? [];
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<EditForm>(EMPTY_FORM);
+  /** Set after a successful save so the page can confirm it out loud. */
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  const resetForm = () => {
-    if (!profile || !provider) return;
-    setForm({
-      fullName: profile.fullName,
-      phone: profile.phone ?? "",
-      address: profile.address ?? "",
-      neighborhood: profile.neighborhood ?? "",
-      companyName: provider.companyName ?? "",
-      bio: provider.bio ?? "",
-      trades: provider.trades.join(", "),
-      workingDays: provider.workingDays,
-      workingHoursStart: provider.workingHoursStart ?? "",
-      workingHoursEnd: provider.workingHoursEnd ?? "",
-      licenseNumber: provider.licenseNumber ?? "",
-      licenseState: provider.licenseState ?? "",
-      insuranceProvider: provider.insuranceProvider ?? "",
-      insurancePolicyNumber: provider.insurancePolicyNumber ?? "",
-    });
-  };
+  // The confirmation is a moment, not a state: it clears itself rather than
+  // sitting on the page until the next navigation.
+  useEffect(() => {
+    if (savedAt === null) return;
+    const timer = window.setTimeout(() => setSavedAt(null), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [savedAt]);
 
-  // Keeps the dialog in step with whatever the server last returned.
-  useEffect(resetForm, [profile, provider]);
-
-  async function handleSave() {
-    const saved = await saveAll(
-      {
-        fullName: form.fullName.trim(),
-        phone: form.phone.trim() || null,
-        address: form.address.trim() || null,
-        neighborhood: form.neighborhood.trim() || null,
-      },
-      {
-        companyName: form.companyName.trim() || null,
-        bio: form.bio.trim() || null,
-        trades: form.trades.split(",").map((trade) => trade.trim()).filter(Boolean),
-        workingDays: form.workingDays,
-        workingHoursStart: form.workingHoursStart || null,
-        workingHoursEnd: form.workingHoursEnd || null,
-        licenseNumber: form.licenseNumber.trim() || null,
-        licenseState: form.licenseState.trim() || null,
-        insuranceProvider: form.insuranceProvider.trim() || null,
-        insurancePolicyNumber: form.insurancePolicyNumber.trim() || null,
-      },
-    );
-    if (saved) setEditing(false);
+  async function handleSave(
+    common: CommonProfileUpdate,
+    business: ProviderProfileUpdate,
+  ): Promise<boolean> {
+    const saved = await saveAll(common, business);
+    // `saveAll` replaces the hook's profile/provider with what the server
+    // returned, so the summary below is already the persisted values — the
+    // same ones a reload would fetch.
+    if (saved) setSavedAt(Date.now());
+    return saved;
   }
 
   if (loading) {
@@ -297,6 +232,11 @@ export default function ProviderProfilePage() {
       </div>
     );
   }
+
+  // Summary figures are the database's totals over every published review, not
+  // a count of the four shown below.
+  const reviewsCount = ratings?.totalCount ?? 0;
+  const averageRating = ratings?.averageRating ?? null;
 
   const pendingBids = bids.filter((bid) => bid.status === "submitted");
   const acceptedBids = bids.filter((bid) => bid.status === "accepted");
@@ -348,7 +288,7 @@ export default function ProviderProfilePage() {
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" onClick={() => setEditing(true)} style={ghostButtonStyle}>
             <IconEdit />
-            Edit public profile
+            Edit business details
           </button>
           <span
             style={{
@@ -370,6 +310,16 @@ export default function ProviderProfilePage() {
         </div>
       </div>
 
+      {savedAt !== null && !editing ? (
+        <div
+          role="status"
+          className="mx-4 mb-4 md:mx-9"
+          style={{ padding: "10px 14px", borderRadius: 12, background: "var(--sage-50)", color: "var(--sage-700)", fontSize: 13, border: "1px solid var(--sage-100)" }}
+        >
+          Your business details are saved.
+        </div>
+      ) : null}
+
       {saveError && !editing ? (
         <div
           role="alert"
@@ -386,13 +336,29 @@ export default function ProviderProfilePage() {
             <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
               <div style={{ height: 88, background: "linear-gradient(135deg, var(--terracotta-100), var(--cream-200) 50%, var(--sage-100))" }} />
               <div style={{ padding: "0 28px 24px", marginTop: -36 }}>
-                <AvatarField
-                  url={profile.avatarUrl}
-                  name={provider.companyName ?? profile.fullName}
-                  progress={uploadProgress}
-                  onSelect={(file) => void changeAvatar(file)}
-                  onRemove={() => void clearAvatar()}
-                />
+                {/* Display only. The photo is changed in the business-details
+                    editor, alongside the company name it sits next to. */}
+                <div
+                  aria-hidden
+                  style={{
+                    width: 76,
+                    height: 76,
+                    borderRadius: "50%",
+                    border: "3px solid var(--bg-card)",
+                    background: profile.avatarUrl ? `center / cover no-repeat url(${JSON.stringify(profile.avatarUrl)})` : "var(--cream-200)",
+                    color: "var(--ink-700)",
+                    display: "grid",
+                    placeItems: "center",
+                    fontFamily: "var(--font-display)",
+                    fontSize: 26,
+                    fontWeight: 600,
+                    overflow: "hidden",
+                  }}
+                >
+                  {profile.avatarUrl
+                    ? null
+                    : initialsFromName(provider.companyName ?? profile.fullName, "SP")}
+                </div>
                 <div style={{ marginTop: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 500, color: "var(--ink-900)" }}>
@@ -413,16 +379,16 @@ export default function ProviderProfilePage() {
                       .join(" · ")}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, fontSize: 13, flexWrap: "wrap" }}>
-                    {reviews.length > 0 ? (
+                    {reviewsCount > 0 ? (
                       <>
                         <span style={{ color: "var(--gold-600)", display: "inline-flex", alignItems: "center", gap: 2 }}>
                           {[1, 2, 3, 4, 5].map((index) => (
-                            <IconStar key={index} color={index <= Math.round(avgRating ?? 0) ? "var(--gold-500)" : "var(--ink-200)"} />
+                            <IconStar key={index} color={index <= Math.round(averageRating ?? 0) ? "var(--gold-500)" : "var(--ink-200)"} />
                           ))}
-                          <strong style={{ color: "var(--ink-900)", marginLeft: 4 }}>{avgRating ?? "—"}</strong>
+                          <strong style={{ color: "var(--ink-900)", marginLeft: 4 }}>{averageRating ?? "—"}</strong>
                         </span>
                         <span style={{ color: "var(--ink-500)" }}>
-                          · {reviews.length} {reviews.length === 1 ? "review" : "reviews"} on Bundleen
+                          · {reviewsCount} {reviewsCount === 1 ? "review" : "reviews"} on Bundleen
                         </span>
                       </>
                     ) : (
@@ -441,8 +407,8 @@ export default function ProviderProfilePage() {
               <div style={eyebrowStyle}>Performance · live</div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-3.5" style={{ marginTop: 14 }}>
                 <PStat big={fmtMoney(earnings?.earnedCents ?? 0)} label="Earnings" tone="terracotta" />
-                <PStat big={`${dashboard?.win_rate_pct?.toFixed(0) ?? 0}%`} label="Win rate" tone="sage" />
-                <PStat big={reviews.length > 0 ? String(avgRating ?? "—") : "—"} label="Rating" tone="gold" />
+                <PStat big={overview?.winRatePct !== null && overview ? `${overview.winRatePct}%` : "—"} label="Win rate" tone="sage" />
+                <PStat big={reviewsCount > 0 ? String(averageRating ?? "—") : "—"} label="Rating" tone="gold" />
                 <PStat big={String(avgLeadDays)} label="Avg lead days" tone="ink" />
               </div>
             </div>
@@ -491,23 +457,23 @@ export default function ProviderProfilePage() {
               <div style={eyebrowStyle}>Recent customer reviews</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
                 {reviews.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "var(--ink-500)" }}>No homeowner reviews yet.</div>
+                  <div style={{ fontSize: 13, color: "var(--ink-500)" }}>No customer reviews yet.</div>
                 ) : (
-                  reviews.slice(0, 4).map((review) => (
+                  reviews.map((review) => (
                     <div key={review.id} style={{ padding: "14px 16px", borderRadius: 14, background: "var(--cream-50)", border: "1px solid var(--border-warm)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink-900)" }}>{review.homeowner_name}</div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink-900)" }}>{review.reviewerName}</div>
                         <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                          {new Date(review.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {new Date(review.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </div>
                       </div>
                       <div style={{ marginTop: 6, display: "flex", gap: 2 }}>
-                        {Array.from({ length: review.stars }).map((_, index) => (
+                        {Array.from({ length: review.rating }).map((_, index) => (
                           <IconStar key={index} color="var(--gold-500)" />
                         ))}
                       </div>
                       <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-700)", lineHeight: 1.5 }}>
-                        {review.comment ?? "No written comment."}
+                        {review.comment}
                       </div>
                     </div>
                   ))
@@ -620,15 +586,15 @@ export default function ProviderProfilePage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, fontSize: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--ink-500)" }}>Unread messages</span>
-                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{dashboard?.unread_messages ?? 0}</span>
+                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{overview?.unreadMessages ?? 0}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--ink-500)" }}>Active bids</span>
-                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{dashboard?.active_bids ?? 0}</span>
+                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{pendingBids.length}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "var(--ink-500)" }}>Reviews</span>
-                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{reviews.length}</span>
+                  <span style={{ fontWeight: 600, color: "var(--ink-900)" }}>{reviewsCount}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <span style={{ color: "var(--ink-500)" }}>Email</span>
@@ -640,182 +606,19 @@ export default function ProviderProfilePage() {
         </div>
       </div>
 
-      {editing ? (
-        <div
-          onClick={() => {
-            resetForm();
-            setEditing(false);
-          }}
-          style={{ position: "fixed", inset: 0, background: "rgba(20,16,12,0.24)", display: "grid", placeItems: "center", padding: 24, zIndex: 50, overflowY: "auto" }}
-        >
-          <div
-            role="dialog"
-            aria-label="Edit provider profile"
-            onClick={(event) => event.stopPropagation()}
-            style={{ width: "min(780px, 100%)", maxHeight: "90vh", overflowY: "auto", background: "var(--bg-card)", borderRadius: 22, border: "1px solid var(--border-warm)", boxShadow: "var(--shadow-warm-lg)", padding: 24 }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 12 }}>
-              <div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 500, color: "var(--ink-900)" }}>
-                  Edit provider profile
-                </div>
-                <div style={{ fontSize: 13, color: "var(--ink-500)", marginTop: 4 }}>
-                  These fields save to your Bundleen record. Verification and payouts are handled by
-                  our team.
-                </div>
-              </div>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => {
-                  resetForm();
-                  setEditing(false);
-                }}
-                style={{ background: "transparent", border: 0, fontSize: 22, cursor: "pointer", color: "var(--ink-500)" }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {(
-                [
-                  ["Your name", "fullName"],
-                  ["Phone", "phone"],
-                  ["Company name", "companyName"],
-                  ["Neighborhood", "neighborhood"],
-                  ["Business address", "address"],
-                  ["Trades (comma separated)", "trades"],
-                  ["License number", "licenseNumber"],
-                  ["License state", "licenseState"],
-                  ["Insurance provider", "insuranceProvider"],
-                  ["Insurance policy number", "insurancePolicyNumber"],
-                ] as const
-              ).map(([label, key]) => (
-                <label key={key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={eyebrowStyle}>{label}</span>
-                  <input
-                    style={inputStyle}
-                    value={form[key]}
-                    onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
-                  />
-                  {fieldErrors[key] ? (
-                    <span role="alert" style={{ fontSize: 12, color: "var(--danger-600)" }}>{fieldErrors[key]}</span>
-                  ) : null}
-                </label>
-              ))}
-
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={eyebrowStyle}>Opens at</span>
-                <input
-                  type="time"
-                  style={inputStyle}
-                  value={form.workingHoursStart}
-                  onChange={(event) => setForm((current) => ({ ...current, workingHoursStart: event.target.value }))}
-                />
-                {fieldErrors.workingHoursStart ? (
-                  <span role="alert" style={{ fontSize: 12, color: "var(--danger-600)" }}>{fieldErrors.workingHoursStart}</span>
-                ) : null}
-              </label>
-
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={eyebrowStyle}>Closes at</span>
-                <input
-                  type="time"
-                  style={inputStyle}
-                  value={form.workingHoursEnd}
-                  onChange={(event) => setForm((current) => ({ ...current, workingHoursEnd: event.target.value }))}
-                />
-                {fieldErrors.workingHoursEnd ? (
-                  <span role="alert" style={{ fontSize: 12, color: "var(--danger-600)" }}>{fieldErrors.workingHoursEnd}</span>
-                ) : null}
-              </label>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, gridColumn: "1 / -1" }}>
-                <span style={eyebrowStyle}>Working days</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {WEEKDAYS.map((day) => {
-                    const selected = form.workingDays.includes(day);
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() =>
-                          setForm((current) => ({
-                            ...current,
-                            workingDays: selected
-                              ? current.workingDays.filter((value) => value !== day)
-                              : [...current.workingDays, day],
-                          }))
-                        }
-                        style={{
-                          height: 32,
-                          padding: "0 12px",
-                          borderRadius: 999,
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          fontFamily: "var(--font-body)",
-                          background: selected ? "var(--terracotta-600)" : "var(--cream-100)",
-                          color: selected ? "white" : "var(--ink-800)",
-                          border: selected ? "1px solid var(--terracotta-600)" : "1px solid var(--border-warm)",
-                        }}
-                      >
-                        {DAY_LABELS[day]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, gridColumn: "1 / -1" }}>
-                <span style={eyebrowStyle}>Bio</span>
-                <textarea
-                  value={form.bio}
-                  maxLength={MAX_BIO_LENGTH}
-                  onChange={(event) => setForm((current) => ({ ...current, bio: event.target.value }))}
-                  rows={5}
-                  style={{ borderRadius: 12, border: "1px solid var(--border-warm)", padding: 12, fontSize: 14, color: "var(--ink-900)", fontFamily: "var(--font-body)", resize: "vertical", background: "var(--bg-card)" }}
-                />
-                <span style={{ fontSize: 11, color: "var(--ink-400)" }}>
-                  {form.bio.length}/{MAX_BIO_LENGTH}
-                </span>
-                {fieldErrors.bio ? (
-                  <span role="alert" style={{ fontSize: 12, color: "var(--danger-600)" }}>{fieldErrors.bio}</span>
-                ) : null}
-              </label>
-            </div>
-
-            {saveError ? (
-              <div role="alert" style={{ marginTop: 14, fontSize: 13, color: "var(--danger-600)" }}>
-                {saveError}
-              </div>
-            ) : null}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  resetForm();
-                  setEditing(false);
-                }}
-                style={ghostButtonStyle}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSave()}
-                disabled={saving}
-                style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1, cursor: saving ? "default" : "pointer" }}
-              >
-                {saving ? "Saving…" : "Save profile"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {editing && profile && provider ? (
+        <ProviderBusinessDetailsDialog
+          profile={profile}
+          provider={provider}
+          saving={saving}
+          saveError={saveError}
+          fieldErrors={fieldErrors}
+          uploadProgress={uploadProgress}
+          onChangeAvatar={(file) => void changeAvatar(file)}
+          onClearAvatar={() => void clearAvatar()}
+          onSave={handleSave}
+          onClose={() => setEditing(false)}
+        />
       ) : null}
     </div>
   );

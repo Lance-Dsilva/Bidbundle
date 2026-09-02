@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 
 import { BundleenAiWidget } from "@/components/ai/BundleenAiWidget";
 import { hasAdminPermission, type AdminPermission } from "@/lib/admin-permissions";
+import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { Icon, type IconName } from "@/components/ui/Icon";
 
 const ADMIN_AI_SUGGESTIONS = [
@@ -21,6 +22,7 @@ type AdminCrmShellProps = Readonly<{
   userName: string | null;
   userEmail: string;
   accessLevel: "owner" | "admin" | null;
+  isStaffAccount: boolean;
   /** Named capabilities from the signed-in admin's active grant. */
   permissions: AdminPermission[];
   /** Open tickets needing attention, for the Support badge. */
@@ -109,6 +111,13 @@ const governanceItems: NavItem[] = [
     match: (pathname) => pathname.startsWith("/app/admin/audit"),
   },
   {
+    label: "Bundleen staff",
+    href: "/app/admin/staff",
+    icon: "users",
+    match: (pathname) => pathname.startsWith("/app/admin/staff"),
+    permission: "staff:manage",
+  },
+  {
     label: "Admin access",
     href: "/app/admin/access",
     icon: "shield",
@@ -189,9 +198,13 @@ function SidebarContent(props: Readonly<AdminCrmShellProps & { pathname: string;
   return (
     <div className="flex h-full flex-col bg-[#0b1728] px-4 py-5 text-white">
       <Link href="/app/admin/dashboard" onClick={props.onNavigate} className="flex items-center gap-3 px-2">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-950/30">
-          <Icon name="logo-mark" size={25} />
-        </span>
+        {/* The mark used to be the monochrome logo-mark glyph inside a CSS mask on a
+            teal gradient tile. A mask paints one colour, so the amber roof was
+            simply absent — and a teal mark on a teal tile would now be
+            invisible. The two-colour artwork sits directly on the navy
+            sidebar instead: teal reads at roughly 5:1 against `#0b1728` and
+            amber higher still, so it needs no plate behind it. */}
+        <BundleenCompanyIcon size={40} className="h-10 w-10 shrink-0" />
         <span>
           <span className="block text-[17px] font-extrabold tracking-[-0.02em]">Bundleen</span>
           <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-400">Operations CRM</span>
@@ -240,7 +253,7 @@ function SidebarContent(props: Readonly<AdminCrmShellProps & { pathname: string;
           </span>
           <span className="min-w-0">
             <span className="block truncate text-[12px] font-semibold text-slate-200">{displayName}</span>
-            <span className="block truncate text-[10px] capitalize text-slate-500">{props.accessLevel || "admin"} account</span>
+            <span className="block truncate text-[10px] capitalize text-slate-500">{props.isStaffAccount ? "staff" : props.accessLevel || "admin"} account</span>
           </span>
           <Icon name="chevron-right" size={14} className="ml-auto text-slate-600" />
         </Link>
@@ -255,6 +268,7 @@ function pageContext(pathname: string) {
   if (pathname.startsWith("/app/admin/support")) return { section: "Support", title: "Ticket queue" };
   if (pathname.startsWith("/app/admin/communications")) return { section: "Communications", title: "Operational broadcasts" };
   if (pathname.startsWith("/app/admin/audit")) return { section: "Governance", title: "Audit trail" };
+  if (pathname.startsWith("/app/admin/staff")) return { section: "Governance", title: "Bundleen staff" };
   if (pathname.startsWith("/app/admin/access")) return { section: "Governance", title: "Admin access" };
   if (pathname.startsWith("/app/admin/profile")) return { section: "Account", title: "Your profile" };
   return { section: "Workspace", title: "Operations overview" };
