@@ -167,6 +167,14 @@ describe("issue #3: the service-area panel is compact and balanced", () => {
     expect(EDITOR).toContain("draggable: !disabled");
   });
 
+  it("contains Leaflet's panes below page-level dialogs", () => {
+    // Leaflet assigns its panes z-index values in the hundreds. The map must
+    // establish a local stacking context, while the modal remains above the
+    // highest Leaflet control, or map tiles can cover the editor as it opens.
+    expect(EDITOR).toContain("relative isolate z-0 overflow-hidden");
+    expect(DIALOG).toContain("zIndex: 1000");
+  });
+
   it("meets the 44px touch minimum on the area actions", () => {
     // The remove/confirm controls sit inside a wrapping card on mobile.
     expect(PANEL).toContain("h-11 rounded-lg bg-red-600");

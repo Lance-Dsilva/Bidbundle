@@ -555,7 +555,7 @@ export function ProviderServiceAreaEditor({
     <div>
       {/* ── Map ─────────────────────────────────────────────────────────── */}
       <div
-        className={`relative overflow-hidden rounded-2xl border border-slate-200 ${mapHeight}`}
+        className={`relative isolate z-0 overflow-hidden rounded-2xl border border-slate-200 ${mapHeight}`}
       >
         <div ref={containerRef} className="h-full w-full" />
         {!mapReady ? (

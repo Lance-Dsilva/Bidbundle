@@ -378,7 +378,10 @@ export function ProviderBusinessDetailsDialog({
         background: "rgba(20,16,12,0.32)",
         display: "grid",
         placeItems: "center",
-        zIndex: 50,
+        // Leaflet's panes deliberately use z-index values up to 800. Keep the
+        // modal in a higher page-level layer so an underlying coverage map can
+        // never paint through its backdrop or over its form fields.
+        zIndex: 1000,
         overflowY: "auto",
       }}
     >
