@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
@@ -12,7 +13,9 @@ import "./landing.css";
  * local providers offer on the grouped work, and the community's manager picks
  * one. Everything that did not serve that story — the dashboard mockup, the
  * proof band, ten service cards, three audience sales panels with their own
- * mockups and CTAs — is gone rather than shrunk.
+ * mockups and CTAs — is gone rather than shrunk. Two original editorial
+ * illustrations now carry the emotional story while small, purposeful icons
+ * make the three-step sequence easier to scan.
  *
  * Every number this page used to state (savings percentages, timelines, star
  * ratings, per-visit prices, contract sizes) was illustrative, and one of them
@@ -34,14 +37,17 @@ const steps = [
   {
     title: "Residents say what they need",
     body: "Everyone shares which recurring service they want and how often they want it.",
+    icon: "/modern/icons/clipboard.svg",
   },
   {
     title: "Providers offer on the whole group",
     body: "Bundleen combines the homes into one request that local providers can offer on.",
+    icon: "/modern/icons/neighbors.svg",
   },
   {
     title: "You choose, and everyone follows along",
     body: "Compare the offers, pick one, and the community can see the schedule and each visit.",
+    icon: "/modern/icons/check.svg",
   },
 ];
 
@@ -83,66 +89,6 @@ const serviceExamples = [
   "Gutters",
   "Seasonal maintenance",
 ];
-
-/** A single house glyph, repeated to show a group. Decorative. */
-function HouseGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        d="M3.5 10.6 12 4l8.5 6.6V20a.9.9 0 0 1-.9.9h-4.4v-5.6H8.8v5.6H4.4a.9.9 0 0 1-.9-.9Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-/**
- * The one hero visual.
- *
- * Deliberately built from real HTML text rather than a fixed-viewBox SVG or a
- * scaled-down product screenshot: the labels reflow and stay at the page's own
- * type sizes at every width, so nothing here becomes texture on a phone the way
- * the old 11px dashboard mockup did. The three offer bars differ in length to
- * show that offers differ — they carry no prices, because Bundleen has no
- * published pricing evidence to quote.
- */
-function GroupRequestFigure() {
-  return (
-    <figure className="ld-flow" aria-label="How one community request works">
-      <div className="ld-flow-stage">
-        <div className="ld-flow-homes" aria-hidden="true">
-          <HouseGlyph />
-          <HouseGlyph />
-          <HouseGlyph />
-          <HouseGlyph />
-          <HouseGlyph />
-        </div>
-        <p className="ld-flow-label">Homes that want the same service</p>
-      </div>
-
-      <div className="ld-flow-arrow" aria-hidden="true" />
-
-      <div className="ld-flow-stage">
-        <div className="ld-flow-request">One community request</div>
-        <p className="ld-flow-label">Combined into a single job</p>
-      </div>
-
-      <div className="ld-flow-arrow" aria-hidden="true" />
-
-      <div className="ld-flow-stage">
-        <ul className="ld-flow-offers">
-          <li><span aria-hidden="true" style={{ width: "58%" }} />Offer</li>
-          <li className="is-chosen">
-            <span aria-hidden="true" style={{ width: "42%" }} />Offer
-            <b>Chosen</b>
-          </li>
-          <li><span aria-hidden="true" style={{ width: "72%" }} />Offer</li>
-        </ul>
-        <p className="ld-flow-label">Providers compete, you pick one</p>
-      </div>
-    </figure>
-  );
-}
 
 export default function HomePage() {
   return (
@@ -233,7 +179,16 @@ export default function HomePage() {
               </p>
             </div>
 
-            <GroupRequestFigure />
+            <figure className="ld-hero-art ld-reveal-scale">
+              <Image
+                src="/modern/artwork/community-service-network.webp"
+                alt="A local service team following one shared route between several homes in a community"
+                width={1536}
+                height={1024}
+                priority
+                sizes="(max-width: 1180px) 90vw, 48vw"
+              />
+            </figure>
           </div>
         </section>
 
@@ -245,9 +200,10 @@ export default function HomePage() {
             <ol className="ld-steps">
               {steps.map((step, index) => (
                 <li key={step.title}>
-                  <span className="ld-step-number" aria-hidden="true">
-                    {index + 1}
-                  </span>
+                  <div className="ld-step-mark" aria-hidden="true">
+                    <span className="ld-step-number">{index + 1}</span>
+                    <img src={step.icon} alt="" />
+                  </div>
                   <h3>{step.title}</h3>
                   <p>{step.body}</p>
                 </li>
@@ -274,17 +230,29 @@ export default function HomePage() {
 
         {/* ── Who it's for ───────────────────────────────────────────────── */}
         <section className="ld-who ld-section-pad" id="who-its-for" aria-labelledby="who-title">
-          <div className="ld-shell">
-            <h2 id="who-title">Who it&apos;s for</h2>
+          <div className="ld-shell ld-who-grid">
+            <div className="ld-who-copy">
+              <h2 id="who-title">Who it&apos;s for</h2>
 
-            <dl className="ld-who-list">
-              {audiences.map((audience) => (
-                <div key={audience.who}>
-                  <dt>{audience.who}</dt>
-                  <dd>{audience.body}</dd>
-                </div>
-              ))}
-            </dl>
+              <dl className="ld-who-list">
+                {audiences.map((audience) => (
+                  <div key={audience.who}>
+                    <dt>{audience.who}</dt>
+                    <dd>{audience.body}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <figure className="ld-who-art ld-reveal-scale">
+              <Image
+                src="/modern/artwork/community-collaboration.webp"
+                alt="A community manager, resident, and local service professional reviewing a service plan together"
+                width={1536}
+                height={1024}
+                sizes="(max-width: 850px) 90vw, 46vw"
+              />
+            </figure>
           </div>
         </section>
 

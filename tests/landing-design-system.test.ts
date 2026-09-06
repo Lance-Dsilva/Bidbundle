@@ -121,7 +121,7 @@ describe("responsive behaviour", () => {
       CSS.indexOf("@media (max-width: 850px)"),
       CSS.indexOf("@media (max-width: 640px)"),
     );
-    for (const selector of [".ld-flow", ".ld-steps", ".ld-benefit-columns"]) {
+    for (const selector of [".ld-steps", ".ld-benefit-columns", ".ld-who-grid"]) {
       expect(tablet, `${selector} still has more than one column`).toMatch(
         new RegExp(`\\${selector}\\s*\\{[^}]*grid-template-columns:\\s*minmax\\(0, 1fr\\)`),
       );

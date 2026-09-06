@@ -5,12 +5,9 @@
    scale, one radius scale, three shadows, two button heights. Section rules
    consume those tokens rather than inventing their own numbers.
 
-   The simplification pass removed the rules for the dashboard mockup, the
-   floating savings badge, the proof band, the example callout, the ten service
-   cards, and the three audience panels with their embedded phone, bid, and
-   route mockups. None of those elements exist any more, so neither do their
-   ~380 lines of CSS — including the `ldFloat` keyframes that only the badge
-   used.
+   The simplification pass removed the dashboard mockup, proof metrics, and
+   repeated card grids. Original editorial artwork now supplies warmth and
+   product context without adding back miniature UI or unsupported claims.
 
    Colors are unchanged — green, navy, amber, white, neutrals.
    ───────────────────────────────────────────────────────────────────────── */
@@ -264,7 +261,15 @@
 .ld-text-link:hover { color: var(--ld-green); }
 
 /* ── Hero ─────────────────────────────────────────────────────────────── */
-.ld-hero { padding-top: var(--ld-space-16); }
+.ld-hero {
+  position: relative;
+  isolation: isolate;
+  padding-top: var(--ld-space-16);
+  background:
+    radial-gradient(circle at 82% 26%, rgba(34, 185, 154, 0.09), transparent 31%),
+    radial-gradient(circle at 64% 72%, rgba(243, 165, 31, 0.07), transparent 24%),
+    #fff;
+}
 .ld-hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
@@ -296,95 +301,28 @@
   line-height: var(--ld-lh-body);
 }
 
-/* ── Hero figure: homes → one request → offers ────────────────────────────
-   Built from HTML text, not a scaled screenshot, so the labels stay at the
-   page's own sizes at every width. Below the tablet breakpoint the three
-   stages stack and the arrows rotate. */
-.ld-flow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: var(--ld-space-4);
-  align-items: center;
+/* ── Hero artwork ──────────────────────────────────────────────────────
+   A single explanatory scene replaces the miniature dashboard and the
+   text-only flow diagram. The image contains no embedded copy or metrics. */
+.ld-hero-art {
+  position: relative;
+  min-width: 0;
   margin: 0;
-  padding: var(--ld-space-8) var(--ld-space-6);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-r-xl);
-  background: linear-gradient(165deg, var(--ld-surface), #fff);
-  box-shadow: var(--ld-shadow-md);
+  overflow: hidden;
+  border: 1px solid rgba(7, 151, 121, 0.16);
+  border-radius: 30px;
+  background: linear-gradient(145deg, #f2fbf8, #fffaf2);
+  box-shadow: 0 28px 70px rgba(16, 40, 63, 0.14);
 }
-.ld-flow-stage { min-width: 0; text-align: center; }
-.ld-flow-label {
-  margin: var(--ld-space-3) 0 0;
-  color: var(--ld-ink-soft);
-  font-size: var(--ld-text-base);
-  font-weight: 600;
-  line-height: var(--ld-lh-snug);
-}
-.ld-flow-homes {
-  display: flex;
-  justify-content: center;
-  gap: var(--ld-space-1);
-  color: var(--ld-green);
-}
-.ld-flow-homes svg { width: 26px; height: 26px; }
-.ld-flow-request {
-  display: grid;
-  place-items: center;
-  min-height: 60px;
-  padding: var(--ld-space-3);
-  border: 1px solid var(--ld-green);
-  border-radius: var(--ld-r-md);
-  color: var(--ld-green-dark);
-  background: var(--ld-green-soft);
-  font-size: var(--ld-text-base);
-  font-weight: 700;
-  line-height: var(--ld-lh-snug);
-}
-.ld-flow-offers { display: grid; gap: var(--ld-space-2); margin: 0; padding: 0; list-style: none; }
-.ld-flow-offers li {
-  display: flex;
-  align-items: center;
-  gap: var(--ld-space-2);
-  padding: var(--ld-space-2) var(--ld-space-3);
-  border: 1px solid var(--ld-line);
-  border-radius: var(--ld-r-sm);
-  background: #fff;
-  color: var(--ld-muted);
-  font-size: var(--ld-text-sm);
-  font-weight: 600;
-  text-align: left;
-}
-/* The bars differ in length to show that offers differ. They carry no
-   numbers: Bundleen has no published pricing to quote. */
-.ld-flow-offers li > span {
-  height: 8px;
-  border-radius: var(--ld-r-pill);
-  background: #d5e2e0;
-}
-.ld-flow-offers li.is-chosen {
-  border-color: var(--ld-green);
-  color: var(--ld-green-dark);
-  background: var(--ld-green-soft);
-}
-.ld-flow-offers li.is-chosen > span { background: var(--ld-green); }
-.ld-flow-offers li b { margin-left: auto; font-size: var(--ld-text-xs); font-weight: 700; }
-.ld-flow-arrow {
-  width: 22px;
-  height: 2px;
-  border-radius: var(--ld-r-pill);
-  background: var(--ld-green);
-  opacity: 0.5;
-}
-.ld-flow-arrow::after {
+.ld-hero-art::after {
   content: "";
-  display: block;
-  width: 7px;
-  height: 7px;
-  margin-left: 15px;
-  border-top: 2px solid var(--ld-green);
-  border-right: 2px solid var(--ld-green);
-  transform: translateY(-4px) rotate(45deg);
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58);
+  pointer-events: none;
 }
+.ld-hero-art img { display: block; width: 100%; height: auto; }
 
 /* ── How it works ─────────────────────────────────────────────────────── */
 .ld-how { scroll-margin-top: 80px; border-top: 1px solid #eef3f2; background: var(--ld-surface); }
@@ -398,8 +336,6 @@
   counter-reset: none;
 }
 .ld-steps li { position: relative; min-width: 0; }
-/* A number and a hairline are enough to read this as a sequence — no card,
-   border, or unrelated icon per step. */
 .ld-steps li + li::before {
   content: "";
   position: absolute;
@@ -419,6 +355,17 @@
   background: var(--ld-green-soft);
   font-size: var(--ld-text-md);
   font-weight: 800;
+}
+.ld-step-mark {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 76px;
+}
+.ld-step-mark img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 .ld-steps h3 {
   margin: var(--ld-space-4) 0 0;
@@ -458,6 +405,13 @@
 
 /* ── Who it's for ─────────────────────────────────────────────────────── */
 .ld-who { scroll-margin-top: 80px; border-top: 1px solid #eef3f2; background: var(--ld-surface); }
+.ld-who-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  gap: clamp(42px, 6vw, 88px);
+  align-items: center;
+}
+.ld-who-copy { min-width: 0; }
 .ld-who-list { margin: var(--ld-space-8) 0 0; }
 .ld-who-list > div {
   display: grid;
@@ -473,6 +427,16 @@
   font-size: var(--ld-text-lg);
   line-height: var(--ld-lh-body);
 }
+.ld-who-art {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(7, 151, 121, 0.14);
+  border-radius: var(--ld-r-xl);
+  background: linear-gradient(145deg, #f2fbf8, #fffaf2);
+  box-shadow: var(--ld-shadow-md);
+}
+.ld-who-art img { display: block; width: 100%; height: auto; }
 
 /* ── Services ─────────────────────────────────────────────────────────── */
 .ld-services { scroll-margin-top: 80px; }
@@ -557,18 +521,17 @@
   .ld-hero-grid { grid-template-columns: minmax(0, 1fr); gap: var(--ld-space-12); }
   .ld-hero-copy { max-width: 640px; }
   .ld-hero h1 { max-width: 18ch; }
-  .ld-flow { width: min(100%, 720px); margin-inline: auto; }
+  .ld-hero-art { width: min(100%, 760px); margin-inline: auto; }
 }
 
 /* ── Tablet ───────────────────────────────────────────────────────────── */
 @media (max-width: 850px) {
   .landing-shell { --ld-section-pad: 64px; }
-  /* The flow stacks and the arrows point down. */
-  .ld-flow { grid-template-columns: minmax(0, 1fr); gap: var(--ld-space-3); }
-  .ld-flow-arrow { justify-self: center; transform: rotate(90deg); }
   .ld-steps { grid-template-columns: minmax(0, 1fr); gap: var(--ld-space-8); }
   .ld-steps li + li::before { display: none; }
   .ld-benefit-columns { grid-template-columns: minmax(0, 1fr); gap: var(--ld-space-8); }
+  .ld-who-grid { grid-template-columns: minmax(0, 1fr); }
+  .ld-who-art { width: min(100%, 680px); margin-inline: auto; }
   .ld-who-list > div { grid-template-columns: minmax(0, 1fr); gap: var(--ld-space-2); }
   .ld-footer-grid { grid-template-columns: 1fr 1fr; gap: var(--ld-space-8); }
   .ld-footer-brand-column { grid-column: 1 / -1; }
@@ -599,8 +562,8 @@
   .ld-hero-lede,
   .ld-hero-aside { max-width: none; }
   .ld-hero-actions .ld-btn { width: 100%; }
-  .ld-flow { padding: var(--ld-space-6) var(--ld-space-4); }
-  .ld-flow-homes svg { width: 22px; height: 22px; }
+  .ld-hero-art,
+  .ld-who-art { border-radius: var(--ld-r-lg); }
   .ld-final-inner { gap: var(--ld-space-6); }
   .ld-final-actions { align-items: flex-start; flex-direction: column; width: 100%; }
   .ld-final-actions .ld-btn { width: 100%; }

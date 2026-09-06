@@ -174,27 +174,38 @@ describe("structure and semantics", () => {
     }
   });
 
-  it("marks decorative graphics as decorative", () => {
+  it("separates decorative icons from meaningful artwork", () => {
     const { container } = render(<HomePage />);
     for (const svg of container.querySelectorAll("svg")) {
       expect(svg.getAttribute("aria-hidden")).toBe("true");
     }
-    // The logo is decoration beside the visible word "Bundleen".
-    for (const img of container.querySelectorAll("img")) {
+
+    // Logos beside the visible brand name and the step icons are decorative.
+    for (const img of container.querySelectorAll('img[alt=""]')) {
       expect(img.getAttribute("alt")).toBe("");
     }
+
+    expect(
+      screen.getByRole("img", {
+        name: /local service team following one shared route between several homes/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", {
+        name: /community manager, resident, and local service professional/i,
+      }),
+    ).toBeInTheDocument();
   });
 
-  it("explains the hero figure in text rather than in an image a reader cannot parse", () => {
+  it("uses original artwork to support rather than replace the written explanation", () => {
     render(<HomePage />);
-    const figure = screen.getByLabelText("How one community request works");
-    for (const label of [
-      /Homes that want the same service/i,
-      /One community request/i,
-      /Providers compete, you pick one/i,
-    ]) {
-      expect(figure).toHaveTextContent(label);
-    }
+    expect(
+      screen.getByRole("img", {
+        name: /local service team following one shared route between several homes/i,
+      }),
+    ).toHaveAttribute("src", expect.stringContaining("community-service-network.webp"));
+    expect(screen.getByText(/When neighbors need the same service/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Providers offer on the whole group/i })).toBeInTheDocument();
   });
 });
 
