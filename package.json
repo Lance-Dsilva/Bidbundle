@@ -13,7 +13,9 @@
     "qstash:configure-reminders": "node scripts/configure-qstash-reminders.mjs",
     "seed:demo-communities": "prisma db execute --file prisma/demo-communities.sql",
     "seed:demo-hoa": "prisma db execute --file prisma/demo-hoa.sql",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "build:check": "next build",
+    "lint": "eslint --config eslint.checks.config.mjs ."
   },
   "dependencies": {
     "@clerk/nextjs": "^7.7.1",
@@ -35,6 +37,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "3.3.5",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -45,6 +48,8 @@
     "@vitejs/plugin-react": "^6.1.0",
     "autoprefixer": "10.4.20",
     "dotenv": "^17.4.2",
+    "eslint": "9.39.4",
+    "eslint-config-next": "15.5.22",
     "jsdom": "^29.1.1",
     "postcss": "8.5.25",
     "prisma": "^7.9.1",
@@ -57,5 +62,9 @@
     "nanoid": "3.3.18",
     "postcss": "$postcss",
     "sharp": "$sharp"
+  },
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0",
+    "npm": ">=10 <12"
   }
 }

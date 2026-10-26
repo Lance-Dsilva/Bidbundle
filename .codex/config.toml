@@ -1,0 +1,5 @@
+# Repository team capacity: one manager plus up to three concurrent specialists.
+# Models, permissions, providers, and connected tools inherit the user's settings.
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
