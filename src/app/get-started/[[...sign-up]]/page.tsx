@@ -8,8 +8,13 @@ import { isHoaManager } from "@/lib/server/hoa";
 import { DASHBOARD_BY_ROLE, isAppRole, PUBLIC_ROLES } from "@/lib/validation/auth";
 
 export default async function SignUpPage({ searchParams }: {
-  searchParams?: Promise<{ role?: string | string[] }>;
+  searchParams?: Promise<{ role?: string | string[]; intent?: string | string[] }>;
 }) {
+  const params = await searchParams;
+  // This is staff-led interest, not public role selection. Redirect before
+  // Clerk/session/profile reads for both visitors and existing accounts.
+  if (params?.intent === "community-manager") redirect("/community-onboarding");
+
   const { userId } = await auth();
   let alreadyVerified = false;
 
@@ -31,7 +36,7 @@ export default async function SignUpPage({ searchParams }: {
     alreadyVerified = true;
   }
 
-  const requestedRole = (await searchParams)?.role;
+  const requestedRole = params?.role;
   const initialRole = PUBLIC_ROLES.find((role) => role === requestedRole) ?? "homeowner";
 
   return (

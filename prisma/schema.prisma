@@ -2356,3 +2356,29 @@ model MediaAsset {
   @@index([issueId, status])
   @@index([communityId, purpose, createdAt])
 }
+
+/// Self-described contact responsibility, never an application authorization role.
+enum CommunityInterestContactRole {
+  community_manager
+  hoa_board
+  property_manager
+  resident
+  other
+}
+
+/// Public interest in staff-led community onboarding. Unverified contact data;
+/// does not create an account, community, invitation, membership or permission.
+model CommunityInterest {
+  id            String                       @id @default(cuid())
+  contactName   String
+  contactRole   CommunityInterestContactRole
+  communityName String
+  communityKey  String
+  numberOfHomes Int
+  email         String
+  phone         String?
+  createdAt     DateTime                     @default(now())
+
+  @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
+  @@index([createdAt, id])
+}
