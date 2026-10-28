@@ -1,4 +1,4 @@
-# Daily GitHub issue engineering
+# GitHub issue engineering
 
 ## Source and schedule
 
@@ -7,10 +7,9 @@ Do not independently scan the repository to invent work, create speculative issu
 or replace an empty/inaccessible backlog with random refactoring. Code inspection is
 limited to understanding and solving the selected issue and its relevant dependencies.
 
-The requested daily cycle begins at **19:00 America/Chicago**, with preparation and
-continuity checks first; retrieve open issues at **19:05 America/Chicago**. Use the
-named timezone so daylight-saving changes preserve local wall time. If execution
-starts late, perform the same steps immediately rather than waiting another day.
+The current schedule continues this chat **every eight hours**. Begin continuity
+checks and issue intake immediately at each wakeup. This replaces the original daily
+19:00/19:05 America/Chicago schedule; do not wait for those historical times.
 Scheduling is active only when the automation service confirms a saved active
 schedule; these instructions alone do not create a scheduler. The manager records
 the actual automation identity and status separately. Do not create overlapping
@@ -27,9 +26,14 @@ Before selecting anything, read `docs/engineering/ISSUE_STATE.md`, current chat
 handoffs, active agents and worktrees. Inspect Git status and reconcile the recorded
 issue, branch, PR and head revision with GitHub. Resume an unfinished issue first,
 including one awaiting CI, requested changes, conflict resolution, review or merge.
-A new priority issue does not silently displace unfinished work.
+A new priority issue does not silently displace actionable unfinished work. The
+user's later instruction explicitly allows parking externally blocked work or a
+verified PR awaiting human review/merge, then continuing other independent issues.
+Record the parked issue's PR/head, evidence, blocker and next owner in its GitHub
+handoff and the local checkpoint. Recheck it when external conditions change.
 
-Keep one issue active at a time. Check for an already-running cycle before starting
+Keep one issue actively being implemented at a time; parked issues remain tracked
+and open. Check for an already-running cycle before starting
 another; if found, reuse its manager/task rather than launching competing writers.
 Record the cycle owner and update time before delegation. Stale state requires
 checking agent activity and remote evidence, not blindly clearing ownership. If two
@@ -123,7 +127,9 @@ fresh relevant CI and review evidence.
 ## Completion and next issue
 
 A created PR is **PR_OPEN**, not a completed issue. While CI or review is pending,
-preserve the active issue and resume it at the next cycle. Do not auto-merge, bypass
+preserve its checkpoint and inspect new actionable feedback at the next cycle. Per
+the user's backlog instruction, park an unchanged external blocker or a verified PR
+awaiting human review/merge and continue another independent eligible issue. Do not auto-merge, bypass
 protections or close issues without separate applicable authority. When merger
 authority is absent, leave the verified PR ready for review/merge and record
 `AWAITING_MERGE`; the user need not coordinate specialists, but merge authority is
@@ -132,8 +138,9 @@ not inferred from permission to create PRs.
 Confirm the resolving PR was merged, inspect final required checks and issue closure,
 and reconcile any post-review changes before marking the issue complete. If the
 issue remains open after merge, report that fact; do not claim completion or close it
-without applicable authority. Only a verified completed issue releases the active
-slot. Then the manager can retrieve the backlog again and select the next issue,
+without applicable authority. Verified completion releases the active slot; a
+documented parked handoff also releases it for other work without resolving the
+parked issue. The manager can retrieve the backlog again and select the next issue,
 subject to the same one-at-a-time rules and available execution time. Persist a
 handoff rather than abandoning partially finished work when a cycle must end.
 

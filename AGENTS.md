@@ -34,13 +34,19 @@ Specialist definitions live in `.codex/agents/`:
 
 ## Scheduled GitHub issue work
 
-Follow `docs/engineering/GITHUB_ISSUES.md` for daily cycles: prepare at 19:00
-America/Chicago and retrieve GitHub Issues at 19:05. The actual repository Issues
+Follow `docs/engineering/GITHUB_ISSUES.md` at each eight-hour wakeup and begin work
+immediately; this replaces the original daily 19:00/19:05 intake. The actual repository Issues
 backlog is the source of work; never scan unrelated code to invent tasks. Resume
 unfinished work from `docs/engineering/ISSUE_STATE.md` and GitHub before selecting
 one new issue. The manager handles selection, planning and all specialist coordination.
 Keep this operational state current across runs. The saved app automation, not this
 file alone, supplies scheduling; its details are in `docs/engineering/SCHEDULE.md`.
+
+Per the user's later backlog instruction, an external blocker or a verified PR
+awaiting human review/merge must not stall all other issues. Record and park that
+issue with its PR, evidence, blocker and next owner, then select another independent
+eligible issue. Keep one issue actively being implemented at a time. Revisit parked
+work when its blocker changes; parked issues remain open and do not bypass gates.
 
 Use native named roles when exposed. If the current tool only accepts a task prompt,
 read the relevant TOML and include its developer instructions in the delegation.

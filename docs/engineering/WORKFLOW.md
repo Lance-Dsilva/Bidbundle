@@ -40,6 +40,12 @@ FINAL VERIFICATION → COMPLETE.
    relevant prior evidence. Reverify affected behavior and obtain review of new edits;
    do not rerun unrelated checks without a reason. Report remaining limitations.
 
+For backlog execution, the user's later instruction permits parking an externally
+blocked issue or a verified PR awaiting human review/merge and continuing another
+independent issue. Persist its remote/local handoff, evidence, blocker and next owner.
+Keep one implementation active at a time; revisit parked work when actionable.
+Parking releases capacity, not the completion gate: the issue stays open.
+
 ## Failure classification and retry control
 
 | Class | Diagnosis and next action |
@@ -117,7 +123,7 @@ instructions, not a separate security sandbox. Native role discovery depends on 
 host; existing sessions may need a new session to load added project configuration.
 If named roles are not exposed, the manager reads the TOML and supplies its instructions
 explicitly to available subagents. Instructions and knowledge persist in the
-repository, while agents are created as needed. The daily issue cycle uses the saved
+repository, while agents are created as needed. The recurring issue cycle uses the saved
 app automation described in `SCHEDULE.md`, with GitHub-specific rules in
 `GITHUB_ISSUES.md`. Use `ISSUE_STATE.md` for resumable cross-cycle operational state;
 temporary task records still hold detailed working evidence.

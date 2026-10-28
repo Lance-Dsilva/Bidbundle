@@ -39,6 +39,17 @@ in temporary task records. Do not record speculative recurring failures as facts
   service provisioning and schedule migration require the Codex UI; preparation
   alone is not a successful cloud run.
 
+## 2026-10-27 — Continue past externally blocked issues
+
+- Motivation: explicit user instruction to post issue7's deployment diagnosis and
+  work on other issues rather than stall the backlog on Preview connectivity.
+- Change: allow documented parking of external blockers or verified PRs awaiting
+  human review/merge, with one active implementation and preserved issue/PR handoffs.
+  Update the existing eight-hour automation to use the same rule.
+- Safeguards: parked issues remain open; correctness, CI and merge gates unchanged.
+- Validation: issue7 diagnosis posted to its GitHub issue; automation update confirmed
+  ACTIVE. Subsequent issue selection checks ownership/dependencies independently.
+
 ## Future entry template
 
 - Date / evidence reference / repeated pattern or clearly insufficient rule:

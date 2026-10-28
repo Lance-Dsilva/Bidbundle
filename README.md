@@ -24,6 +24,6 @@ See [repository knowledge](docs/engineering/KNOWLEDGE.md) for architecture, veri
 commands, and database safety constraints. In particular, `npm run build` applies
 database migrations before compiling the application.
 
-The [daily GitHub issue workflow](docs/engineering/GITHUB_ISSUES.md) continues one
+The [recurring GitHub issue workflow](docs/engineering/GITHUB_ISSUES.md) continues one
 issue at a time using a persistent GitHub Operations Engineer. See the
 [schedule](docs/engineering/SCHEDULE.md) and [resume state](docs/engineering/ISSUE_STATE.md).

@@ -202,9 +202,9 @@ next-action summary in the active PR description and verify its head against rem
 branches. Treat `ISSUE_STATE.md` as a checkpoint that can be stale in a new clone.
 If no remote checkpoint exists and ownership is uncertain, stop and report it.
 
-The existing daily heartbeat is local. Publishing a cloud environment does not
+The existing eight-hour heartbeat is local. Publishing a cloud environment does not
 move that schedule or its chat automatically. After publication, create a supported
-cloud-targeted daily task with explicit **America/Chicago** scheduling and these
+cloud-targeted task every eight hours and these
 repository-relative instructions; verify its destination and first run, then retire
 the local heartbeat to avoid duplicate workers. Do not claim unattended cloud
 scheduling is active before that migration. See `SCHEDULE.md` for current status.
