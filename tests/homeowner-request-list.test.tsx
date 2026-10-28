@@ -124,6 +124,29 @@ describe("own recent service requests", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("names and focuses an owned card with an opaque whitespace and slash ID after loading", async () => {
+    const opaque = { ...older, id: "new / target" };
+    window.history.replaceState({}, "", "/app/homeowner/requests#request-new%20%2F%20target");
+    let resolve!: (value: unknown) => void;
+    const fetchMock = vi.fn(() => new Promise((done) => { resolve = done; }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(<HomeownerRequestsPage />);
+    expect(document.activeElement).toBe(document.body);
+    expect(scroll).not.toHaveBeenCalled();
+    await act(async () => resolve(response({ requests: [recent, opaque], eligibility })));
+    const target = await screen.findByRole("article", { name: opaque.title });
+    const heading = within(target).getByRole("heading", { name: opaque.title });
+    expect(target).toHaveAttribute("id", "request-new%20%2F%20target");
+    expect(heading).toHaveAttribute("id", "request-title-new%20%2F%20target");
+    expect(target).toHaveAttribute("aria-labelledby", heading.id);
+    expect(document.getElementById(target.getAttribute("aria-labelledby")!)).toBe(heading);
+    await waitFor(() => expect(target).toHaveFocus());
+    expect(screen.getByRole("article", { name: recent.title })).not.toHaveFocus();
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/homeowner/requests", expect.objectContaining({ credentials: "same-origin", cache: "no-store" }));
+  });
+
   it.each(["", "#request-unknown", "#request-%E0%A4%A", "#other-element", "#request-%23%5Bowner%3Dother%5D"])("does not steal focus or fetch arbitrary targets for hash %s", async (hash) => {
     window.history.replaceState({}, "", `/app/homeowner/requests${hash}`);
     const fetchMock = mockList();

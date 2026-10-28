@@ -90,7 +90,7 @@ export default function HomeownerRequestsPage() {
       // A hash can only target a record in this authenticated collection. It
       // never names a different endpoint or expands the server's owner scope.
       if (!requests.some((request) => request.id === requestId)) return;
-      const card = document.getElementById(`request-${requestId}`);
+      const card = document.getElementById(`request-${encodeURIComponent(requestId)}`);
       card?.focus({ preventScroll: true });
       card?.scrollIntoView?.({ block: "start" });
     }
@@ -140,14 +140,14 @@ export default function HomeownerRequestsPage() {
           ) : requests.map((request) => (
             <article
               key={request.id}
-              id={`request-${request.id}`}
+              id={`request-${encodeURIComponent(request.id)}`}
               tabIndex={-1}
-              aria-labelledby={`request-title-${request.id}`}
+              aria-labelledby={`request-title-${encodeURIComponent(request.id)}`}
               className="scroll-mt-24 space-y-3 break-words p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--terracotta-600)]"
               style={cardStyle}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <h2 id={`request-title-${request.id}`} className="min-w-0 text-lg font-semibold text-[var(--ink-900)]">{request.title}</h2>
+                <h2 id={`request-title-${encodeURIComponent(request.id)}`} className="min-w-0 text-lg font-semibold text-[var(--ink-900)]">{request.title}</h2>
                 <span className="rounded-full bg-[var(--terracotta-50)] px-3 py-1 text-xs font-semibold text-[var(--terracotta-600)]">
                   {STATUS_LABELS[request.status] ?? request.status.replace(/_/g, " ")}
                 </span>
