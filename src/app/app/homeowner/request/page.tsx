@@ -215,10 +215,10 @@ export default function HomeownerRequestPage() {
     >
       <header className="relative flex items-center justify-center">
         <button
-          aria-label="Back to dashboard"
+          aria-label="Back to my requests"
           className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full text-foreground transition hover:bg-card"
           type="button"
-          onClick={() => router.push("/app/homeowner/dashboard")}
+          onClick={() => router.push("/app/homeowner/requests")}
         >
           <svg
             aria-hidden="true"
@@ -273,13 +273,12 @@ export default function HomeownerRequestPage() {
           </section>
 
           <div className="space-y-3">
-            <Button
-              variant="primary"
-              className="w-full"
-              onClick={() => router.push("/app/homeowner/dashboard")}
+            <Link
+              href={`/app/homeowner/requests#request-${encodeURIComponent(created.id)}`}
+              className="bb-btn bb-btn-primary w-full"
             >
-              Back to dashboard
-            </Button>
+              View your request
+            </Link>
             <button
               className="h-12 w-full rounded-xl border border-divider bg-card text-sm font-medium text-foreground transition-all duration-150 hover:bg-canvas active:scale-[0.98]"
               type="button"

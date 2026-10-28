@@ -19,7 +19,7 @@ import { initialsFromName } from "@/lib/display-name";
 
 const navigation = [
   { label: "Overview", href: "/app/homeowner/dashboard", icon: "home" as const },
-  { label: "My Requests", href: "/app/homeowner/request", icon: "clipboard" as const },
+  { label: "My Requests", href: "/app/homeowner/requests", icon: "clipboard" as const },
   { label: "My Bids", href: "/app/homeowner/bids", icon: "bids" as const },
   { label: "Neighbourhood", href: "/app/homeowner/neighbourhood", icon: "users" as const },
   { label: "Messages", href: "/app/homeowner/chat", icon: "chat" as const },
@@ -65,7 +65,8 @@ function HomeownerChrome({
   const displayName = userName || "Homeowner";
   const initials = initialsFromName(displayName);
 
-  const isActive = (href: string) => pathname === href;
+  const isActive = (href: string) =>
+    pathname === href || (href === "/app/homeowner/requests" && pathname === "/app/homeowner/request");
 
   return (
     <div className="dash-shell">
@@ -179,7 +180,7 @@ function HomeownerChrome({
       </Link>
       <nav className="dash-mobile-bottom-nav" aria-label="Mobile navigation">
         <Link className={pathname === "/app/homeowner/dashboard" ? "is-active" : ""} href="/app/homeowner/dashboard"><Icon name="home" size={20} /><span>Home</span></Link>
-        <Link className={pathname === "/app/homeowner/request" ? "is-active" : ""} href="/app/homeowner/request"><Icon name="clipboard" size={20} /><span>Requests</span></Link>
+        <Link className={isActive("/app/homeowner/requests") ? "is-active" : ""} href="/app/homeowner/requests"><Icon name="clipboard" size={20} /><span>Requests</span></Link>
         <Link href="/app/homeowner/request" className="dash-mobile-create" aria-label="New request"><Icon name="plus" size={22} /></Link>
         <Link className={pathname === "/app/homeowner/bids" ? "is-active" : ""} href="/app/homeowner/bids"><Icon name="bids" size={20} /><span>Bids</span></Link>
         <Link className={pathname === "/app/homeowner/chat" ? "is-active" : ""} href="/app/homeowner/chat"><Icon name="chat" size={20} /><span>Activity</span></Link>

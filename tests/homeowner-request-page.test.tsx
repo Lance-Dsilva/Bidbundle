@@ -14,8 +14,9 @@ import HomeownerRequestPage from "@/app/app/homeowner/request/page";
  * `apiFetch` error surfaced.
  */
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
 }));
 
 const originalFetch = global.fetch;
@@ -58,6 +59,7 @@ function fillValidRequest() {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  push.mockClear();
 });
 
 afterEach(() => {
@@ -66,6 +68,14 @@ afterEach(() => {
 });
 
 describe("new request page", () => {
+  it("takes the form back to the owned requests list", async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonOnce({ eligibility: eligible })) as unknown as typeof fetch;
+    render(<HomeownerRequestPage />);
+    await screen.findByText("For Oakwood Heights");
+    fireEvent.click(screen.getByRole("button", { name: "Back to my requests" }));
+    expect(push).toHaveBeenCalledWith("/app/homeowner/requests");
+  });
+
   it("offers the same canonical services as provider onboarding", async () => {
     global.fetch = vi.fn().mockResolvedValue(jsonOnce({ requests: [], eligibility: eligible })) as unknown as typeof fetch;
     render(<HomeownerRequestPage />);
@@ -140,6 +150,10 @@ describe("new request page", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Request posted"),
+    );
+
+    expect(screen.getByRole("link", { name: "View your request" })).toHaveAttribute(
+      "href", `/app/homeowner/requests#request-${encodeURIComponent(created.id)}`,
     );
 
     const [url, init] = fetchMock.mock.calls[1]!;
