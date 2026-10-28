@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { Button } from "@/components/ui/Button";
 import type { ProviderFeedItem } from "@/lib/hoa-types";
 import { apiFetch } from "@/lib/api";
+import { MAX_BID_AMOUNT_CENTS } from "@/lib/validation/hoa";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 
 /**
@@ -54,10 +55,19 @@ function closesIn(iso: string | null): string {
   return hours < 24 ? `Closes in ${hours}h` : `Closes in ${Math.round(hours / 24)}d`;
 }
 
+type CardFeedback = { success: string | null; error: string | null; stale: boolean; title?: string };
+const EMPTY_FEEDBACK: CardFeedback = { success: null, error: null, stale: false };
+
+function readAmountCents(amount: string): number | null {
+  if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(amount.trim())) return null;
+  const cents = Math.round(Number(amount) * 100);
+  return Number.isSafeInteger(cents) && cents >= 0 && cents <= MAX_BID_AMOUNT_CENTS ? cents : null;
+}
+
 export function ProviderMarketplaceFeed() {
   const { workspace, loading, error, refresh } = useProviderMarketplace();
   const [trade, setTrade] = useState("all");
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, CardFeedback>>({});
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const inFlight = useRef(false);
 
@@ -72,39 +82,64 @@ export function ProviderMarketplaceFeed() {
     [workspace, trade],
   );
 
-  const submitBid = async (requestId: string, body: Record<string, unknown>) => {
+  const refreshCard = async (requestId: string) => {
+    // A read failure must never turn a confirmed write into a failed bid.
+    let stale = false;
+    try {
+      const result = await refresh({ background: true });
+      stale = result?.ok === false;
+    } catch {
+      // Keep this boundary safe if a future refresh implementation throws.
+      stale = true;
+    }
+    setFeedback((current) => ({
+      ...current,
+      [requestId]: { ...(current[requestId] ?? EMPTY_FEEDBACK), stale },
+    }));
+  };
+
+  const mutateBid = async (
+    requestId: string, method: "PUT" | "DELETE", success: string, title: string,
+    body?: Record<string, unknown>,
+  ) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusyRequestId(requestId);
-    setActionError(null);
+    setFeedback((current) => ({ ...current, [requestId]: EMPTY_FEEDBACK }));
     try {
-      await apiFetch(`/provider/marketplace/requests/${requestId}/bid`, {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-      await refresh();
-    } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "Your bid was not saved.");
+      try {
+        await apiFetch(`/provider/marketplace/requests/${requestId}/bid`, {
+          method,
+          ...(body ? { body: JSON.stringify(body) } : {}),
+        });
+      } catch (caught) {
+        setFeedback((current) => ({
+          ...current,
+          [requestId]: {
+            success: null, stale: false,
+            error: caught instanceof Error ? caught.message
+              : method === "PUT" ? "Your bid was not saved. Please try again."
+                : "Your bid was not withdrawn. Please try again.",
+          },
+        }));
+        return;
+      }
+      setFeedback((current) => ({
+        ...current, [requestId]: { success, error: null, stale: false, title },
+      }));
+      await refreshCard(requestId);
     } finally {
       inFlight.current = false;
       setBusyRequestId(null);
     }
   };
 
-  const withdrawBid = async (requestId: string) => {
+  const retryRefresh = async (requestId: string) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusyRequestId(requestId);
-    setActionError(null);
-    try {
-      await apiFetch(`/provider/marketplace/requests/${requestId}/bid`, { method: "DELETE" });
-      await refresh();
-    } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "Your bid was not withdrawn.");
-    } finally {
-      inFlight.current = false;
-      setBusyRequestId(null);
-    }
+    try { await refreshCard(requestId); }
+    finally { inFlight.current = false; setBusyRequestId(null); }
   };
 
   if (loading) {
@@ -143,16 +178,11 @@ export function ProviderMarketplaceFeed() {
         </p>
       ) : null}
 
-      {actionError ? (
-        <p className="rounded-xl px-4 py-3 text-sm" role="alert" style={{ background: "#fef2f2", color: "#b91c1c" }}>
-          {actionError}
-        </p>
-      ) : null}
-
       <div className="flex flex-wrap gap-2">
         {trades.map((value) => (
           <button
-            className="rounded-full px-3 py-1 text-xs font-semibold"
+            disabled={busyRequestId !== null}
+            className="rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-60"
             key={value}
             onClick={() => setTrade(value)}
             style={
@@ -167,6 +197,14 @@ export function ProviderMarketplaceFeed() {
         ))}
       </div>
 
+      {Object.entries(feedback).filter(([requestId, state]) =>
+        state.success && !workspace.feed.some((item) => item.requestId === requestId),
+      ).map(([requestId, state]) => (
+        <p key={requestId} role="status" className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border-warm)", color: "#166534" }}>
+          <strong>{state.title ?? "Service request"}: {state.success}</strong> This request is no longer in the available feed.
+        </p>
+      ))}
+
       {visible.length === 0 ? (
         <div className="p-5" style={card}>
           <p className="text-sm" style={{ color: "var(--ink-700)" }}>
@@ -178,11 +216,14 @@ export function ProviderMarketplaceFeed() {
         visible.map((item) => (
           <FeedCard
             busy={busyRequestId !== null}
+            working={busyRequestId === item.requestId}
             canBid={workspace.eligible}
             item={item}
             key={item.requestId}
-            onSubmit={(body) => void submitBid(item.requestId, body)}
-            onWithdraw={() => void withdrawBid(item.requestId)}
+            feedback={feedback[item.requestId] ?? EMPTY_FEEDBACK}
+            onRefresh={() => void retryRefresh(item.requestId)}
+            onSubmit={(body) => void mutateBid(item.requestId, "PUT", item.myBid ? "Bid updated." : "Bid sent.", item.title, body)}
+            onWithdraw={() => void mutateBid(item.requestId, "DELETE", "Bid withdrawn.", item.title)}
           />
         ))
       )}
@@ -194,30 +235,58 @@ function FeedCard({
   item,
   canBid,
   busy,
+  working,
   onSubmit,
   onWithdraw,
+  feedback,
+  onRefresh,
 }: {
   item: ProviderFeedItem;
   canBid: boolean;
   busy: boolean;
+  working: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
   onWithdraw: () => void;
+  feedback: CardFeedback;
+  onRefresh: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const quoteCurrency = item.myBid?.currency ?? "USD";
   const initialAmount = () => item.myBid?.pricingBasis === "total"
     ? (item.myBid.amountCents / 100).toString() : "";
   const [amount, setAmount] = useState(initialAmount);
-  const previewCents = amount.trim() && Number.isFinite(Number(amount)) && Number(amount) >= 0
-    ? Math.round(Number(amount) * 100) : null;
+  const previewCents = readAmountCents(amount);
+  const [amountError, setAmountError] = useState<string | null>(null);
+  const amountId = useId();
+  const amountInput = useRef<HTMLInputElement>(null);
+  const actionFocus = useRef<HTMLElement | null>(null);
+  const wasBusy = useRef(false);
+  const writesBlocked = busy || feedback.stale;
+
+  useEffect(() => {
+    if (wasBusy.current && !working && actionFocus.current &&
+      (document.activeElement === document.body || document.activeElement === actionFocus.current)) {
+      const target = feedback.stale
+        ? document.getElementById(`${amountId}-refresh`) : actionFocus.current;
+      target?.focus({ preventScroll: true });
+    }
+    wasBusy.current = working;
+  }, [working, feedback.stale, amountId]);
+
+  const showAmountError = () => {
+    setAmountError(`Enter a whole-job total from 0 to ${MAX_BID_AMOUNT_CENTS / 100} using no more than two decimal places.`);
+    amountInput.current?.focus({ preventScroll: true });
+  };
 
   const handle = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (writesBlocked) return;
+    if (previewCents === null) { showAmountError(); return; }
+    setAmountError(null);
+    actionFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const data = new FormData(event.currentTarget);
-    if (busy || previewCents === null) return;
     onSubmit({
-      // Dollars in the form, whole cents on the wire — the one money unit the
-      // marketplace stores.
+      // Only the entered integer total is sent; averages are display-only.
       amountCents: previewCents,
       pricingBasis: "total",
       scope: String(data.get("scope") ?? "").trim(),
@@ -231,7 +300,7 @@ function FeedCard({
   };
 
   return (
-    <article className="p-5" style={card}>
+    <article className="p-5" style={card} aria-busy={working}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold" style={{ color: "var(--ink-900)" }}>
@@ -286,11 +355,11 @@ function FeedCard({
 
       {canBid ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => { if (!open) setAmount(initialAmount()); setOpen((current) => !current); }} variant="warm">
+          <Button disabled={writesBlocked} onClick={() => setOpen((current) => !current)} variant="warm">
             {item.myBid ? "Revise bid" : "Submit bid"}
           </Button>
           {item.myBid && item.myBid.status === "submitted" ? (
-            <Button disabled={busy} onClick={onWithdraw} variant="ghost">
+            <Button disabled={writesBlocked} onClick={() => { actionFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; onWithdraw(); }} variant="ghost">
               Withdraw
             </Button>
           ) : null}
@@ -303,8 +372,14 @@ function FeedCard({
             Whole-job total ({quoteCurrency.toUpperCase()})
             <input
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              disabled={busy}
+              ref={amountInput}
+              id={amountId}
+              onChange={(event) => { setAmount(event.target.value); setAmountError(null); }}
+              readOnly={busy}
+              aria-invalid={amountError ? true : undefined}
+              aria-describedby={amountError ? `${amountId}-error` : undefined}
+              onInvalid={(event) => { event.preventDefault(); showAmountError(); }}
+              max={MAX_BID_AMOUNT_CENTS / 100}
               min="0"
               name="amount"
               required
@@ -312,6 +387,7 @@ function FeedCard({
               style={input}
               type="number"
             />
+            {amountError ? <span id={`${amountId}-error`} className="mt-1 block text-xs" role="alert" style={{ color: "#b91c1c" }}>{amountError}</span> : null}
           </label>
           <div className="sm:col-span-2 space-y-2" role="status" aria-live="polite">
             <p className="text-xs" style={{ color: "var(--ink-700)" }}>
@@ -332,30 +408,48 @@ function FeedCard({
               defaultValue={item.myBid?.scope ?? ""}
               name="scope"
               required
+              readOnly={busy}
               rows={3}
               style={input}
             />
           </label>
           <label className="block text-xs" style={{ color: "var(--ink-700)" }}>
             Exclusions (optional)
-            <input defaultValue={item.myBid?.exclusions ?? ""} name="exclusions" style={input} />
+            <input defaultValue={item.myBid?.exclusions ?? ""} readOnly={busy} name="exclusions" style={input} />
           </label>
           <label className="block text-xs" style={{ color: "var(--ink-700)" }}>
             Estimated duration (optional)
             <input
               defaultValue={item.myBid?.estimatedDurationLabel ?? ""}
+              readOnly={busy}
               name="duration"
               placeholder="Half a day"
               style={input}
             />
           </label>
           <div className="sm:col-span-2">
-            <Button disabled={busy} type="submit" variant="warm">
-              {busy ? "Sending…" : item.myBid ? "Update bid" : "Send bid"}
+            <Button disabled={writesBlocked} type="submit" variant="warm">
+              {working ? "Sending…" : item.myBid ? "Update bid" : "Send bid"}
             </Button>
           </div>
         </form>
       ) : null}
+
+      {(feedback.success || feedback.error || feedback.stale) ? (
+        <div className="mt-3 space-y-2 rounded-xl border p-3" style={{ borderColor: "var(--border-warm)" }}>
+          {feedback.success ? <p role="status" className="text-sm font-semibold" style={{ color: "#166534" }}>{feedback.success}</p> : null}
+          {feedback.error ? <p role="alert" className="text-sm" style={{ color: "#b91c1c" }}>{feedback.error}</p> : null}
+          {feedback.stale ? (
+            <>
+              <p role="status" className="text-xs leading-relaxed" style={{ color: "#92400e" }}>
+                Your change is confirmed, but the latest details could not be loaded. Do not send it again. Refresh the details before making another change.
+              </p>
+              <Button id={`${amountId}-refresh`} disabled={busy} onClick={onRefresh} variant="secondary">{working ? "Refreshing…" : "Refresh details"}</Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
     </article>
   );
 }
