@@ -496,33 +496,48 @@ export async function transitionHoaRequest(
               : request.biddingClosesAt,
           })
         : [];
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: {
-            status: isCompulsory ? "open_for_bids" : "collecting_interest",
-            opensAt: request.opensAt ?? now,
-            participantsLockedAt: isCompulsory ? now : null,
-            ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
-          },
-        }),
-        ...(isCompulsory
-          ? [
-              db.hoaRequestParticipation.createMany({
-                data: audience.map((unit) => ({
-                  id: randomUUID(),
-                  requestId: request.id,
-                  unitId: unit.id,
-                  userId: unit.memberships[0]?.userId ?? null,
-                  response: "joined" as const,
-                })),
-                skipDuplicates: true,
-              }),
-            ]
-          : []),
-        audit(isCompulsory ? "open_for_bids" : "collecting_interest"),
-        ...(await buildPreferenceAwareNotificationOps([...intents, ...providerIntents])),
-      ]);
+      // Publishing a draft competes with its owner's corrections/withdrawal.
+      // Only the still-unlocked snapshot may publish and enqueue its audience.
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: {
+              id: request.id,
+              status: "draft",
+              updatedAt: request.updatedAt,
+              participantsLockedAt: null,
+              agreement: { is: null },
+            },
+            data: {
+              status: isCompulsory ? "open_for_bids" : "collecting_interest",
+              opensAt: request.opensAt ?? now,
+              participantsLockedAt: isCompulsory ? now : null,
+              ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
+            },
+          }),
+          ...(isCompulsory
+            ? [
+                db.hoaRequestParticipation.createMany({
+                  data: audience.map((unit) => ({
+                    id: randomUUID(),
+                    requestId: request.id,
+                    unitId: unit.id,
+                    userId: unit.memberships[0]?.userId ?? null,
+                    response: "joined" as const,
+                  })),
+                  skipDuplicates: true,
+                }),
+              ]
+            : []),
+          audit(isCompulsory ? "open_for_bids" : "collecting_interest"),
+          ...(await buildPreferenceAwareNotificationOps([...intents, ...providerIntents])),
+        ]);
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before it was published. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
 
@@ -563,28 +578,46 @@ export async function transitionHoaRequest(
       });
       // Locking the participant snapshot means providers quote against a
       // stable home count from this point on.
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: {
-            status: "open_for_bids",
-            biddingClosesAt,
-            participantsLockedAt: now,
-          },
-        }),
-        db.adminAuditLog.create({
-          data: buildAuditEntry({
-            actorUserId: userId,
-            action: "hoa_participants_locked",
-            targetType: "hoa_request",
-            targetId: request.id,
-            communityId: request.communityId,
-            metadata: { lockedHomeCount: joinedHomes.length, context: request.community.type },
+      // A homeowner may edit/cancel while we prepare the provider audience.
+      // Claim the same still-unlocked snapshot before committing any intents;
+      // an old manager click must not resurrect a cancellation or invite quotes
+      // against a scope that changed after it was read.
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: {
+              id: request.id,
+              status: "collecting_interest",
+              kind: "optional_group",
+              updatedAt: request.updatedAt,
+              participantsLockedAt: null,
+              agreement: { is: null },
+            },
+            data: {
+              status: "open_for_bids",
+              biddingClosesAt,
+              participantsLockedAt: now,
+            },
           }),
-        }),
-        audit("open_for_bids", { lockedHomeCount: joinedHomes.length }),
-        ...(await buildPreferenceAwareNotificationOps(providerIntents)),
-      ]);
+          db.adminAuditLog.create({
+            data: buildAuditEntry({
+              actorUserId: userId,
+              action: "hoa_participants_locked",
+              targetType: "hoa_request",
+              targetId: request.id,
+              communityId: request.communityId,
+              metadata: { lockedHomeCount: joinedHomes.length, context: request.community.type },
+            }),
+          }),
+          audit("open_for_bids", { lockedHomeCount: joinedHomes.length }),
+          ...(await buildPreferenceAwareNotificationOps(providerIntents)),
+        ]);
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before bidding opened. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
 
