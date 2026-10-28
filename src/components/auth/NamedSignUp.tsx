@@ -77,7 +77,10 @@ function AccountStepLoading() {
 const LOADER_CARD_CLASS =
   "auth-step-enter w-full rounded-2xl border border-[#e4e7ec] bg-white px-7 py-10 text-center shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9";
 
-export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boolean }) {
+export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner" }: {
+  alreadyVerified?: boolean;
+  initialRole?: PublicRole;
+}) {
   const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -86,7 +89,9 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [errors, setErrors] = useState<NameErrors>({});
-  const [role, setRole] = useState<PublicRole>("homeowner");
+  // A public URL choice seeds this mount only. Saved drafts and later manual
+  // choices take precedence; rerenders must not restore the original query.
+  const [role, setRole] = useState<PublicRole>(initialRole);
   const [address, setAddress] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
