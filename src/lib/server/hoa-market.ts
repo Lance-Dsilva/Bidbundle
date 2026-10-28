@@ -2,6 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { normalizeServiceCategory, normalizeServiceTrades, serviceCategoryLabel } from "@/lib/service-categories";
+
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   AgreementSummary,
@@ -864,7 +866,7 @@ async function requireProvider(
   const profile = user.providerProfile;
   const gate: ProviderGate = {
     userId,
-    trades: profile.trades.map((trade) => trade.toLowerCase()),
+    trades: normalizeServiceTrades(profile.trades),
     eligible: true,
     ineligibleReason: null,
   };
@@ -943,7 +945,8 @@ function providerCanSeeRequest(input: {
   now: Date;
 }): boolean {
   if (!input.gate.eligible) return false;
-  if (!input.gate.trades.includes(input.category.toLowerCase())) return false;
+  const category = normalizeServiceCategory(input.category);
+  if (category === null || !input.gate.trades.includes(category)) return false;
   if (input.biddingClosesAt && input.biddingClosesAt <= input.now) return false;
   return input.areas.some((area) => areaCoversLocation(area, input.location));
 }
@@ -1080,7 +1083,7 @@ async function eligibleProviderIntentsForRequest(input: {
       providerCanSeeRequest({
         gate: {
           userId: profile.user.id,
-          trades: profile.trades.map((trade) => trade.toLowerCase()),
+          trades: normalizeServiceTrades(profile.trades),
           eligible: true,
           ineligibleReason: null,
         },
@@ -1095,7 +1098,7 @@ async function eligibleProviderIntentsForRequest(input: {
       userId: profile.user.id,
       email: profile.notifyNewJobs ? profile.user.email : null,
       kind: "request" as const,
-      title: `New ${input.category} request near your service area`,
+      title: `New ${serviceCategoryLabel(input.category)} request near your service area`,
       body: `${input.communityName} opened “${input.title}” for provider bids.`,
       linkPath: "/app/provider/hoa",
       dedupeKey: `provider-request-open:${input.requestId}:${profile.user.id}`,
@@ -1211,7 +1214,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
       locality: location.locality,
       region: location.region,
       title: request.title,
-      category: request.category,
+      category: normalizeServiceCategory(request.category) ?? request.category,
       kind: request.kind,
       description: request.description,
       recurrenceLabel: request.recurrenceLabel,
@@ -1338,7 +1341,8 @@ export async function submitBid(
   if (request.biddingClosesAt && request.biddingClosesAt <= now) {
     throw new HoaWorkflowError("Bidding has closed on this request.");
   }
-  if (!gate.trades.includes(request.category.toLowerCase())) {
+  const category = normalizeServiceCategory(request.category);
+  if (category === null || !gate.trades.includes(category)) {
     throw new HoaWorkflowError("Your account does not offer this service category.", 403);
   }
   const [areas, location] = await Promise.all([

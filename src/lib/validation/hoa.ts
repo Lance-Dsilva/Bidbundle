@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeServiceCategory, SERVICE_CATEGORIES } from "@/lib/service-categories";
+
 import {
   SERVICE_RADIUS_MAX_MILES,
   SERVICE_RADIUS_MIN_MILES,
@@ -179,7 +181,15 @@ export type HoaResidentInvitationCreateInput = z.infer<typeof hoaResidentInvitat
 export const hoaRequestCreateSchema = z
   .object({
     title: z.string().trim().min(1, "Enter a request title.").max(MAX_HOA_TITLE_LENGTH),
-    category: z.string().trim().min(1, "Enter a category.").max(MAX_HOA_CATEGORY_LENGTH),
+    category: z
+      .string()
+      .trim()
+      .min(1, "Choose a service category.")
+      .max(MAX_HOA_CATEGORY_LENGTH)
+      .transform((value) => normalizeServiceCategory(value) ?? value)
+      .pipe(z.enum(SERVICE_CATEGORIES, {
+        message: "Choose one of the supported service categories.",
+      })),
     description: z
       .string()
       .trim()

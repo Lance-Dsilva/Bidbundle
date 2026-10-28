@@ -162,6 +162,38 @@ describe("what the feed includes", () => {
     await expect(getProviderHoaWorkspace("provider-1")).resolves.toMatchObject({ feed: [] });
   });
 
+  it.each([
+    ["Lawn care", "lawn"],
+    ["lawn", "Lawn care"],
+    ["Landscaping", "Gardening"],
+    ["Pool care", "Pool"],
+    ["Gutters", "gutter"],
+    ["Pest control", "pest_control"],
+    ["Painting", "painting"],
+    ["Seasonal maintenance", "seasonal_maintenance"],
+  ])("routes the provider's %s to matching request %s", async (trade, category) => {
+    state.provider = verifiedProvider({ trades: [trade] });
+    state.requests = [neighbourhoodRequest({ category }), hoaRequest({ category })];
+    const workspace = await getProviderHoaWorkspace("provider-1");
+    expect(workspace.feed.map((item) => item.requestId).sort()).toEqual(["request-1", "request-2"]);
+  });
+
+  it("does not turn unknown legacy trades into broad matching permission", async () => {
+    state.provider = verifiedProvider({ trades: ["Drain clearing"] });
+    state.requests = [
+      neighbourhoodRequest({ category: "Drain clearing" }),
+      hoaRequest({ category: "other" }),
+    ];
+    expect((await getProviderHoaWorkspace("provider-1")).feed).toEqual([]);
+  });
+
+  it("still applies coverage after canonicalizing legacy lawn-care trades", async () => {
+    state.provider = verifiedProvider({ trades: ["Lawn care"] });
+    state.areas = [{ ...AUSTIN_AREA, centerLatitude: 29.42, centerLongitude: -98.49 }];
+    state.requests = [neighbourhoodRequest({ category: "lawn" })];
+    expect((await getProviderHoaWorkspace("provider-1")).feed).toEqual([]);
+  });
+
   it("excludes a request whose bidding deadline has passed", async () => {
     state.requests = [
       neighbourhoodRequest({ biddingClosesAt: new Date(Date.now() - 1_000) }),

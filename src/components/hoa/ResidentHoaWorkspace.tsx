@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { BidSummary, ResidentHoaHub, VisitSummary } from "@/lib/hoa-types";
+import { serviceCategoryLabel } from "@/lib/service-categories";
 
 async function post(path: string, body: unknown) {
   const response = await fetch(path, {
@@ -129,7 +130,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--teal-800)]">
-                          {request.category}
+                          {serviceCategoryLabel(request.category)}
                         </p>
                         <h4 className="mt-1 text-sm font-semibold text-[var(--ink-900)]">{request.title}</h4>
                       </div>

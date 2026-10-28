@@ -11,6 +11,8 @@ import type {
   OccurrenceSummary,
 } from "@/lib/hoa-types";
 
+import { CATEGORY_LABELS, SERVICE_CATEGORIES, serviceCategoryLabel } from "@/lib/service-categories";
+
 type ActionState = { busy: boolean; error: string | null; success: string | null };
 const IDLE: ActionState = { busy: false, error: null, success: null };
 
@@ -346,7 +348,15 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         </p>
         <form className="mt-5 grid gap-3 md:grid-cols-2" onSubmit={submitRequest}>
           <Field name="title" label="Request title" placeholder="Biweekly gardening" />
-          <Field name="category" label="Service category" placeholder="Gardening" />
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-[#334e68]">Service category</span>
+            <select className={inputClass} name="category" defaultValue="" required>
+              <option value="" disabled>Choose a service category</option>
+              {SERVICE_CATEGORIES.map((category) => (
+                <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+              ))}
+            </select>
+          </label>
           <label>
             <span className="mb-1 block text-xs font-semibold text-[#334e68]">Request type</span>
             <select
@@ -566,7 +576,7 @@ function RequestCard({
     <article className="rounded-xl border border-[#e1e8e6] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-[#0f8f83]">{request.category}</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-[#0f8f83]">{serviceCategoryLabel(request.category)}</p>
           <h3 className="mt-1 font-semibold text-[#102a43]">{request.title}</h3>
         </div>
         <Badge tone={["completed", "awarded", "scheduled", "in_progress"].includes(request.status) ? "green" : request.status === "cancelled" ? "gray" : "teal"}>

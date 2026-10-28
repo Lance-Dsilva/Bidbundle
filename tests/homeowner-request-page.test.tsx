@@ -66,6 +66,22 @@ afterEach(() => {
 });
 
 describe("new request page", () => {
+  it("offers the same canonical services as provider onboarding", async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonOnce({ requests: [], eligibility: eligible })) as unknown as typeof fetch;
+    render(<HomeownerRequestPage />);
+    await screen.findByText("For Oakwood Heights");
+    const category = screen.getByRole("combobox", { name: "Category" });
+    for (const [label, slug] of [
+      ["Lawn care", "lawn"], ["Pool care", "pool_care"], ["Gutters", "gutter"],
+      ["Landscaping", "landscaping"], ["Seasonal maintenance", "seasonal_maintenance"],
+      ["Painting", "painting"], ["Pest control", "pest_control"],
+    ]) {
+      expect(screen.getByRole("option", { name: label })).toHaveValue(slug);
+      fireEvent.change(category, { target: { value: slug } });
+      expect(category).toHaveValue(slug);
+    }
+  });
+
   it("asks the canonical endpoint for eligibility, and nothing else, on load", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonOnce({ requests: [], eligibility: eligible }),

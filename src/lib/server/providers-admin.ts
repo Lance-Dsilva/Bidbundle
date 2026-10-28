@@ -1,5 +1,7 @@
 import "server-only";
 
+import { normalizeServiceCategory } from "@/lib/service-categories";
+
 import type { Prisma } from "@/generated/prisma/client";
 import { CommunityRuleError } from "@/lib/community-rules";
 import type {
@@ -89,10 +91,12 @@ function serializeProviderSummary(row: ProviderSummaryRow): ProviderSummary {
 }
 
 export async function listProviders(query: ProviderListQuery): Promise<ProviderListResult> {
+  const categorySearch = query.search ? normalizeServiceCategory(query.search) : null;
   const tradeSearchVariants = query.search
     ? [...new Set([
         query.search,
         query.search.toLowerCase(),
+        ...(categorySearch ? [categorySearch] : []),
         query.search.toUpperCase(),
         query.search.replace(/\b\w/g, (letter) => letter.toUpperCase()),
       ])]

@@ -14,9 +14,15 @@ import {
 import { AvatarField } from "@/components/profile/AvatarField";
 import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
 import {
+  CATEGORY_LABELS,
+  SERVICE_CATEGORIES,
+  normalizeServiceCategory,
+  normalizeServiceTrades,
+  serviceCategoryLabel,
+} from "@/lib/service-categories";
+import {
   MAX_BIO_LENGTH,
   MAX_TRADES,
-  MAX_TRADE_LENGTH,
   WEEKDAYS,
   type CommonProfileUpdate,
   type ProviderProfileUpdate,
@@ -122,7 +128,7 @@ export function formFromProfile(
     neighborhood: profile.neighborhood ?? "",
     companyName: provider.companyName ?? "",
     bio: provider.bio ?? "",
-    trades: [...provider.trades],
+    trades: Array.from(new Set(provider.trades.map((trade) => normalizeServiceCategory(trade) ?? trade))),
     workingDays: [...provider.workingDays],
     workingHoursStart: provider.workingHoursStart ?? "",
     workingHoursEnd: provider.workingHoursEnd ?? "",
@@ -276,19 +282,15 @@ export function ProviderBusinessDetailsDialog({
   /* ── Trades ────────────────────────────────────────────────────────────── */
 
   function addTrade(raw: string) {
-    const trade = raw.trim();
+    const trade = normalizeServiceCategory(raw);
     if (!trade) {
-      setTradeError("Enter a service before adding it.");
-      return;
-    }
-    if (trade.length > MAX_TRADE_LENGTH) {
-      setTradeError(`Keep each service under ${MAX_TRADE_LENGTH} characters.`);
+      setTradeError("Choose a supported service before adding it.");
       return;
     }
     // Case-insensitive, matching the server's own de-duplication so the list
     // the provider sees is the list that gets stored.
     if (form.trades.some((existing) => existing.toLowerCase() === trade.toLowerCase())) {
-      setTradeError(`${trade} is already on your list.`);
+      setTradeError(`${serviceCategoryLabel(trade)} is already on your list.`);
       return;
     }
     if (form.trades.length >= MAX_TRADES) {
@@ -303,14 +305,23 @@ export function ProviderBusinessDetailsDialog({
   /* ── Save ──────────────────────────────────────────────────────────────── */
 
   async function handleSave() {
-    // A service still sitting in the input is one the provider meant to add.
-    const pending = tradeDraft.trim();
+    // A selected service is included even if the provider has not clicked Add.
+    const pending = normalizeServiceCategory(tradeDraft);
+    if (pending && !form.trades.includes(pending) && form.trades.length >= MAX_TRADES) {
+      setTradeError(`You can list at most ${MAX_TRADES} services.`);
+      return;
+    }
     const trades =
       pending &&
       !form.trades.some((existing) => existing.toLowerCase() === pending.toLowerCase()) &&
       form.trades.length < MAX_TRADES
         ? [...form.trades, pending]
         : form.trades;
+
+    if (trades.some((trade) => !normalizeServiceCategory(trade))) {
+      setTradeError("Replace unsupported saved services with a category below, then remove the old services before saving.");
+      return;
+    }
 
     const saved = await onSave(
       {
@@ -322,7 +333,9 @@ export function ProviderBusinessDetailsDialog({
       {
         companyName: form.companyName.trim() || null,
         bio: form.bio.trim() || null,
-        trades,
+        // Unsupported legacy values were explicitly rejected above, so this
+        // narrowing cannot silently discard a provider's saved service.
+        trades: normalizeServiceTrades(trades),
         workingDays: form.workingDays,
         workingHoursStart: form.workingHoursStart || null,
         workingHoursEnd: form.workingHoursEnd || null,
@@ -514,16 +527,17 @@ export function ProviderBusinessDetailsDialog({
                     color: "var(--terracotta-600)",
                   }}
                 >
-                  {trade}
+                  {serviceCategoryLabel(trade)}{normalizeServiceCategory(trade) ? "" : " (unsupported)"}
                   <button
                     type="button"
-                    aria-label={`Remove ${trade}`}
-                    onClick={() =>
+                    aria-label={`Remove ${serviceCategoryLabel(trade)}`}
+                    onClick={() => {
+                      setTradeError(null);
                       set(
                         "trades",
                         form.trades.filter((value) => value !== trade),
-                      )
-                    }
+                      );
+                    }}
                     style={{
                       width: 24,
                       height: 24,
@@ -542,28 +556,28 @@ export function ProviderBusinessDetailsDialog({
               ))
             )}
           </div>
+          {form.trades.some((trade) => !normalizeServiceCategory(trade)) ? (
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--danger-600)", lineHeight: 1.5 }}>
+              Some saved services are no longer supported. Choose a replacement below, then remove
+              the old service before saving. Your saved choices have not been removed automatically.
+            </p>
+          ) : null}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 220px" }}>
               <span style={labelStyle}>Add a service</span>
-              <input
-                type="text"
+              <select
                 style={inputStyle}
                 value={tradeDraft}
-                maxLength={MAX_TRADE_LENGTH}
-                placeholder="Lawn care"
                 onChange={(event) => {
                   setTradeDraft(event.target.value);
                   setTradeError(null);
                 }}
-                onKeyDown={(event) => {
-                  // Enter or comma commits, so a list can be typed without
-                  // reaching for the mouse.
-                  if (event.key === "Enter" || event.key === ",") {
-                    event.preventDefault();
-                    addTrade(tradeDraft);
-                  }
-                }}
-              />
+              >
+                <option value="">Choose a service</option>
+                {SERVICE_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+                ))}
+              </select>
             </label>
             <button
               type="button"
