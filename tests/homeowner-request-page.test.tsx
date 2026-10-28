@@ -48,7 +48,7 @@ function fillValidRequest() {
   fireEvent.change(screen.getByLabelText("Title"), {
     target: { value: "Pressure washing" },
   });
-  fireEvent.change(screen.getByLabelText("Category"), { target: { value: "cleaning" } });
+  fireEvent.click(screen.getByRole("radio", { name: "Cleaning" }));
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Driveway and back patio." },
   });
@@ -70,15 +70,17 @@ describe("new request page", () => {
     global.fetch = vi.fn().mockResolvedValue(jsonOnce({ requests: [], eligibility: eligible })) as unknown as typeof fetch;
     render(<HomeownerRequestPage />);
     await screen.findByText("For Oakwood Heights");
-    const category = screen.getByRole("combobox", { name: "Category" });
+    const category = screen.getByRole("group", { name: /^Category/ });
     for (const [label, slug] of [
       ["Lawn care", "lawn"], ["Pool care", "pool_care"], ["Gutters", "gutter"],
       ["Landscaping", "landscaping"], ["Seasonal maintenance", "seasonal_maintenance"],
       ["Painting", "painting"], ["Pest control", "pest_control"],
     ]) {
-      expect(screen.getByRole("option", { name: label })).toHaveValue(slug);
-      fireEvent.change(category, { target: { value: slug } });
-      expect(category).toHaveValue(slug);
+      const choice = screen.getByRole("radio", { name: label });
+      expect(category).toContainElement(choice);
+      expect(choice).toHaveAttribute("value", slug);
+      fireEvent.click(choice);
+      expect(choice).toBeChecked();
     }
   });
 

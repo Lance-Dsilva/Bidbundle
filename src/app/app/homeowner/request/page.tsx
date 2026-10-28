@@ -7,12 +7,12 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import {
-  CATEGORY_LABELS,
   MAX_REQUEST_DESCRIPTION_LENGTH,
   MAX_REQUEST_TITLE_LENGTH,
-  SERVICE_CATEGORIES,
-  type ServiceCategory,
 } from "@/lib/validation/homeowner-requests";
+import { CATEGORY_LABELS, SERVICE_CATEGORIES, type ServiceCategory } from "@/lib/service-categories";
+
+const REQUEST_CATEGORIES = SERVICE_CATEGORIES.filter((value) => value !== "other");
 
 /**
  * Open an individual (non-HOA) service request.
@@ -90,7 +90,7 @@ export default function HomeownerRequestPage() {
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<ServiceCategory>("other");
+  const [category, setCategory] = useState<ServiceCategory | "">("");
   const [description, setDescription] = useState("");
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
@@ -101,6 +101,7 @@ export default function HomeownerRequestPage() {
   const [created, setCreated] = useState<CreatedRequest | null>(null);
   /** Synchronous latch: `disabled` alone cannot stop a same-tick second click. */
   const inFlight = useRef(false);
+  const firstCategoryInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +138,7 @@ export default function HomeownerRequestPage() {
     const minCents = dollarsToCents(budgetMin);
     const maxCents = dollarsToCents(budgetMax);
     const localErrors: Record<string, string> = {};
+    if (!category) localErrors.category = "Choose a service category.";
     if (!title.trim()) localErrors.title = "Give your request a short title.";
     if (!description.trim()) localErrors.description = "Describe the work you need done.";
     if (minCents === null) localErrors.budgetMinCents = "Enter a minimum budget.";
@@ -147,6 +149,7 @@ export default function HomeownerRequestPage() {
     if (Object.keys(localErrors).length > 0) {
       setFieldErrors(localErrors);
       setFormError(null);
+      if (localErrors.category) firstCategoryInput.current?.focus();
       return;
     }
 
@@ -283,7 +286,7 @@ export default function HomeownerRequestPage() {
               onClick={() => {
                 setCreated(null);
                 setTitle("");
-                setCategory("other");
+                setCategory("");
                 setDescription("");
                 setBudgetMin("");
                 setBudgetMax("");
@@ -333,6 +336,53 @@ export default function HomeownerRequestPage() {
               For {eligibility.communityName}
             </p>
 
+            <fieldset
+              disabled={submitting}
+              aria-invalid={fieldErrors.category ? true : undefined}
+              aria-describedby={fieldErrors.category ? "request-category-error" : undefined}
+            >
+              <legend className="mb-1.5 text-sm font-medium text-[var(--ink-700)]">
+                Category <span className="text-[var(--ink-500)]">(required)</span>
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {REQUEST_CATEGORIES.map((value, index) => (
+                  <label
+                    key={value}
+                    className={`flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-sm font-medium text-[var(--ink-900)] transition focus-within:ring-2 focus-within:ring-[var(--terracotta-600)] focus-within:ring-offset-2 ${
+                      category === value
+                        ? "border-[var(--terracotta-600)] bg-[var(--terracotta-50)]"
+                        : "border-[var(--border-warm)] bg-[var(--bg-card)]"
+                    } ${submitting ? "cursor-wait opacity-60" : "cursor-pointer"}`}
+                  >
+                    <input
+                      ref={index === 0 ? firstCategoryInput : undefined}
+                      type="radio"
+                      name="request-category"
+                      value={value}
+                      required
+                      checked={category === value}
+                      className="h-4 w-4 shrink-0 accent-[var(--terracotta-600)]"
+                      aria-describedby={fieldErrors.category ? "request-category-error" : undefined}
+                      onChange={() => {
+                        setCategory(value);
+                        setFieldErrors((errors) => {
+                          const next = { ...errors };
+                          delete next.category;
+                          return next;
+                        });
+                      }}
+                    />
+                    {CATEGORY_LABELS[value]}
+                  </label>
+                ))}
+              </div>
+              {fieldErrors.category ? (
+                <p id="request-category-error" role="alert" className="mt-1 text-[12px] font-medium text-[var(--danger-600)]">
+                  {fieldErrors.category}
+                </p>
+              ) : null}
+            </fieldset>
+
             <div>
               <label
                 className="mb-1.5 block text-sm font-medium text-[var(--ink-700)]"
@@ -353,34 +403,6 @@ export default function HomeownerRequestPage() {
               {fieldErrors.title ? (
                 <p id="request-title-error" className="mt-1 text-[12px] font-medium text-[var(--danger-600)]">
                   {fieldErrors.title}
-                </p>
-              ) : null}
-            </div>
-
-            <div>
-              <label
-                className="mb-1.5 block text-sm font-medium text-[var(--ink-700)]"
-                htmlFor="request-category"
-              >
-                Category
-              </label>
-              <select
-                id="request-category"
-                style={inputStyle}
-                value={category}
-                onChange={(event) => setCategory(event.target.value as ServiceCategory)}
-                aria-invalid={fieldErrors.category ? true : undefined}
-                aria-describedby={fieldErrors.category ? "request-category-error" : undefined}
-              >
-                {SERVICE_CATEGORIES.map((value) => (
-                  <option key={value} value={value}>
-                    {CATEGORY_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.category ? (
-                <p id="request-category-error" className="mt-1 text-[12px] font-medium text-[var(--danger-600)]">
-                  {fieldErrors.category}
                 </p>
               ) : null}
             </div>
