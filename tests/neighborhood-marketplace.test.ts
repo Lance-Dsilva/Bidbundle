@@ -130,6 +130,7 @@ function collectingRequest(overrides: Record<string, unknown> = {}) {
     minHomes: 1,
     maxHomes: null,
     createdByUserId: "resident-a",
+    updatedAt: new Date(Date.now() - 1000),
     enrollmentClosesAt: new Date(Date.now() + 86_400_000),
     biddingClosesAt: null,
     participantsLockedAt: null,

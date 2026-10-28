@@ -13,7 +13,7 @@ import type {
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { HoaWorkflowError } from "@/lib/server/hoa";
-import { listRequestBids } from "@/lib/server/hoa-market";
+import { listRequestBids, reconcileNeighborhoodEnrollment } from "@/lib/server/hoa-market";
 import {
   findNeighborhoodManager,
   requireActiveNeighborhoodMember,
@@ -58,6 +58,38 @@ export async function respondToNeighborhoodRequest(
   requestId: string,
   response: ParticipationChoice,
 ): Promise<{ response: ParticipationChoice; joinedCount: number }> {
+  return recordNeighborhoodResponse(userId, requestId, response, false);
+}
+
+/** Translate only the two enrollment boundary constraints, never arbitrary DB failures. */
+function isEnrollmentBoundaryConflict(error: unknown): boolean {
+  const record = (value: unknown): Record<string, unknown> =>
+    typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  const candidate = record(error);
+  const meta = record(candidate.meta);
+  const cause = record(record(meta.driverAdapterError).cause);
+  const sources = [candidate, meta, cause];
+  if (candidate.code !== "P2004" && !sources.some(
+    (source) => source.code === "23514" || source.originalCode === "23514",
+  )) return false;
+
+  const constraints = [
+    "HoaRequestParticipation_enrollment_open_required",
+    "HoaRequestParticipation_locked",
+  ];
+  return sources.some((source) => {
+    if (constraints.includes(String(source.constraint ?? ""))) return true;
+    if (constraints.includes(String(source.detail ?? ""))) return true;
+    return constraints.includes(String(source.database_error ?? ""));
+  });
+}
+
+async function recordNeighborhoodResponse(
+  userId: string,
+  requestId: string,
+  response: ParticipationChoice,
+  retriedDuplicate: boolean,
+): Promise<{ response: ParticipationChoice; joinedCount: number }> {
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     select: {
@@ -67,6 +99,7 @@ export async function respondToNeighborhoodRequest(
       status: true,
       maxHomes: true,
       createdByUserId: true,
+      updatedAt: true,
       enrollmentClosesAt: true,
       participantsLockedAt: true,
       community: { select: { type: true } },
@@ -119,26 +152,43 @@ export async function respondToNeighborhoodRequest(
     return { response, joinedCount: request.participations.length };
   }
 
-  if (existing) {
-    await db.hoaRequestParticipation.update({
-      where: { id: existing.id },
-      data: { response },
-    });
-  } else {
-    try {
-      await db.hoaRequestParticipation.create({
-        data: { id: randomUUID(), requestId, userId, unitId: null, response },
-      });
-    } catch (error) {
-      // Two concurrent first-time answers: the unique index on
-      // (requestId, userId) keeps one row, and the loser applies its answer as
-      // an update rather than failing the customer's click.
-      if ((error as { code?: string }).code !== "P2002") throw error;
-      await db.hoaRequestParticipation.updateMany({
-        where: { requestId, userId },
-        data: { response },
-      });
+  const claimedAt = new Date();
+  try {
+    // Serialize enrollment edits with opening/expiry on the same parent row.
+    // A monotonic timestamp also detects another response within one millisecond.
+    await db.$transaction([
+      db.hoaServiceRequest.update({
+        where: {
+          id: requestId,
+          updatedAt: request.updatedAt,
+          status: "collecting_interest",
+          participantsLockedAt: null,
+          community: { type: "neighborhood", status: "active" },
+          enrollmentClosesAt: request.enrollmentClosesAt === null
+            ? null
+            : { equals: request.enrollmentClosesAt, gt: claimedAt },
+        },
+        data: { updatedAt: new Date(Math.max(claimedAt.getTime(), request.updatedAt.getTime() + 1)) },
+      }),
+      existing
+        ? db.hoaRequestParticipation.update({
+            where: { id: existing.id },
+            data: { response },
+          })
+        : db.hoaRequestParticipation.create({
+            data: { id: randomUUID(), requestId, userId, unitId: null, response },
+          }),
+    ]);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "P2002" && !retriedDuplicate) {
+      // Re-read and revalidate the parent before applying a concurrent first answer.
+      return recordNeighborhoodResponse(userId, requestId, response, true);
     }
+    if (code === "P2025" || isEnrollmentBoundaryConflict(error)) {
+      throw new HoaWorkflowError("This request changed or sign-ups closed. Refresh before trying again.", 409);
+    }
+    throw error;
   }
 
   const joinedCount = await db.hoaRequestParticipation.count({
@@ -483,17 +533,12 @@ export async function getNeighborhoodRequest(
 /* ── Deadline reconciliation ─────────────────────────────────────────────── */
 
 /**
- * Advances requests whose windows have expired.
- *
- * Deadlines are deterministic: a request whose bidding deadline has passed is
- * closed regardless of whether anyone visited the page. This runs from the
- * outbox job, and calls the *same* domain rules the manager's buttons do — so
- * a sweep and a click cannot reach different states.
- *
- * Every step is expressed as a conditional `updateMany`, so a sweep racing a
- * manager's click updates zero rows rather than duplicating the transition.
+ * Advance elapsed bidding/enrollment windows from either scheduled worker.
+ * Neighborhood opening uses the same guarded transition as manual opening;
+ * each candidate has its own atomic audit and notification transaction.
  */
 export async function reconcileExpiredWindows(now = new Date()): Promise<{
+  biddingOpened: number;
   biddingClosed: number;
   enrollmentExpired: number;
 }> {
@@ -515,6 +560,7 @@ export async function reconcileExpiredWindows(now = new Date()): Promise<{
       enrollmentClosesAt: { not: null, lte: now },
       participantsLockedAt: null,
       participations: { none: { response: "joined" } },
+      NOT: { kind: "optional_group", community: { type: "neighborhood" } },
     },
     data: { status: "failed" },
   });
@@ -535,5 +581,37 @@ export async function reconcileExpiredWindows(now = new Date()): Promise<{
     });
   }
 
-  return { biddingClosed: closed.count, enrollmentExpired: expired.count };
+  const neighborhood = await reconcileNeighborhoodEnrollments(now);
+  return {
+    biddingOpened: neighborhood.biddingOpened,
+    biddingClosed: closed.count,
+    enrollmentExpired: expired.count + neighborhood.enrollmentExpired,
+  };
+}
+
+/** Bounded active-neighborhood enrollment work for the five-minute worker. */
+export async function reconcileNeighborhoodEnrollments(now = new Date()): Promise<{
+  biddingOpened: number;
+  enrollmentExpired: number;
+}> {
+  const candidates = await db.hoaServiceRequest.findMany({
+    where: {
+      kind: "optional_group",
+      status: "collecting_interest",
+      enrollmentClosesAt: { not: null, lte: now },
+      participantsLockedAt: null,
+      community: { type: "neighborhood", status: "active" },
+    },
+    orderBy: [{ enrollmentClosesAt: "asc" }, { id: "asc" }],
+    take: 100,
+    select: { id: true },
+  });
+  let biddingOpened = 0;
+  let enrollmentExpired = 0;
+  for (const candidate of candidates) {
+    const result = await reconcileNeighborhoodEnrollment(candidate.id, now);
+    if (result === "opened") biddingOpened += 1;
+    if (result === "failed") enrollmentExpired += 1;
+  }
+  return { biddingOpened, enrollmentExpired };
 }

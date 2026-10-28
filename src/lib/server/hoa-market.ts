@@ -390,6 +390,197 @@ export async function createHoaRequest(
   return requestId;
 }
 
+/** Seven complete days for provider quotes after automatic enrollment closure. */
+const DEFAULT_BIDDING_WINDOW_MS = 7 * 86_400_000;
+
+type BiddingRequest = {
+  id: string;
+  communityId: string;
+  title: string;
+  category: string;
+  kind: "compulsory_recurring" | "optional_group";
+  status: HoaRequestSummary["status"];
+  minHomes: number | null;
+  enrollmentClosesAt: Date | null;
+  biddingClosesAt: Date | null;
+  participantsLockedAt: Date | null;
+  updatedAt: Date;
+  community: { type: "hoa" | "neighborhood" };
+  participations: Array<{ unitId: string | null; userId: string | null; response: string }>;
+};
+
+function joinedHomeCount(request: BiddingRequest): number {
+  return request.participations.filter(
+    (item) => item.response === "joined" &&
+      (request.community.type === "neighborhood" ? item.userId : item.unitId),
+  ).length;
+}
+
+function biddingClaim(request: BiddingRequest, automaticAt?: Date): Prisma.HoaServiceRequestWhereUniqueInput {
+  const joined = request.participations.filter((item) => item.response === "joined");
+  // Reject a stale enrollment snapshot if a joined home changed before the claim.
+  const joinedSnapshot = joined.map(({ unitId, userId }) => ({ unitId, userId, response: "joined" as const }));
+  return {
+    id: request.id,
+    kind: "optional_group",
+    status: "collecting_interest",
+    participantsLockedAt: null,
+    minHomes: request.minHomes,
+    updatedAt: request.updatedAt,
+    AND: [
+      { participations: { every: { OR: [{ response: { not: "joined" } }, ...joinedSnapshot] } } },
+      ...joinedSnapshot.map((home) => ({ participations: { some: home } })),
+    ],
+    biddingClosesAt: request.biddingClosesAt,
+    community: {
+      status: "active",
+      ...(automaticAt ? { type: "neighborhood" as const } : {}),
+    },
+    ...(automaticAt
+      ? { enrollmentClosesAt: { equals: request.enrollmentClosesAt, lte: automaticAt } }
+      : {}),
+  };
+}
+
+/**
+ * The manager and deadline worker use the same enrollment/participant rules.
+ * The guarded update is first in a short batch transaction: losing a race throws
+ * P2025 and rolls back every audit and notification instead of repeating them.
+ */
+async function openRequestBidding(
+  request: BiddingRequest,
+  input: {
+    actorUserId: string | null;
+    via: string;
+    communityName: string;
+    now: Date;
+    biddingClosesAt: Date | null;
+    automaticAt?: Date;
+  },
+): Promise<void> {
+  if (request.kind !== "optional_group" || request.status !== "collecting_interest" || request.participantsLockedAt) {
+    throw new HoaWorkflowError("Only an optional request collecting interest can open bidding.");
+  }
+  if (!input.biddingClosesAt || input.biddingClosesAt <= input.now) {
+    throw new HoaWorkflowError("Set a future bidding deadline to open bidding.", 400);
+  }
+  const lockedHomeCount = joinedHomeCount(request);
+  if (lockedHomeCount === 0) throw new HoaWorkflowError("No homes joined this service.");
+  if (request.minHomes != null && lockedHomeCount < request.minHomes) {
+    throw new HoaWorkflowError(`Only ${lockedHomeCount} of the required ${request.minHomes} homes joined.`);
+  }
+  const providerIntents = await eligibleProviderIntentsForRequest({
+    requestId: request.id,
+    communityId: request.communityId,
+    communityName: input.communityName,
+    title: request.title,
+    category: request.category,
+    biddingClosesAt: input.biddingClosesAt,
+  });
+  const auditMetadata = {
+    lockedHomeCount,
+    context: request.community.type,
+    via: input.via,
+  };
+  await db.$transaction([
+    db.hoaServiceRequest.update({
+      where: biddingClaim(request, input.automaticAt),
+      data: {
+        status: "open_for_bids",
+        biddingClosesAt: input.biddingClosesAt,
+        participantsLockedAt: input.now,
+      },
+    }),
+    db.adminAuditLog.create({
+      data: buildAuditEntry({
+        actorUserId: input.actorUserId,
+        action: "hoa_participants_locked",
+        targetType: "hoa_request",
+        targetId: request.id,
+        communityId: request.communityId,
+        metadata: auditMetadata,
+      }),
+    }),
+    db.adminAuditLog.create({
+      data: buildAuditEntry({
+        actorUserId: input.actorUserId,
+        action: "hoa_request_status_changed",
+        targetType: "hoa_request",
+        targetId: request.id,
+        communityId: request.communityId,
+        metadata: {
+          previousStatus: request.status,
+          nextStatus: "open_for_bids",
+          ...auditMetadata,
+        },
+      }),
+    }),
+    ...(await buildPreferenceAwareNotificationOps(providerIntents)),
+  ]);
+}
+
+/** Worker-only transition; this never grants a resident manager privileges. */
+export async function reconcileNeighborhoodEnrollment(
+  requestId: string,
+  now: Date,
+): Promise<"opened" | "failed" | "skipped"> {
+  const request = await db.hoaServiceRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      community: { select: { type: true, status: true, name: true } },
+      participations: { select: { unitId: true, userId: true, response: true } },
+    },
+  });
+  if (!request || request.community.type !== "neighborhood" || request.community.status !== "active" ||
+      request.kind !== "optional_group" || request.status !== "collecting_interest" ||
+      request.participantsLockedAt || !request.enrollmentClosesAt || request.enrollmentClosesAt > now) {
+    return "skipped";
+  }
+  try {
+    const lockedHomeCount = joinedHomeCount(request);
+    if (lockedHomeCount === 0 || (request.minHomes != null && lockedHomeCount < request.minHomes)) {
+      await db.$transaction([
+        db.hoaServiceRequest.update({
+          where: biddingClaim(request, now),
+          data: { status: "failed" },
+        }),
+        db.adminAuditLog.create({
+          data: buildAuditEntry({
+            actorUserId: null,
+            action: "hoa_request_status_changed",
+            targetType: "hoa_request",
+            targetId: request.id,
+            communityId: request.communityId,
+            metadata: {
+              previousStatus: "collecting_interest",
+              nextStatus: "failed",
+              context: "neighborhood",
+              via: "deadline_reconciliation",
+              reason: "insufficient_joined_homes",
+              lockedHomeCount,
+            },
+          }),
+        }),
+      ]);
+      return "failed";
+    }
+    await openRequestBidding(request, {
+      actorUserId: null,
+      via: "deadline_reconciliation",
+      communityName: request.community.name,
+      now,
+      biddingClosesAt: request.biddingClosesAt && request.biddingClosesAt > now
+        ? request.biddingClosesAt
+        : new Date(now.getTime() + DEFAULT_BIDDING_WINDOW_MS),
+      automaticAt: now,
+    });
+    return "opened";
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025") return "skipped";
+    throw error;
+  }
+}
+
 /**
  * Manager lifecycle transitions. The transition table is enforced here — the
  * client sends an action name, never a raw status value.
@@ -513,64 +704,22 @@ export async function transitionHoaRequest(
     }
 
     case "open_bidding": {
-      if (request.kind !== "optional_group" || request.status !== "collecting_interest") {
-        throw new HoaWorkflowError("Only an optional request collecting interest can open bidding.");
+      try {
+        await openRequestBidding(request, {
+          actorUserId: userId,
+          via: authority.via,
+          communityName: community.name,
+          now,
+          biddingClosesAt: input.biddingClosesAt
+            ? new Date(input.biddingClosesAt)
+            : request.biddingClosesAt,
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed. Refresh before trying again.", 409);
+        }
+        throw error;
       }
-      const biddingClosesAt = input.biddingClosesAt
-        ? new Date(input.biddingClosesAt)
-        : request.biddingClosesAt;
-      if (!biddingClosesAt || biddingClosesAt <= now) {
-        throw new HoaWorkflowError("Set a future bidding deadline to open bidding.", 400);
-      }
-      // An HOA participation is a *unit*; a neighbourhood participation is a
-      // *homeowner*. Counting only `unitId` here is exactly what stopped
-      // neighbourhood requests from ever leaving `collecting_interest`.
-      const joinedHomes = request.participations.filter(
-        (item) => item.response === "joined" && (isNeighborhood ? item.userId : item.unitId),
-      );
-      if (joinedHomes.length === 0) {
-        throw new HoaWorkflowError("No homes joined this service.");
-      }
-      // `minHomes` is the only floor. A neighbourhood request created by one
-      // homeowner defaults to 1, so a single participating home is a complete,
-      // awardable job — it does not need neighbours to become real.
-      if (request.minHomes != null && joinedHomes.length < request.minHomes) {
-        throw new HoaWorkflowError(
-          `Only ${joinedHomes.length} of the required ${request.minHomes} homes joined.`,
-        );
-      }
-      const providerIntents = await eligibleProviderIntentsForRequest({
-        requestId: request.id,
-        communityId: request.communityId,
-        communityName: community.name,
-        title: request.title,
-        category: request.category,
-        biddingClosesAt,
-      });
-      // Locking the participant snapshot means providers quote against a
-      // stable home count from this point on.
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: {
-            status: "open_for_bids",
-            biddingClosesAt,
-            participantsLockedAt: now,
-          },
-        }),
-        db.adminAuditLog.create({
-          data: buildAuditEntry({
-            actorUserId: userId,
-            action: "hoa_participants_locked",
-            targetType: "hoa_request",
-            targetId: request.id,
-            communityId: request.communityId,
-            metadata: { lockedHomeCount: joinedHomes.length, context: request.community.type },
-          }),
-        }),
-        audit("open_for_bids", { lockedHomeCount: joinedHomes.length }),
-        ...(await buildPreferenceAwareNotificationOps(providerIntents)),
-      ]);
       return;
     }
 

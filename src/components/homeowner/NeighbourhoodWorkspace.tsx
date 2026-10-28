@@ -210,6 +210,14 @@ function RequestCard({
         </div>
       </dl>
 
+      {request.status === "collecting_interest" && request.enrollmentClosesAt ? (
+        <p className="mt-3 text-xs" style={{ color: "var(--ink-700)" }}>
+          After sign-ups close, bidding opens automatically if at least {request.minHomes}{" "}
+          {request.minHomes === 1 ? "home has" : "homes have"} joined. The update can take a few
+          minutes. If fewer homes join, the request expires.
+        </p>
+      ) : null}
+
       {/* ── Neighbour: join or decline ─────────────────────────────────── */}
       {request.permissions.canRespond ? (
         <div className="mt-4 flex flex-wrap gap-2">
