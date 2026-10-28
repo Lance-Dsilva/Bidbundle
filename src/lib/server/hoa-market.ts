@@ -1418,27 +1418,43 @@ export async function submitBid(
     requestId: request.id,
   });
 
-  await db.$transaction([
-    existing
-      ? db.serviceBid.update({
-          where: { id: bidId },
-          data: { ...data, version: { increment: 1 } },
-        })
-      : db.serviceBid.create({
-          data: { id: bidId, requestId, providerUserId, ...data },
-        }),
-    ...(await buildPreferenceAwareNotificationOps(
-      recipients.map((recipient) => ({
-        userId: recipient.userId,
-        email: recipient.email,
-        kind: "bid" as const,
-        title: `New bid on “${request.title}”`,
-        body: `A provider ${existing ? "revised their" : "submitted a"} bid for ${request.community.name}.`,
-        linkPath: recipient.linkPath,
-        dedupeKey: `bid:${bidId}:v${(existing?.version ?? 0) + 1}:${recipient.userId}`,
-      })),
-    )),
-  ]);
+  try {
+    await db.$transaction([
+      existing
+        ? db.serviceBid.update({
+            where: {
+              id: bidId,
+              version: existing.version,
+              status: existing.status,
+              request: {
+                status: "open_for_bids",
+                community: { status: "active" },
+                OR: [{ biddingClosesAt: null }, { biddingClosesAt: { gt: new Date() } }],
+              },
+            },
+            data: { ...data, version: { increment: 1 } },
+          })
+        : db.serviceBid.create({
+            data: { id: bidId, requestId, providerUserId, ...data },
+          }),
+      ...(await buildPreferenceAwareNotificationOps(
+        recipients.map((recipient) => ({
+          userId: recipient.userId,
+          email: recipient.email,
+          kind: "bid" as const,
+          title: `New bid on “${request.title}”`,
+          body: `A provider ${existing ? "revised their" : "submitted a"} bid for ${request.community.name}.`,
+          linkPath: recipient.linkPath,
+          dedupeKey: `bid:${bidId}:v${(existing?.version ?? 0) + 1}:${recipient.userId}`,
+        })),
+      )),
+    ]);
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025") {
+      throw new HoaWorkflowError("This bid or bidding window changed. Refresh before submitting again.", 409);
+    }
+    throw error;
+  }
 
   const row = await db.serviceBid.findUniqueOrThrow({
     where: { id: bidId },
@@ -1451,17 +1467,32 @@ export async function withdrawBid(providerUserId: string, requestId: string): Pr
   await requireProvider(providerUserId);
   const bid = await db.serviceBid.findUnique({
     where: { requestId_providerUserId: { requestId, providerUserId } },
-    select: { id: true, status: true, request: { select: { status: true } } },
+    select: { id: true, status: true, version: true, request: { select: { status: true } } },
   });
   if (!bid) throw new HoaWorkflowError("You have no bid on this request.", 404);
   if (bid.status !== "submitted") throw new HoaWorkflowError("This bid cannot be withdrawn.");
   if (bid.request.status !== "open_for_bids") {
     throw new HoaWorkflowError("Bidding has closed; the bid can no longer be withdrawn.");
   }
-  await db.serviceBid.update({
-    where: { id: bid.id },
-    data: { status: "withdrawn", withdrawnAt: new Date() },
-  });
+  try {
+    await db.serviceBid.update({
+      where: {
+        id: bid.id,
+        version: bid.version,
+        status: "submitted",
+        request: {
+          status: "open_for_bids",
+          OR: [{ biddingClosesAt: null }, { biddingClosesAt: { gt: new Date() } }],
+        },
+      },
+      data: { status: "withdrawn", withdrawnAt: new Date() },
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025") {
+      throw new HoaWorkflowError("This bid or bidding window changed. Refresh before withdrawing again.", 409);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -1661,6 +1692,9 @@ export async function awardBid(
   if (!bid || bid.requestId !== request.id) {
     throw new HoaWorkflowError("That bid does not belong to this request.", 404);
   }
+  if (input.expectedBidVersion !== undefined && input.expectedBidVersion !== bid.version) {
+    throw new HoaWorkflowError("This quote changed since you reviewed it. Refresh and review the current quote before confirming.", 409);
+  }
   if (bid.status !== "submitted") {
     throw new HoaWorkflowError("Only a submitted bid can be accepted.");
   }
@@ -1758,7 +1792,7 @@ export async function awardBid(
   try {
     await db.$transaction([
       db.serviceBid.update({
-        where: { id: bid.id },
+        where: { id: bid.id, version: bid.version, status: "submitted" },
         data: { status: "accepted", decidedAt: now },
       }),
       db.serviceBid.updateMany({
@@ -1832,12 +1866,16 @@ export async function awardBid(
       ])),
     ]);
   } catch (error) {
-    if ((error as { code?: string }).code === "P2002") {
+    const code = (error as { code?: string }).code;
+    if (code === "P2002" || code === "P2025") {
       const existing = await db.serviceAgreement.findUnique({
         where: { requestId: request.id },
         select: { id: true, bidId: true },
       });
       if (existing?.bidId === input.bidId) return existing.id;
+      if (code === "P2025" && !existing) {
+        throw new HoaWorkflowError("This quote changed since you reviewed it. Refresh and review the current quote before confirming.", 409);
+      }
       throw new HoaWorkflowError("A different bid has already been accepted for this request.");
     }
     throw error;

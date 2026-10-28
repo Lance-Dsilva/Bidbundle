@@ -5,6 +5,8 @@ import { useMemo, useState, type CSSProperties } from "react";
 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { compareBidQuotes } from "@/lib/bid-pricing";
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import type { HomeownerBidView } from "@/lib/server/marketplace-reads";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useHomeownerBids } from "@/hooks/useHomeownerBids";
 import { useNeighbourhood } from "@/hooks/useNeighbourhood";
@@ -42,20 +44,26 @@ const CONTACTABLE = new Set(["submitted", "accepted"]);
 
 export default function HomeownerBidsPage() {
   const { bids, loading, error, refresh } = useHomeownerBids();
-  const { act, busy, missingAddresses, error: actionError } = useNeighbourhood();
+  const { act, busy, missingAddresses, error: actionError, setError: setActionError } = useNeighbourhood();
   const [filter, setFilter] = useState<"all" | "submitted" | "accepted">("all");
   const router = useRouter();
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<HomeownerBidView | null>(null);
+  const currentBid = confirmation ? bids.find((bid) => bid.id === confirmation.id) : null;
+  const validConfirmation = Boolean(confirmation && currentBid?.canAward && currentBid.requestStatus === "bidding_closed" && currentBid.status === "submitted" && currentBid.pricingBasis === "total" &&
+    currentBid.requestId === confirmation.requestId && currentBid.version === confirmation.version && currentBid.amountCents === confirmation.amountCents && currentBid.currency === confirmation.currency && currentBid.providerUserId === confirmation.providerUserId);
+
 
   const visible = useMemo(
     () => bids.filter((bid) => filter === "all" || bid.status === filter).sort(compareBidQuotes),
     [bids, filter],
   );
 
-  const award = async (requestId: string, bidId: string) => {
-    const ok = await act({ kind: "award", requestId, bidId });
+  const award = async (bid: HomeownerBidView) => {
+    const ok = await act({ kind: "award", requestId: bid.requestId, bidId: bid.id, expectedBidVersion: bid.version });
     if (ok) await refresh();
+    return ok;
   };
 
   /**
@@ -178,7 +186,7 @@ export default function HomeownerBidsPage() {
                   <button
                     className="rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                     disabled={busy || bid.pricingBasis !== "total"}
-                    onClick={() => void award(bid.requestId, bid.id)}
+                    onClick={() => { setActionError(null); setConfirmation({ ...bid }); }}
                     style={{ background: "var(--terracotta-600)" }}
                     type="button"
                   >
@@ -201,6 +209,19 @@ export default function HomeownerBidsPage() {
           ))}
         </ul>
       )}
+      {confirmation ? (
+        <ConfirmAction
+          open title="Award this provider?" confirmLabel="Award provider"
+          valid={validConfirmation} error={actionError}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => !validConfirmation || busy ? false : award(confirmation)}
+          description={<>
+            <p>Award “{confirmation.requestTitle}” to {confirmation.providerCompany ?? confirmation.providerName} (quote version {confirmation.version})?</p>
+            <BidPrice bid={confirmation} />
+            <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
+          </>}
+        />
+      ) : null}
     </div>
   );
 }

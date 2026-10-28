@@ -19,7 +19,7 @@ import type { MissingAddressReport, NeighborhoodHub } from "@/lib/neighborhood-t
 export type NeighbourhoodAction =
   | { kind: "respond"; requestId: string; response: "joined" | "declined" }
   | { kind: "transition"; requestId: string; action: "open_bidding" | "close_bidding" | "complete" | "cancel"; biddingClosesAt?: string }
-  | { kind: "award"; requestId: string; bidId: string };
+  | { kind: "award"; requestId: string; bidId: string; expectedBidVersion?: number };
 
 export function useNeighbourhood() {
   const [hub, setHub] = useState<NeighborhoodHub | null>(null);
@@ -74,7 +74,10 @@ export function useNeighbourhood() {
         } else {
           await apiFetch(`/homeowner/requests/${action.requestId}/award`, {
             method: "POST",
-            body: JSON.stringify({ bidId: action.bidId }),
+            body: JSON.stringify({
+              bidId: action.bidId,
+              ...(action.expectedBidVersion !== undefined ? { expectedBidVersion: action.expectedBidVersion } : {}),
+            }),
           });
         }
         await refresh();

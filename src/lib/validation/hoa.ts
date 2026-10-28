@@ -380,7 +380,10 @@ export const bidSubmitSchema = z
 
 export type BidSubmitInput = z.infer<typeof bidSubmitSchema>;
 
-export const awardSchema = z.object({ bidId: idField }).strict();
+export const awardSchema = z.object({
+  bidId: idField,
+  expectedBidVersion: z.number().int().positive().optional(),
+}).strict();
 
 export type AwardInput = z.infer<typeof awardSchema>;
 

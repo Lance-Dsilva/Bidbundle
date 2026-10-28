@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { compareBidQuotes } from "@/lib/bid-pricing";
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { Button } from "@/components/ui/Button";
 import type { BidSummary } from "@/lib/hoa-types";
 import type { NeighborhoodRequestView } from "@/lib/neighborhood-types";
@@ -66,7 +67,7 @@ function defaultBiddingDeadline(): string {
 }
 
 export function NeighbourhoodWorkspace() {
-  const { hub, loading, error, busy, missingAddresses, act } = useNeighbourhood();
+  const { hub, loading, error, busy, missingAddresses, act, setError } = useNeighbourhood();
 
   if (loading) {
     return (
@@ -153,7 +154,7 @@ export function NeighbourhoodWorkspace() {
         </div>
       ) : (
         hub.requests.map((request) => (
-          <RequestCard key={request.id} busy={busy} onAct={act} request={request} />
+          <RequestCard key={request.id} busy={busy} onAct={act} request={request} actionError={error} onPrepare={() => setError(null)} />
         ))
       )}
     </div>
@@ -164,12 +165,33 @@ function RequestCard({
   request,
   busy,
   onAct,
+  actionError,
+  onPrepare,
 }: {
   request: NeighborhoodRequestView;
   busy: boolean;
   onAct: ReturnType<typeof useNeighbourhood>["act"];
+  actionError: string | null;
+  onPrepare: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [confirmation, setConfirmation] = useState<{
+    action: "cancel" | "complete" | "award"; status: string; title: string; bid?: BidSummary;
+  } | null>(null);
+  const ask = (action: "cancel" | "complete" | "award", bid?: BidSummary) => {
+    onPrepare();
+    setConfirmation({ action, status: request.status, title: request.title, bid: bid ? { ...bid } : undefined });
+  };
+  const currentBid = confirmation?.bid ? request.bids?.find((bid) => bid.id === confirmation.bid?.id) : null;
+  const validConfirmation = Boolean(confirmation && request.permissions.canManage &&
+    confirmation.status === request.status && confirmation.title === request.title &&
+    (confirmation.action === "award"
+      ? request.status === "bidding_closed" && currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+        currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
+        currentBid.providerUserId === confirmation.bid.providerUserId && !request.bids?.some((bid) => bid.status === "accepted")
+      : confirmation.action === "complete" ? ["awarded", "scheduled", "in_progress"].includes(request.status)
+        : ["collecting_interest", "open_for_bids", "bidding_closed"].includes(request.status)));
+
 
   return (
     <article className="p-5" style={card}>
@@ -279,7 +301,7 @@ function RequestCard({
               <Button
                 disabled={busy}
                 onClick={() =>
-                  void onAct({ kind: "transition", requestId: request.id, action: "complete" })
+                  ask("complete")
                 }
                 variant="secondary"
               >
@@ -292,7 +314,7 @@ function RequestCard({
               <Button
                 disabled={busy}
                 onClick={() =>
-                  void onAct({ kind: "transition", requestId: request.id, action: "cancel" })
+                  ask("cancel")
                 }
                 variant="ghost"
               >
@@ -345,7 +367,7 @@ function RequestCard({
                   canAward={request.permissions.canManage && request.status === "bidding_closed"}
                   key={bid.id}
                   onAward={() =>
-                    void onAct({ kind: "award", requestId: request.id, bidId: bid.id })
+                    ask("award", bid)
                   }
                 />
               ))}
@@ -375,6 +397,29 @@ function RequestCard({
             ))}
           </ul>
         </div>
+      ) : null}
+      {confirmation ? (
+        <ConfirmAction
+          open
+          title={confirmation.action === "award" ? "Award this provider?" : confirmation.action === "complete" ? "Mark this request complete?" : "Cancel this request?"}
+          confirmLabel={confirmation.action === "award" ? "Award provider" : confirmation.action === "complete" ? "Mark complete" : "Cancel request"}
+          destructive={confirmation.action === "cancel"}
+          valid={validConfirmation}
+          error={actionError}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => {
+            if (!validConfirmation || busy) return false;
+            return confirmation.action === "award" && confirmation.bid
+              ? onAct({ kind: "award", requestId: request.id, bidId: confirmation.bid.id, expectedBidVersion: confirmation.bid.version })
+              : onAct({ kind: "transition", requestId: request.id, action: confirmation.action as "cancel" | "complete" });
+          }}
+          description={confirmation.action === "award" && confirmation.bid ? <>
+            <p>Award “{confirmation.title}” to {confirmation.bid.providerCompany ?? confirmation.bid.providerName} (quote version {confirmation.bid.version})?</p>
+            <BidPrice bid={confirmation.bid} />
+            <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
+          </> : confirmation.action === "complete" ? <p>Mark “{confirmation.title}” and its agreement complete? All service cycles must already be closed. You may receive a prompt to review the provider.</p>
+            : <p>Cancel “{confirmation.title}”? This ends the request and bidding, and expires submitted quotes. Affected residents and quoting providers may be notified according to their preferences.</p>}
+        />
       ) : null}
     </article>
   );
