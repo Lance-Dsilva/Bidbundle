@@ -107,7 +107,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
     create: (args: Row) => plan("hoaRequestParticipation", "create", args),
     update: (args: Row) => plan("hoaRequestParticipation", "update", args),
   },
-  user: { findUnique: async () => ({ email: "resident@example.test" }) },
+  user: { findUnique: async () => ({ email: "resident@example.test", address: "1 Oak St", latitude: 30.4, longitude: -97.7 }) },
   adminAuditLog: { create: (args: Row) => plan("adminAuditLog", "create", args) },
   $transaction: async (ops: Op[]) => {
     state.transactions += 1;

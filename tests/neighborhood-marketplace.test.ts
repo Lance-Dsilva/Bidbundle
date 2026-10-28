@@ -27,6 +27,8 @@ const state = vi.hoisted(() => ({
   users: [] as Array<Record<string, unknown>>,
   adminGrant: null as Record<string, unknown> | null,
   actorRole: "homeowner",
+  profile: { address: "1 Oak St", latitude: 30.4, longitude: -97.7 } as { address: string | null; latitude: number | null; longitude: number | null },
+  profileReads: [] as unknown[],
   batches: [] as Op[][],
   writes: [] as Op[],
 }));
@@ -77,8 +79,10 @@ vi.mock("@/lib/server/db", () => ({
       updateMany: op("serviceBid", "updateMany"),
     },
     user: {
-      findUnique: async () =>
-        state.providerUser ?? { id: "actor", email: "actor@example.com", role: state.actorRole },
+      findUnique: async (args: { select?: Record<string, unknown> }) => {
+        if (args.select?.address) { state.profileReads.push(args); return state.profile; }
+        return state.providerUser ?? { id: "actor", email: "actor@example.com", role: state.actorRole };
+      },
       findMany: async () => state.users,
     },
     serviceAgreement: { create: op("serviceAgreement", "create"), findUnique: async () => null },
@@ -145,6 +149,8 @@ function collectingRequest(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  state.profile = { address: "1 Oak St", latitude: 30.4, longitude: -97.7 };
+  state.profileReads = [];
   state.batches = [];
   state.writes = [];
   state.community = { ...NEIGHBOURHOOD };
@@ -216,6 +222,52 @@ describe("neighbourhood manager authority", () => {
 /* ── Participation ───────────────────────────────────────────────────────── */
 
 describe("joining and declining", () => {
+  it.each([
+    { address: null, latitude: null, longitude: null },
+    { address: "  ", latitude: 30, longitude: -97 },
+    { address: "1 Oak St", latitude: null, longitude: -97 },
+    { address: "1 Oak St", latitude: 30, longitude: null },
+    { address: "1 Oak St", latitude: 91, longitude: -97 },
+    { address: "1 Oak St", latitude: 30, longitude: -181 },
+    { address: "1 Oak St", latitude: Number.NaN, longitude: -97 },
+    { address: "1 Oak St", latitude: 30, longitude: Infinity },
+  ])("blocks joining without a routeable own profile before any write: %j", async (profile) => {
+    state.profile = profile;
+    await expect(respondToNeighborhoodRequest("resident-b", "request-1", "joined")).rejects.toMatchObject({ status: 409, name: "HomeAddressRequiredError" });
+    expect(state.writes).toEqual([]);
+    expect(state.batches).toEqual([]);
+    expect(state.profileReads).toEqual([{ where: { id: "resident-b" }, select: { address: true, latitude: true, longitude: true } }]);
+  });
+
+  it("requires an address even when repeating an already-joined answer", async () => {
+    state.profile = { address: null, latitude: null, longitude: null };
+    state.participation = { id: "joined", response: "joined" };
+    await expect(respondToNeighborhoodRequest("resident-b", "request-1", "joined")).rejects.toMatchObject({ status: 409 });
+    expect(state.writes).toEqual([]);
+  });
+
+  it("does not query or disclose the profile before membership authorization", async () => {
+    state.membership = null;
+    state.profile = { address: null, latitude: null, longitude: null };
+    await expect(respondToNeighborhoodRequest("outsider", "request-1", "joined")).rejects.toMatchObject({ status: 403 });
+    expect(state.profileReads).toEqual([]);
+    expect(state.writes).toEqual([]);
+  });
+
+  it("allows declining without requiring a profile address", async () => {
+    state.profile = { address: null, latitude: null, longitude: null };
+    state.participation = { id: "participation-1", response: "joined" };
+    await respondToNeighborhoodRequest("resident-b", "request-1", "declined");
+    expect(state.profileReads).toEqual([]);
+    expect(state.writes.some((write) => write.model === "hoaRequestParticipation")).toBe(true);
+  });
+
+  it("accepts zero coordinates as a valid routeable location", async () => {
+    state.profile = { address: " Equator Home ", latitude: 0, longitude: 0 };
+    await respondToNeighborhoodRequest("resident-b", "request-1", "joined");
+    expect(state.writes.some((write) => write.model === "hoaRequestParticipation")).toBe(true);
+  });
+
   it("records a neighbour's join against the homeowner, not a unit", async () => {
     await respondToNeighborhoodRequest("resident-b", "request-1", "joined");
 

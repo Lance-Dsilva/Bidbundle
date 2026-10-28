@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
+import { HomeAddressCompletion } from "@/components/homeowner/HomeAddressCompletion";
 import { Button } from "@/components/ui/Button";
 import type { BidSummary } from "@/lib/hoa-types";
 import type { NeighborhoodRequestView } from "@/lib/neighborhood-types";
@@ -64,7 +65,10 @@ function defaultBiddingDeadline(): string {
 }
 
 export function NeighbourhoodWorkspace() {
-  const { hub, loading, error, busy, missingAddresses, act } = useNeighbourhood();
+  const {
+    hub, loading, error, busy, missingAddresses, act,
+    addressRequiredRequestId, resumeJoin, cancelAddress,
+  } = useNeighbourhood();
 
   if (loading) {
     return (
@@ -107,8 +111,8 @@ export function NeighbourhoodWorkspace() {
         </p>
         {!hub.addressReady ? (
           <p className="mt-2 text-sm" style={{ color: "#b45309" }} role="status">
-            Add your home address to your profile — a provider cannot be sent to your home without
-            it, and requests you join will be held back until it is on file.
+            Add your home address before joining a request so a provider can find your home.
+            You can do this when you choose to join.
           </p>
         ) : null}
       </header>
@@ -151,7 +155,15 @@ export function NeighbourhoodWorkspace() {
         </div>
       ) : (
         hub.requests.map((request) => (
-          <RequestCard key={request.id} busy={busy} onAct={act} request={request} />
+          <RequestCard
+            key={request.id}
+            busy={busy || Boolean(addressRequiredRequestId)}
+            onAct={act}
+            request={request}
+            needsAddress={addressRequiredRequestId === request.id}
+            onAddressComplete={resumeJoin}
+            onAddressCancel={cancelAddress}
+          />
         ))
       )}
     </div>
@@ -162,12 +174,26 @@ function RequestCard({
   request,
   busy,
   onAct,
+  needsAddress,
+  onAddressComplete,
+  onAddressCancel,
 }: {
   request: NeighborhoodRequestView;
   busy: boolean;
   onAct: ReturnType<typeof useNeighbourhood>["act"];
+  needsAddress: boolean;
+  onAddressComplete: () => Promise<void>;
+  onAddressCancel: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const joinButtonId = useId();
+  const hadAddressPrompt = useRef(false);
+  useEffect(() => {
+    if (hadAddressPrompt.current && !needsAddress) {
+      document.getElementById(joinButtonId)?.focus();
+    }
+    hadAddressPrompt.current = needsAddress;
+  }, [needsAddress, joinButtonId]);
 
   return (
     <article className="p-5" style={card}>
@@ -222,6 +248,7 @@ function RequestCard({
       {request.permissions.canRespond ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
+            id={joinButtonId}
             disabled={busy}
             onClick={() =>
               void onAct({ kind: "respond", requestId: request.id, response: "joined" })
@@ -240,6 +267,10 @@ function RequestCard({
             {request.viewerResponse === "declined" ? "You declined" : "No thanks"}
           </Button>
         </div>
+      ) : null}
+
+      {needsAddress ? (
+        <HomeAddressCompletion onComplete={onAddressComplete} onCancel={onAddressCancel} />
       ) : null}
 
       {/* ── Manager: lifecycle ─────────────────────────────────────────── */}

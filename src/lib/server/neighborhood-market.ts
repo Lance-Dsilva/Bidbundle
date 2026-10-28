@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { hasRouteableHomeAddress } from "@/lib/home-address";
 import type { AgreementSummary, BidSummary, OccurrenceSummary } from "@/lib/hoa-types";
 import type {
   NeighborhoodHub,
@@ -12,6 +13,7 @@ import type {
 } from "@/lib/neighborhood-types";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
+import { HomeAddressRequiredError } from "@/lib/server/home-address";
 import { HoaWorkflowError } from "@/lib/server/hoa";
 import { listRequestBids, reconcileNeighborhoodEnrollment } from "@/lib/server/hoa-market";
 import {
@@ -129,6 +131,14 @@ async function recordNeighborhoodResponse(
     throw new HoaWorkflowError(
       "You opened this request, so your home is included. Cancel the request instead.",
     );
+  }
+
+  if (response === "joined") {
+    const profile = await db.user.findUnique({
+      where: { id: userId },
+      select: { address: true, latitude: true, longitude: true },
+    });
+    if (!hasRouteableHomeAddress(profile)) throw new HomeAddressRequiredError();
   }
 
   const alreadyJoined = request.participations.some(
@@ -289,15 +299,6 @@ function permissionsFor(input: {
   };
 }
 
-/** Whether Bundleen holds a routeable address for one account. */
-function addressReady(user: {
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-} | null): boolean {
-  return Boolean(user?.address?.trim()) && user?.latitude != null && user?.longitude != null;
-}
-
 async function serializeRequest(input: {
   row: NeighborhoodRequestRow;
   viewerUserId: string;
@@ -326,7 +327,7 @@ async function serializeRequest(input: {
         .map((item) => ({
           userId: item.user!.id,
           displayName: item.user!.fullName,
-          addressReady: addressReady(item.user),
+          addressReady: hasRouteableHomeAddress(item.user),
           response: item.response,
           isViewer: item.user!.id === viewerUserId,
         }))
@@ -503,7 +504,7 @@ export async function getNeighborhoodHub(userId: string): Promise<NeighborhoodHu
     isManager,
     managerName: manager?.fullName ?? null,
     activeNeighbourCount: neighbourCount,
-    addressReady: addressReady(viewer),
+    addressReady: hasRouteableHomeAddress(viewer),
     requests,
   };
 }

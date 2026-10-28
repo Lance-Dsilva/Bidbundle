@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiFetch, ApiError } from "@/lib/api";
 import type { MissingAddressReport, NeighborhoodHub } from "@/lib/neighborhood-types";
@@ -26,6 +26,8 @@ export function useNeighbourhood() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const [addressRequiredRequestId, setAddressRequiredRequestId] = useState<string | null>(null);
   /** Set when an award is refused because homes cannot be routed to. */
   const [missingAddresses, setMissingAddresses] = useState<MissingAddressReport | null>(null);
 
@@ -52,8 +54,10 @@ export function useNeighbourhood() {
     void refresh();
   }, [refresh]);
 
-  const act = useCallback(
-    async (action: NeighbourhoodAction): Promise<boolean> => {
+  const performAction = useCallback(
+    async (action: NeighbourhoodAction, reportError = true): Promise<boolean> => {
+      if (inFlight.current) return false;
+      inFlight.current = true;
       setBusy(true);
       setError(null);
       setMissingAddresses(null);
@@ -80,21 +84,55 @@ export function useNeighbourhood() {
         await refresh();
         return true;
       } catch (caught) {
+        if (
+          action.kind === "respond" && action.response === "joined" &&
+          caught instanceof ApiError && caught.status === 409 &&
+          caught.body?.code === "HOME_ADDRESS_REQUIRED" && caught.body.addressRequired === true
+        ) {
+          setAddressRequiredRequestId(action.requestId);
+          if (!reportError) throw caught;
+          return false;
+        }
         // A blocked award carries the homes to fix. Surfacing the count and
         // names is the difference between "try again" and a task the manager
         // can actually finish.
         const report = readMissingAddresses(caught);
         if (report) setMissingAddresses(report);
+        if (!reportError) throw caught;
         setError(caught instanceof Error ? caught.message : "That did not work. Try again.");
         return false;
       } finally {
+        inFlight.current = false;
         setBusy(false);
       }
     },
     [refresh],
   );
 
-  return { hub, loading, error, busy, missingAddresses, refresh, act, setError };
+  const act = useCallback(async (action: NeighbourhoodAction) => {
+    if (inFlight.current) return false;
+    if (action.kind === "respond" && action.response === "joined" && hub?.addressReady === false) {
+      setError(null);
+      setAddressRequiredRequestId(action.requestId);
+      return false;
+    }
+    return performAction(action);
+  }, [hub?.addressReady, performAction]);
+
+  const resumeJoin = async () => {
+    if (!addressRequiredRequestId) return;
+    const joined = await performAction({
+      kind: "respond", requestId: addressRequiredRequestId, response: "joined",
+    }, false);
+    if (!joined) throw new Error("A request is already being processed. Please try again.");
+    setAddressRequiredRequestId(null);
+  };
+
+  return {
+    hub, loading, error, busy, missingAddresses, refresh, act, setError,
+    addressRequiredRequestId, resumeJoin,
+    cancelAddress: () => setAddressRequiredRequestId(null),
+  };
 }
 
 /** Pulls the structured missing-address report out of a `409`, if present. */

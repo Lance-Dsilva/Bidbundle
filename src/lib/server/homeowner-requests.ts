@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { hasRouteableHomeAddress } from "@/lib/home-address";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { buildPreferenceAwareNotificationOps } from "@/lib/server/notifications";
@@ -138,15 +139,7 @@ export async function getRequestEligibility(user: {
 
   const neighborhood = live.filter((row) => row.community.type === "neighborhood");
   const active = neighborhood.find((row) => row.status === "active");
-  if (active) {
-    return {
-      canCreate: true,
-      communityId: active.community.id,
-      communityName: active.community.name,
-    };
-  }
-
-  if (neighborhood.length > 0) {
+  if (!active && neighborhood.length > 0) {
     return {
       canCreate: false,
       reason: "membership_pending",
@@ -157,15 +150,28 @@ export async function getRequestEligibility(user: {
     };
   }
 
-  // No community at all. Distinguish "we cannot place you" from "we have not
-  // placed you yet", because only the first one has an action the customer can
-  // take.
+  // Creating a request auto-enrolls its owner, so an existing membership must
+  // not bypass the same routeable-address requirement as an explicit join.
   const profile = await db.user.findUnique({
     where: { id: user.id },
     select: { address: true, latitude: true, longitude: true },
   });
-  const hasLocation =
-    Boolean(profile?.address) && profile?.latitude != null && profile?.longitude != null;
+  const hasLocation = hasRouteableHomeAddress(profile);
+  if (active) {
+    return hasLocation
+      ? {
+          canCreate: true,
+          communityId: active.community.id,
+          communityName: active.community.name,
+        }
+      : {
+          canCreate: false,
+          reason: "no_profile_location",
+          message: "Add and confirm your home address before opening a request so the provider can reach your home.",
+          actionLabel: "Add your address",
+          actionPath: "/app/homeowner/profile",
+        };
+  }
 
   return hasLocation
     ? {
