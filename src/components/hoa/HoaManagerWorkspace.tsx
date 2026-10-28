@@ -168,9 +168,20 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
   };
 
   const transition = (requestId: string, action: string, success: string) =>
-    run(setRequestState, success, () =>
-      sendJson("PATCH", `/api/hoa/requests/${requestId}`, { action }),
-    );
+    run(setRequestState, success, () => {
+      const request = community.requests.find((item) => item.id === requestId);
+      const needsDefaultDeadline =
+        action === "open_bidding" &&
+        request?.kind === "optional_group" &&
+        request.status === "collecting_interest" &&
+        !request.biddingClosesAt;
+      return sendJson("PATCH", `/api/hoa/requests/${requestId}`, {
+        action,
+        ...(needsDefaultDeadline
+          ? { biddingClosesAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }
+          : {}),
+      });
+    });
 
   const award = (requestId: string, bidId: string) =>
     run(setAwardState, "Bid accepted — agreement and visits created.", () =>
@@ -372,7 +383,12 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
           ) : (
             <>
               <Field name="enrollmentClosesAt" label="Enrollment deadline" type="datetime-local" />
-              <Field name="biddingClosesAt" label="Bidding deadline (can set later)" type="datetime-local" required={false} />
+              <div>
+                <Field name="biddingClosesAt" label="Bidding deadline (optional)" type="datetime-local" required={false} />
+                <p className="mt-1 text-xs text-[#64748b]">
+                  Leave blank for a 7-day bidding period starting when you open bidding.
+                </p>
+              </div>
               <Field name="minHomes" label="Minimum homes" type="number" placeholder="3" required={false} />
               <Field name="totalOccurrences" label="Number of visits" type="number" placeholder="1" required={false} />
             </>
@@ -580,6 +596,13 @@ function RequestCard({
           : `Optional · ${request.joinedCount} joined / ${request.declinedCount} declined${request.minHomes ? ` · needs ${request.minHomes}` : ""}`}
         {request.biddingClosesAt ? ` · bids close ${dateLabel(request.biddingClosesAt)}` : ""}
       </p>
+      {request.kind === "optional_group" &&
+      request.status === "collecting_interest" &&
+      !request.biddingClosesAt ? (
+        <p className="mt-2 text-xs text-[#64748b]">
+          Opening bidding sets the deadline to 7 days from that time.
+        </p>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
         {request.status === "draft" ? (
