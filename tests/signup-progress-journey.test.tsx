@@ -44,15 +44,17 @@ function nameToRole() {
 }
 function selectRole(role: "Homeowner" | "Service Provider") { fireEvent.click(screen.getByRole("button", { name: new RegExp(role) })); }
 function nextRole() { fireEvent.click(screen.getByRole("button", { name: /^Continue$/ })); }
-beforeEach(() => { sessionStorage.clear(); vi.clearAllMocks(); state.auth.mockReset().mockResolvedValue({ userId: null }); state.profile.mockReset().mockResolvedValue(null); state.isHoaManager.mockReset().mockResolvedValue(false); });
-afterEach(cleanup);
+beforeEach(() => { sessionStorage.clear(); vi.clearAllMocks(); state.auth.mockReset().mockResolvedValue({ userId: null }); state.profile.mockReset().mockResolvedValue(null); state.isHoaManager.mockReset().mockResolvedValue(false); vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ coverage: "available" }), { status: 200 }))); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("signup progress across each role's complete journey", () => {
   it("starts with the four-step homeowner journey before a role is chosen", () => { render(<NamedSignUp />); progress(1, 4); expect(screen.queryByLabelText("Clerk account form")).not.toBeInTheDocument(); });
 
-  it("keeps homeowner name, role, location and account numbered 1–4 out of 4", () => {
+  it("keeps homeowner name, role, location and account numbered 1–4 out of 4", async () => {
     render(<NamedSignUp />); progress(1, 4); nameToRole(); progress(2, 4);
-    nextRole(); progress(3, 4); fireEvent.click(screen.getByRole("button", { name: "Continue to email verification" }));
+    nextRole(); progress(3, 4); fireEvent.click(screen.getByRole("button", { name: "Check neighborhood availability" }));
+    progress(3, 4); await screen.findByRole("heading", { name: "Your area has neighborhood access" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue to email verification" }));
     progress(4, 4); expect(screen.getByLabelText("Clerk account form")).toBeInTheDocument();
   });
 
@@ -120,6 +122,7 @@ describe("signup role deep links", () => {
     saveOnboardingDraft({ name: { firstName: "Jane", lastName: "Smith" }, role, address: "1 Oak St", neighborhood: "Oakwood", latitude: 30.4, longitude: -97.7, providerBusiness: { companyName: "Company", bio: "", services: ["cleaning"], serviceArea: "Oakwood", licenseNumber: "", insuranceProvider: "" }, providerCoverage: role === "provider" ? { label: "Oakwood", centerLatitude: 30.4, centerLongitude: -97.7, radiusMiles: 5, formattedAddress: "1 Oak St", locality: "Oakwood", region: null, postalCode: null, countryCode: null } : null, completionAuthorized: true });
     render(await SignUpPage({ searchParams: Promise.resolve({ role: role === "homeowner" ? "provider" : "homeowner" }) }));
     const total = role === "homeowner" ? 4 : 6;
+    if (role === "homeowner") { progress(3, 4); await screen.findByRole("heading", { name: "Your area has neighborhood access" }); fireEvent.click(screen.getByRole("button", { name: "Continue to email verification" })); }
     progress(total, total); fireEvent.click(screen.getByRole("button", { name: "Edit details" })); progress(2, total);
     expect(screen.getByRole("button", { name: role === "homeowner" ? /Homeowner/ : /Service Provider/ })).toHaveAttribute("aria-pressed", "true");
   });

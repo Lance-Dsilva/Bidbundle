@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { BundleenAuthLoader } from "@/components/auth/BundleenAuthLoader";
 import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
+import { HomeownerCoverageStep } from "@/components/onboarding/HomeownerCoverageStep";
 import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessStep";
 import { ProviderCoverageStep } from "@/components/onboarding/ProviderCoverageStep";
 import { RoleStep } from "@/components/onboarding/RoleStep";
@@ -46,9 +47,10 @@ type SignUpStage =
   | "location"
   | "provider"
   | "coverage"
-  | "account";
+  | "account"
+  | "homeowner_coverage";
 
-type CountedSignUpStage = Exclude<SignUpStage, "session">;
+type CountedSignUpStage = Exclude<SignUpStage, "session" | "homeowner_coverage">;
 const SIGN_UP_STAGES: Record<PublicRole, readonly CountedSignUpStage[]> = {
   homeowner: ["name", "role", "location", "account"],
   provider: ["name", "role", "location", "provider", "coverage", "account"],
@@ -107,7 +109,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
   const stepCount = stages.length;
   // Missing name data renders the name screen; session confirmation is outside
   // the numbered journey and returns before any progress indicator is shown.
-  const progressStage = !name || stage === "session" ? "name" : stage;
+  const progressStage = !name || stage === "session" ? "name" : stage === "homeowner_coverage" ? "location" : stage;
   const stepNumber = stages.indexOf(progressStage) + 1;
 
   useEffect(() => {
@@ -126,7 +128,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
       setCoords({ lat: draft.latitude, lng: draft.longitude });
       setProviderBusiness(draft.providerBusiness);
       setProviderCoverage(draft.providerCoverage ?? null);
-      setStage(alreadyVerified ? "session" : "account");
+      setStage(alreadyVerified ? "session" : draft.role === "homeowner" ? "homeowner_coverage" : "account");
     } else if (alreadyVerified) {
       setStage("session");
     }
@@ -201,7 +203,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
     } else continueToAccount(location);
   };
 
-  const continueToAccount = (location?: VerifiedLocation) => {
+  const continueToAccount = (location?: VerifiedLocation, homeownerCoverageConfirmed = false) => {
     if (!name) return;
     const finalCoords = location
       ? { lat: location.latitude, lng: location.longitude }
@@ -209,6 +211,17 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
     const finalAddress = location?.address ?? address;
     const finalNeighborhood = location?.neighborhood ?? neighborhood;
     if (!finalCoords || !finalAddress.trim()) return;
+    if (role === "homeowner" && !homeownerCoverageConfirmed) {
+      // Retain the selected address if this advisory check is interrupted,
+      // without authorizing authenticated completion before the decision.
+      saveOnboardingDraft({
+        name, role, address: finalAddress, neighborhood: finalNeighborhood,
+        latitude: finalCoords.lat, longitude: finalCoords.lng, providerBusiness,
+        providerCoverage: null, completionAuthorized: false,
+      });
+      setStage("homeowner_coverage");
+      return;
+    }
     // A provider cannot reach Clerk's account step without a coverage circle;
     // the step's own Continue button is already disabled without one, and this
     // is the second gate for a resumed draft that predates the step.
@@ -269,8 +282,14 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
             onClick={() => {
               setSessionAccepted(true);
               if (draft) {
-                saveOnboardingDraft({ ...draft, completionAuthorized: true });
-                router.replace("/get-started/profile");
+                if (draft.role === "homeowner") {
+                  // Session consent alone cannot skip the pre-account coverage notice.
+                  saveOnboardingDraft({ ...draft, completionAuthorized: false });
+                  setStage("homeowner_coverage");
+                } else {
+                  saveOnboardingDraft({ ...draft, completionAuthorized: true });
+                  router.replace("/get-started/profile");
+                }
               } else {
                 setStage("name");
               }
@@ -401,8 +420,31 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
           onNeighborhoodDetected={setNeighborhood}
           stepNumber={stepNumber}
           stepCount={stepCount}
-          confirmLabel={role === "provider" ? "Continue to business details" : "Continue to email verification"}
+          confirmLabel={role === "provider" ? "Continue to business details" : "Check neighborhood availability"}
         />
+      </div>
+    );
+  }
+
+  if (stage === "homeowner_coverage") {
+    // No account UI is mounted until the latest address check has completed and
+    // the homeowner has deliberately continued through its advisory result.
+    return (
+      <div className="auth-step-enter w-full max-w-xl rounded-[22px] border border-[#e4e7ec] bg-white px-7 shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9">
+        {coords && address.trim() ? (
+          <HomeownerCoverageStep
+            address={address} latitude={coords.lat} longitude={coords.lng}
+            onBack={() => setStage("location")}
+            onContinue={() => continueToAccount(undefined, true)}
+            stepNumber={stepNumber} stepCount={stepCount}
+            continueLabel={alreadyVerified ? "Continue with this account" : "Continue to email verification"}
+          />
+        ) : (
+          <section className="py-7">
+            <p role="alert" className="text-sm text-red-700">Confirm your address before checking neighborhood availability.</p>
+            <Button className="mt-4 min-h-11" onClick={() => setStage("location")} variant="warm">Edit address</Button>
+          </section>
+        )}
       </div>
     );
   }
