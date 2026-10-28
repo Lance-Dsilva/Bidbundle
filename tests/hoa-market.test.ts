@@ -189,7 +189,7 @@ describe("awardBid", () => {
       status: "submitted",
       amountCents: 45_000,
       currency: "usd",
-      pricingBasis: "per_visit",
+      pricingBasis: "total",
       perHomeCents: null,
       proposedStartDate: null,
       scope: "Mow and edge",
@@ -217,6 +217,27 @@ describe("awardBid", () => {
       { user: { id: "resident-1", email: "resident1@example.com" } },
     ];
     state.emailOptOutUserIds = [];
+  });
+
+  it.each(["per_home", "per_visit"])("refuses a new legacy %s award before all writes", async (pricingBasis) => {
+    state.bid = { ...state.bid!, pricingBasis, amountCents: 45000 };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+    expect(state.bid).toMatchObject({ pricingBasis, amountCents: 45000 });
+  });
+
+  it.each(["per_home", "per_visit"])("keeps accepted legacy %s agreement idempotence", async (pricingBasis) => {
+    state.bid = { ...state.bid!, pricingBasis };
+    state.request = { ...state.request!, status: "awarded", agreement: { id: "historic-agreement", bidId: "bid-1" } };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).resolves.toBe("historic-agreement");
+    expect(state.batches).toEqual([]);
+  });
+
+  it("checks manager authorization before exposing the legacy pricing refusal", async () => {
+    state.managerAssignment = null;
+    state.bid = { ...state.bid!, pricingBasis: "per_visit" };
+    await expect(awardBid("outsider", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 403 });
+    expect(state.batches).toEqual([]);
   });
 
   it("performs the entire award as one transaction batch", async () => {

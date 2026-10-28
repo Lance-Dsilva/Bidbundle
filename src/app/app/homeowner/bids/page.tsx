@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
 
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useHomeownerBids } from "@/hooks/useHomeownerBids";
 import { useNeighbourhood } from "@/hooks/useNeighbourhood";
@@ -36,9 +38,7 @@ const STATUS_TONES: Record<string, CSSProperties> = {
 /** A live quote is what entitles a customer to message the provider. */
 const CONTACTABLE = new Set(["submitted", "accepted"]);
 
-function money(cents: number): string {
-  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
+
 
 export default function HomeownerBidsPage() {
   const { bids, loading, error, refresh } = useHomeownerBids();
@@ -49,7 +49,7 @@ export default function HomeownerBidsPage() {
   const [openError, setOpenError] = useState<string | null>(null);
 
   const visible = useMemo(
-    () => bids.filter((bid) => filter === "all" || bid.status === filter),
+    () => bids.filter((bid) => filter === "all" || bid.status === filter).sort(compareBidQuotes),
     [bids, filter],
   );
 
@@ -158,8 +158,7 @@ export default function HomeownerBidsPage() {
                   </p>
                   <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>
                     {bid.providerCompany ?? bid.providerName}
-                    {bid.providerVerified ? " · verified" : ""} · {money(bid.amountCents)} ·{" "}
-                    {bid.pricingBasis.replace("_", " ")}
+                    {bid.providerVerified ? " · verified" : ""}
                   </p>
                 </div>
                 <span
@@ -169,6 +168,8 @@ export default function HomeownerBidsPage() {
                   {bid.status}
                 </span>
               </div>
+              <div className="mt-2"><BidPrice bid={bid} /></div>
+              {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={bid.requestStatus} /> : null}
               <p className="mt-2 text-xs" style={{ color: "var(--ink-700)" }}>
                 {bid.scope}
               </p>
@@ -176,7 +177,7 @@ export default function HomeownerBidsPage() {
                 {bid.canAward ? (
                   <button
                     className="rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                    disabled={busy}
+                    disabled={busy || bid.pricingBasis !== "total"}
                     onClick={() => void award(bid.requestId, bid.id)}
                     style={{ background: "var(--terracotta-600)" }}
                     type="button"

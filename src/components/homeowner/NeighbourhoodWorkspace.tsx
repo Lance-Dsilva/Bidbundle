@@ -2,6 +2,8 @@
 
 import { useState, type CSSProperties } from "react";
 
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import { Button } from "@/components/ui/Button";
 import type { BidSummary } from "@/lib/hoa-types";
 import type { NeighborhoodRequestView } from "@/lib/neighborhood-types";
@@ -335,9 +337,10 @@ function RequestCard({
           </button>
           {expanded ? (
             <ul className="mt-2 space-y-2">
-              {request.bids.map((bid) => (
+              {[...request.bids].sort(compareBidQuotes).map((bid) => (
                 <BidRow
                   bid={bid}
+                  requestStatus={request.status}
                   busy={busy}
                   canAward={request.permissions.canManage && request.status === "bidding_closed"}
                   key={bid.id}
@@ -379,11 +382,13 @@ function RequestCard({
 
 function BidRow({
   bid,
+  requestStatus,
   canAward,
   busy,
   onAward,
 }: {
   bid: BidSummary;
+  requestStatus: string;
   canAward: boolean;
   busy: boolean;
   onAward: () => void;
@@ -403,14 +408,12 @@ function BidRow({
               </span>
             ) : null}
           </p>
-          <p className="text-xs" style={{ color: "var(--ink-400)" }}>
-            {money(bid.amountCents)} {bid.pricingBasis.replace("_", " ")}
-            {bid.perHomeCents != null ? ` · ${money(bid.perHomeCents)} per home` : ""}
-            {bid.estimatedDurationLabel ? ` · ${bid.estimatedDurationLabel}` : ""}
-          </p>
+          <BidPrice bid={bid} />
+          {bid.estimatedDurationLabel ? <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>{bid.estimatedDurationLabel}</p> : null}
+          {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={requestStatus} /> : null}
         </div>
         {canAward && bid.status === "submitted" ? (
-          <Button disabled={busy} onClick={onAward} variant="warm">
+          <Button disabled={busy || bid.pricingBasis !== "total"} onClick={onAward} variant="warm">
             Award this provider
           </Button>
         ) : (

@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import type {
   AgreementSummary,
   BidSummary,
@@ -49,6 +50,7 @@ import {
   contentHash,
   type NotificationIntent,
 } from "@/lib/server/notifications";
+import { MAX_BID_AMOUNT_CENTS } from "@/lib/validation/hoa";
 import type {
   AwardInput,
   BidSubmitInput,
@@ -151,6 +153,10 @@ type BidRow = {
   validUntil: Date | null;
   version: number;
   submittedAt: Date;
+  request?: {
+    totalOccurrences: number;
+    _count: { participations: number };
+  };
   provider: {
     fullName: string;
     providerProfile: {
@@ -162,6 +168,12 @@ type BidRow = {
 };
 
 const bidInclude = {
+  request: {
+    select: {
+      totalOccurrences: true,
+      _count: { select: { participations: { where: { response: "joined" } } } },
+    },
+  },
   provider: {
     select: {
       fullName: true,
@@ -188,6 +200,8 @@ function serializeBid(row: BidRow): BidSummary {
     currency: row.currency,
     pricingBasis: row.pricingBasis,
     perHomeCents: row.perHomeCents,
+    homeCount: row.request?._count?.participations,
+    totalOccurrences: row.request?.totalOccurrences,
     proposedStartDate: row.proposedStartDate?.toISOString() ?? null,
     estimatedDurationLabel: row.estimatedDurationLabel,
     scope: row.scope,
@@ -1316,6 +1330,11 @@ export async function submitBid(
   const gate = await requireProvider(providerUserId);
   const now = new Date();
 
+  if (input.pricingBasis !== "total" || input.perHomeCents != null ||
+      !Number.isSafeInteger(input.amountCents) || input.amountCents < 0 || input.amountCents > MAX_BID_AMOUNT_CENTS) {
+    throw new HoaWorkflowError("Quote the total price for the whole job. Per-home and per-visit amounts are calculated for comparison.", 400);
+  }
+
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     select: {
@@ -1377,8 +1396,8 @@ export async function submitBid(
   const data = {
     status: "submitted" as const,
     amountCents: input.amountCents,
-    pricingBasis: input.pricingBasis,
-    perHomeCents: input.perHomeCents ?? null,
+    pricingBasis: "total" as const,
+    perHomeCents: null,
     proposedStartDate: input.proposedStartDate ? new Date(input.proposedStartDate) : null,
     estimatedDurationLabel: input.estimatedDurationLabel,
     scope: input.scope,
@@ -1509,10 +1528,10 @@ export async function listRequestBids(
 
   const rows = await db.serviceBid.findMany({
     where: { requestId, status: { in: ["submitted", "accepted", "rejected"] } },
-    orderBy: [{ status: "asc" }, { amountCents: "asc" }],
+    orderBy: { id: "asc" },
     include: bidInclude,
   });
-  return rows.map(serializeBid);
+  return rows.map(serializeBid).sort(compareBidQuotes);
 }
 
 /* ── Award ───────────────────────────────────────────────────────────────── */
@@ -1644,6 +1663,12 @@ export async function awardBid(
   }
   if (bid.status !== "submitted") {
     throw new HoaWorkflowError("Only a submitted bid can be accepted.");
+  }
+  if (bid.pricingBasis !== "total") {
+    throw new HoaWorkflowError(
+      "This legacy quote uses unit pricing and cannot be awarded. Bidding has closed; open a new request to collect a whole-job total.",
+      409,
+    );
   }
   const now = new Date();
   if (bid.validUntil && bid.validUntil <= now) {
@@ -2420,12 +2445,12 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
             requestId: { in: requestIds },
             status: { in: ["submitted", "accepted", "rejected"] },
           },
-          orderBy: { amountCents: "asc" },
+          orderBy: { id: "asc" },
           include: bidInclude,
         })
       : [];
     const bidsByRequest: Record<string, BidSummary[]> = {};
-    for (const bid of bids) {
+    for (const bid of bids.sort(compareBidQuotes)) {
       (bidsByRequest[bid.requestId] ??= []).push(serializeBid(bid));
     }
 
@@ -2535,12 +2560,12 @@ export async function getResidentHoaHub(userId: string): Promise<ResidentHoaHub>
             requestId: { in: requestIds },
             status: { in: ["submitted", "accepted", "rejected"] },
           },
-          orderBy: { amountCents: "asc" },
+          orderBy: { id: "asc" },
           include: bidInclude,
         })
       : [];
     const bidsByRequest: Record<string, BidSummary[]> = {};
-    for (const bid of bids) {
+    for (const bid of bids.sort(compareBidQuotes)) {
       (bidsByRequest[bid.requestId] ??= []).push(serializeBid(bid));
     }
 

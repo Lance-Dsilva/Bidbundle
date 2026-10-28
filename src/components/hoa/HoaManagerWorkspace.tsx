@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
+
 import type {
   BidSummary,
   HoaManagerCommunity,
@@ -615,7 +618,7 @@ function RequestCard({
             Bids ({bids.length})
           </h4>
           <ul className="mt-2 space-y-2">
-            {bids.map((bid) => (
+            {[...bids].sort(compareBidQuotes).map((bid) => (
               <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3 text-sm" key={bid.id}>
                 <div className="min-w-0">
                   <p className="font-medium text-[#102a43]">
@@ -626,13 +629,13 @@ function RequestCard({
                       </span>
                     ) : null}
                   </p>
-                  <p className="mt-0.5 text-xs text-[#64748b]">
-                    {money(bid.amountCents, bid.currency)}{" "}
-                    {bid.pricingBasis === "per_home" ? "per home" : bid.pricingBasis === "per_visit" ? "per visit" : "total"}
-                    {bid.cadenceLabel ? ` · ${bid.cadenceLabel}` : ""}
-                    {bid.proposedStartDate ? ` · starts ${dateLabel(bid.proposedStartDate)}` : ""}
-                    {` · v${bid.version}`}
+                  <BidPrice bid={bid} />
+                  <p className="mt-1 text-xs text-[#64748b]">
+                    {bid.cadenceLabel ? `${bid.cadenceLabel} · ` : ""}
+                    {bid.proposedStartDate ? `starts ${dateLabel(bid.proposedStartDate)} · ` : ""}
+                    v{bid.version}
                   </p>
+                  {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={request.status} /> : null}
                   <p className="mt-1 line-clamp-2 text-xs text-[#64748b]">{bid.scope}</p>
                 </div>
                 <div>
@@ -640,10 +643,10 @@ function RequestCard({
                     <Badge tone="green">Accepted</Badge>
                   ) : bid.status === "rejected" ? (
                     <Badge tone="gray">Rejected</Badge>
-                  ) : request.status === "bidding_closed" && !accepted ? (
+                  ) : request.status === "bidding_closed" && !accepted && bid.status === "submitted" ? (
                     <button
                       className="rounded-lg bg-[#0f8f83] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                      disabled={busy}
+                      disabled={busy || bid.pricingBasis !== "total"}
                       onClick={() => void onAward(request.id, bid.id)}
                       type="button"
                     >
