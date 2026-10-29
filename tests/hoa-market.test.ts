@@ -84,6 +84,7 @@ vi.mock("@/lib/server/db", () => ({
     homeownerProfile: {
       findMany: async () => state.emailOptOutUserIds.map((userId) => ({ userId })),
     },
+    $executeRaw: (query: unknown) => ({ model: "managerAuthority", action: "assert", args: { query } }),
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;
@@ -170,6 +171,8 @@ describe("awardBid", () => {
       id: "request-1",
       communityId: "hoa-1",
       status: "bidding_closed",
+      updatedAt: new Date(),
+      participantsLockedAt: new Date(),
       kind: "compulsory_recurring",
       title: "Biweekly gardening",
       recurrenceIntervalDays: 14,
@@ -283,11 +286,16 @@ describe("awardBid", () => {
     expect((notifications.args as { skipDuplicates?: boolean }).skipDuplicates).toBe(true);
   });
 
-  it("refuses to award while bidding is still open", async () => {
+  it("accepts an authorized award while bidding is still open", async () => {
     state.request = { ...state.request!, status: "open_for_bids" };
-    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toThrow(
-      HoaWorkflowError,
-    );
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).resolves.toBeTypeOf("string");
+    expect(state.batches).toHaveLength(1);
+    expect(state.batches[0][0]).toMatchObject({ model: "hoaServiceRequest", action: "update", args: { where: { status: "open_for_bids", updatedAt: state.request.updatedAt, participantsLockedAt: { not: null } }, data: { status: "awarded", biddingClosesAt: expect.any(Date) } } });
+    expect(state.batches[0][1]).toMatchObject({ model: "managerAuthority", action: "assert" });
+  });
+  it("retains refusal when participating homes have not been locked", async () => {
+    state.request = { ...state.request!, status: "open_for_bids", participantsLockedAt: null };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toThrow(/locked/);
     expect(state.batches).toHaveLength(0);
   });
 

@@ -11,6 +11,7 @@ function matches(actual: unknown, expected: unknown): boolean {
     if (key === "OR") return (value as unknown[]).some((part) => matches(actual, part));
     if (key === "gt") return Number(actual) > Number(value);
     if (key === "not") return !matches(actual, value);
+    if (key === "is") return matches(actual, value);
     return matches((actual as Row | null)?.[key], value);
   });
 }
@@ -22,7 +23,7 @@ function execute(model: string, args: Row) {
     if (!matches(actual, args.where)) throw { code: "P2025" };
     const data = args.data as Row;
     Object.assign(state.bid, data, typeof data.version === "object" ? { version: Number(state.bid.version) + Number((data.version as Row).increment) } : {});
-  } else if (model === "request") Object.assign(state.request, args.data);
+  } else if (model === "request") { if (!matches(state.request, args.where)) throw { code: "P2025" }; Object.assign(state.request, args.data); }
   else if (model === "agreement") { state.agreement = args.data as Row; state.request.agreement = { id: state.agreement.id, bidId: state.agreement.bidId }; }
   state.effects.push(model);
   return state.bid;
@@ -47,6 +48,8 @@ vi.mock("@/lib/server/db", () => ({ db: {
   serviceOccurrence: { createMany: (args: Row) => plan("occurrences", args) },
   serviceVisit: { createMany: (args: Row) => plan("visits", args) },
   adminAuditLog: { create: (args: Row) => plan("audit", args) },
+  $queryRaw: (query: unknown) => plan("parentLock", { query }),
+  $executeRaw: (query: unknown) => plan("authority", { query }),
   $transaction: async (ops: Op[]) => {
     // Snapshot after any independently committed competing action, before this
     // batch executes. A losing claim rolls back only this batch's effects.
@@ -62,7 +65,7 @@ import { awardBid, submitBid, withdrawBid } from "@/lib/server/hoa-market";
 const input = { amountCents: 20000, pricingBasis: "total", perHomeCents: null, scope: "Updated whole job", exclusions: null, cadenceLabel: null, proposedStartDate: null, estimatedDurationLabel: null, validUntil: null } satisfies BidSubmitInput;
 beforeEach(() => {
   state.bid = { id: "bid", requestId: "request", providerUserId: "provider", status: "submitted", version: 3, amountCents: 12345, pricingBasis: "total", perHomeCents: null, currency: "eur", proposedStartDate: null, validUntil: null, scope: "All homes", cadenceLabel: null, exclusions: null, estimatedDurationLabel: null, submittedAt: new Date(), provider: { fullName: "Provider", providerProfile: { companyName: "Company" } } };
-  state.request = { id: "request", communityId: "community", title: "Cleaning", category: "cleaning", status: "bidding_closed", totalOccurrences: 2, recurrenceIntervalDays: null, startDate: null, biddingClosesAt: new Date(Date.now() + 86400000), community: { id: "community", type: "hoa", status: "active", name: "Oakwood" }, participations: [{ unitId: "unit", userId: null }], agreement: null };
+  state.request = { id: "request", communityId: "community", title: "Cleaning", category: "cleaning", status: "bidding_closed", updatedAt: new Date(), participantsLockedAt: new Date(), totalOccurrences: 2, recurrenceIntervalDays: null, startDate: null, biddingClosesAt: new Date(Date.now() + 86400000), community: { id: "community", type: "hoa", status: "active", name: "Oakwood" }, participations: [{ unitId: "unit", userId: null }], agreement: null };
   state.agreement = null; state.effects = []; state.claims = []; state.beforeWrite = null; state.failure = null; state.failModel = null;
 });
 
@@ -99,10 +102,30 @@ describe("confirmed quote version validation", () => {
     await expect(awardBid("manager", "request", { bidId: "bid", expectedBidVersion: 3 })).rejects.toMatchObject({ status: 409 });
     expect(state.bid.status).toBe("submitted"); expect(state.agreement).toBeNull(); expect(state.effects).toEqual([]);
   });
-  it("claims the exact quote before creating its agreement, visits, audit or notifications", async () => {
+  it("claims the parent snapshot and authority before the exact quote and materialized effects", async () => {
     await awardBid("manager", "request", { bidId: "bid", expectedBidVersion: 3 });
-    expect(state.effects[0]).toBe("bid"); expect(state.effects).toEqual(expect.arrayContaining(["agreement", "visits", "audit", "notification"]));
+    expect(state.effects.slice(0, 3)).toEqual(["request", "authority", "bid"]); expect(state.effects).toEqual(expect.arrayContaining(["agreement", "visits", "audit", "notification"]));
     expect(state.agreement).toMatchObject({ amountCents: 12345, currency: "eur", bidId: "bid" });
+  });
+  it("accepts an open-bidding quote with the same whole-job contract and closes its future deadline", async () => {
+    state.request.status = "open_for_bids"; const before = new Date();
+    await awardBid("manager", "request", { bidId: "bid", expectedBidVersion: 3 });
+    expect(state.request.status).toBe("awarded"); expect(+(state.request.biddingClosesAt as Date)).toBeGreaterThanOrEqual(+before); expect(+(state.request.biddingClosesAt as Date)).toBeLessThanOrEqual(Date.now());
+    expect(state.agreement).toMatchObject({ amountCents: 12345, currency: "eur", bidId: "bid", pricingBasis: "total" });
+  });
+  it("loses a changed parent audience snapshot before making a child claim", async () => {
+    state.beforeWrite = () => { state.request.updatedAt = new Date(+(state.request.updatedAt as Date) + 1); };
+    await expect(awardBid("manager", "request", { bidId: "bid", expectedBidVersion: 3 })).rejects.toMatchObject({ status: 409 });
+    expect(state.effects).toEqual([]); expect(state.bid.status).toBe("submitted"); expect(state.agreement).toBeNull();
+  });
+  it.each(["P1701", "P1702", "P1703"])("rolls back a parent claim when a prepared SQL guard returns %s", async (code) => {
+    state.failure = { code: "P2010", meta: { driverAdapterError: { cause: { originalCode: code } } } }; state.failModel = code === "P1702" ? "bid" : "authority";
+    await expect(awardBid("manager", "request", { bidId: "bid", expectedBidVersion: 3 })).rejects.toMatchObject({ status: 409 });
+    expect(state.request.status).toBe("bidding_closed"); expect(state.bid.status).toBe("submitted"); expect(state.effects).toEqual([]); expect(state.agreement).toBeNull();
+  });
+  it("does not conceal an unrelated SQL constraint error as a retryable guard", async () => {
+    const error = { code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "23514", constraint: "Unrelated_constraint" } } } }; state.failure = error; state.failModel = "authority";
+    await expect(awardBid("manager", "request", { bidId: "bid", expectedBidVersion: 3 })).rejects.toBe(error); expect(state.effects).toEqual([]); expect(state.request.status).toBe("bidding_closed");
   });
 });
 

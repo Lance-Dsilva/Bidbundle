@@ -155,7 +155,7 @@ export function NeighbourhoodWorkspace() {
         </div>
       ) : (
         hub.requests.map((request) => (
-          <RequestCard key={request.id} busy={busy} onAct={act} request={request} actionError={error} ownerError={ownerError?.requestId === request.id ? ownerError : null} ownerSuccess={ownerSuccess?.requestId === request.id ? ownerSuccess.action : null} onPrepare={() => { setError(null); clearOwnerFeedback?.(); }} />
+          <RequestCard key={request.id} busy={busy} onAct={act} request={request} managerName={hub.managerName} actionError={error} ownerError={ownerError?.requestId === request.id ? ownerError : null} ownerSuccess={ownerSuccess?.requestId === request.id ? ownerSuccess.action : null} onPrepare={() => { setError(null); clearOwnerFeedback?.(); }} />
         ))
       )}
     </div>
@@ -167,6 +167,7 @@ function RequestCard({
   busy,
   onAct,
   actionError,
+  managerName,
   ownerError,
   ownerSuccess,
   onPrepare,
@@ -175,11 +176,12 @@ function RequestCard({
   busy: boolean;
   onAct: ReturnType<typeof useNeighbourhood>["act"];
   actionError: string | null;
+  managerName: string | null;
   ownerError: { message: string; fields?: Record<string, string> } | null;
   ownerSuccess: "edit" | "cancel" | null;
   onPrepare: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const editButton = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -197,20 +199,23 @@ function RequestCard({
     request.bidCount === 0 && request.agreement === null;
   const finishEditing = () => setEditing(false);
   const [confirmation, setConfirmation] = useState<{
-    action: "cancel" | "owner_cancel" | "complete" | "award"; status: string; title: string; joinedCount: number; bid?: BidSummary;
+    action: "cancel" | "owner_cancel" | "complete" | "award"; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary;
   } | null>(null);
   const ask = (action: "cancel" | "owner_cancel" | "complete" | "award", bid?: BidSummary) => {
     onPrepare();
-    setConfirmation({ action, status: request.status, title: request.title, joinedCount: request.joinedCount, bid: bid ? { ...bid } : undefined });
+    setConfirmation({ action, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences, bid: bid ? { ...bid } : undefined });
   };
   const currentBid = confirmation?.bid ? request.bids?.find((bid) => bid.id === confirmation.bid?.id) : null;
   const validConfirmation = Boolean(confirmation &&
     (confirmation.action === "owner_cancel" ? canEditOwn && confirmation.joinedCount === request.joinedCount : request.permissions.canManage) &&
     confirmation.status === request.status && confirmation.title === request.title &&
     (confirmation.action === "award"
-      ? request.status === "bidding_closed" && currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+      ? ["open_for_bids", "bidding_closed"].includes(request.status) &&
+        confirmation.joinedCount === request.joinedCount && confirmation.totalOccurrences === request.totalOccurrences &&
+        currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
         currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
-        currentBid.providerUserId === confirmation.bid.providerUserId && !request.bids?.some((bid) => bid.status === "accepted")
+        currentBid.providerUserId === confirmation.bid.providerUserId &&
+        currentBid.homeCount === confirmation.bid.homeCount && currentBid.totalOccurrences === confirmation.bid.totalOccurrences && !request.bids?.some((bid) => bid.status === "accepted")
       : confirmation.action === "complete" ? ["awarded", "scheduled", "in_progress"].includes(request.status)
         : confirmation.action === "owner_cancel" ? ["draft", "collecting_interest"].includes(request.status)
           : ["collecting_interest", "open_for_bids", "bidding_closed"].includes(request.status)));
@@ -396,11 +401,21 @@ function RequestCard({
         </div>
       ) : null}
 
+      {request.isOwner && !request.permissions.canManage && ["collecting_interest", "open_for_bids", "bidding_closed"].includes(request.status) ? (
+        <p className="mt-4 text-sm leading-6" style={{ color: "var(--ink-700)" }}>
+          {managerName
+            ? `${managerName}, your neighbourhood manager, chooses the provider. You can compare the quotes, but only the manager can award the work.`
+            : "No neighbourhood manager is assigned yet. Bundleen must assign a manager before a provider can be chosen. You can still compare any available quotes."}
+        </p>
+      ) : null}
+
       {/* ── Transparent bid comparison ─────────────────────────────────── */}
       {request.permissions.canViewBids && request.bids && request.bids.length > 0 ? (
         <div className="mt-4">
           <button
-            className="text-xs font-semibold underline"
+            aria-expanded={expanded}
+            aria-controls={`${headingId}-quotes`}
+            className="min-h-11 text-xs font-semibold underline"
             onClick={() => setExpanded((current) => !current)}
             style={{ color: "var(--ink-700)" }}
             type="button"
@@ -409,13 +424,13 @@ function RequestCard({
             {request.bids.length === 1 ? "quote" : "quotes"}
           </button>
           {expanded ? (
-            <ul className="mt-2 space-y-2">
+            <ul id={`${headingId}-quotes`} className="mt-2 space-y-2">
               {[...request.bids].sort(compareBidQuotes).map((bid) => (
                 <BidRow
                   bid={bid}
                   requestStatus={request.status}
                   busy={busy}
-                  canAward={request.permissions.canManage && request.status === "bidding_closed"}
+                  canAward={request.permissions.canManage && ["open_for_bids", "bidding_closed"].includes(request.status) && !request.bids?.some((item) => item.status === "accepted")}
                   key={bid.id}
                   onAward={() =>
                     ask("award", bid)
@@ -468,6 +483,8 @@ function RequestCard({
           description={confirmation.action === "award" && confirmation.bid ? <>
             <p>Award “{confirmation.title}” to {confirmation.bid.providerCompany ?? confirmation.bid.providerName} (quote version {confirmation.bid.version})?</p>
             <BidPrice bid={confirmation.bid} />
+            <p>Current request scope: {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}; {confirmation.totalOccurrences} {confirmation.totalOccurrences === 1 ? "visit" : "visits"} per home.</p>
+            <p>{confirmation.status === "open_for_bids" ? "Awarding now ends bidding immediately. No more quotes can be submitted." : "Bidding is already closed."} This choice cannot be undone here.</p>
             <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
           </> : confirmation.action === "complete" ? <p>Mark “{confirmation.title}” and its agreement complete? All service cycles must already be closed. You may receive a prompt to review the provider.</p>
             : confirmation.action === "owner_cancel" ? <p>Cancel “{confirmation.title}” for {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}? This ends sign-ups and cannot be undone. Affected residents and the neighbourhood manager may be notified according to their preferences.</p>
@@ -647,7 +664,7 @@ function BidRow({
           {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={requestStatus} /> : null}
         </div>
         {canAward && bid.status === "submitted" ? (
-          <Button disabled={busy || bid.pricingBasis !== "total"} onClick={onAward} variant="warm">
+          <Button className="min-h-11" disabled={busy || bid.pricingBasis !== "total"} onClick={onAward} variant="warm">
             Award this provider
           </Button>
         ) : (

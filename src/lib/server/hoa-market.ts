@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import type {
   AgreementSummary,
@@ -71,6 +71,34 @@ import type {
  * Everything here re-derives authority from live Neon rows on every call —
  * a request/unit/bid id in the URL never grants access by itself.
  */
+
+/** Parent-before-child ordering is part of each batch, never an autocommit lock. */
+function lockRequestForBid(requestId: string) {
+  return db.$queryRaw(Prisma.sql`SELECT "id" FROM "HoaServiceRequest" WHERE "id" = ${requestId} FOR UPDATE`);
+}
+
+function assertPreparedManager(userId: string, requestId: string, via: string) {
+  return db.$executeRaw(Prisma.sql`SELECT "bundleen_assert_request_manager"(${userId}, ${requestId}, ${via})`);
+}
+
+/** Only our named SQL guard codes become a retryable workflow conflict. */
+function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
+  const object = (value: unknown): Record<string, unknown> | null =>
+    typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
+  const entry = object(error);
+  const meta = object(entry?.meta);
+  const cause = object(object(meta?.driverAdapterError)?.cause);
+  const directCause = object(entry?.cause);
+  const codes = [entry?.code, meta?.code, cause?.originalCode, cause?.code, directCause?.code];
+  if (codes.includes("P1701")) return new HoaWorkflowError("This bid or bidding window changed. Refresh before trying again.", 409);
+  if (codes.includes("P1702")) return new HoaWorkflowError("This quote or provider changed since you reviewed it. Refresh and review the current quote.", 409);
+  if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
+  return null;
+}
+
+function nextRequestStamp(previous: Date, now: Date): Date {
+  return new Date(Math.max(now.getTime(), previous.getTime() + 1));
+}
 
 /* ── Serializers ─────────────────────────────────────────────────────────── */
 
@@ -625,13 +653,23 @@ export async function transitionHoaRequest(
       if (request.status !== "open_for_bids") {
         throw new HoaWorkflowError("Bidding is not open on this request.");
       }
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: { status: "bidding_closed", biddingClosesAt: request.biddingClosesAt ?? now },
-        }),
-        audit("bidding_closed"),
-      ]);
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: { id: request.id, status: request.status, updatedAt: request.updatedAt, agreement: { is: null } },
+            data: { status: "bidding_closed", biddingClosesAt: request.biddingClosesAt ?? now, updatedAt: nextRequestStamp(request.updatedAt, now) },
+          }),
+          assertPreparedManager(userId, request.id, authority.via),
+          audit("bidding_closed"),
+        ]);
+      } catch (error) {
+        const conflict = preparedWorkflowConflict(error);
+        if (conflict) throw conflict;
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before bidding closed. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
 
@@ -716,15 +754,28 @@ export async function transitionHoaRequest(
           dedupeKey: `request-cancelled:${request.id}:${provider.id}`,
         })),
       ];
-      await db.$transaction([
-        db.hoaServiceRequest.update({ where: { id: request.id }, data: { status: "cancelled" } }),
-        db.serviceBid.updateMany({
-          where: { requestId: request.id, status: "submitted" },
-          data: { status: "expired", decidedAt: now },
-        }),
-        audit("cancelled"),
-        ...(await buildPreferenceAwareNotificationOps(cancellationIntents)),
-      ]);
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: { id: request.id, status: request.status, updatedAt: request.updatedAt, agreement: { is: null } },
+            data: { status: "cancelled", updatedAt: nextRequestStamp(request.updatedAt, now) },
+          }),
+          assertPreparedManager(userId, request.id, authority.via),
+          db.serviceBid.updateMany({
+            where: { requestId: request.id, status: "submitted" },
+            data: { status: "expired", decidedAt: now },
+          }),
+          audit("cancelled"),
+          ...(await buildPreferenceAwareNotificationOps(cancellationIntents)),
+        ]);
+      } catch (error) {
+        const conflict = preparedWorkflowConflict(error);
+        if (conflict) throw conflict;
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before cancellation. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
   }
@@ -1453,6 +1504,7 @@ export async function submitBid(
 
   try {
     await db.$transaction([
+      lockRequestForBid(request.id),
       existing
         ? db.serviceBid.update({
             where: {
@@ -1483,6 +1535,8 @@ export async function submitBid(
       )),
     ]);
   } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
     if ((error as { code?: string }).code === "P2025") {
       throw new HoaWorkflowError("This bid or bidding window changed. Refresh before submitting again.", 409);
     }
@@ -1508,7 +1562,9 @@ export async function withdrawBid(providerUserId: string, requestId: string): Pr
     throw new HoaWorkflowError("Bidding has closed; the bid can no longer be withdrawn.");
   }
   try {
-    await db.serviceBid.update({
+    await db.$transaction([
+      lockRequestForBid(requestId),
+      db.serviceBid.update({
       where: {
         id: bid.id,
         version: bid.version,
@@ -1519,8 +1575,11 @@ export async function withdrawBid(providerUserId: string, requestId: string): Pr
         },
       },
       data: { status: "withdrawn", withdrawnAt: new Date() },
-    });
+      }),
+    ]);
   } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
     if ((error as { code?: string }).code === "P2025") {
       throw new HoaWorkflowError("This bid or bidding window changed. Refresh before withdrawing again.", 409);
     }
@@ -1710,12 +1769,11 @@ export async function awardBid(
     if (request.agreement.bidId === input.bidId) return request.agreement.id;
     throw new HoaWorkflowError("A different bid has already been accepted for this request.");
   }
-  if (request.status !== "bidding_closed") {
-    throw new HoaWorkflowError(
-      request.status === "open_for_bids"
-        ? "Close bidding before accepting a bid."
-        : "This request is not ready for an award.",
-    );
+  if (!["open_for_bids", "bidding_closed"].includes(request.status)) {
+    throw new HoaWorkflowError("This request is not ready for an award.");
+  }
+  if (!request.participantsLockedAt) {
+    throw new HoaWorkflowError("The participating homes must be locked before an award.", 409);
   }
 
   const bid = await db.serviceBid.findUnique({
@@ -1733,7 +1791,9 @@ export async function awardBid(
   }
   if (bid.pricingBasis !== "total") {
     throw new HoaWorkflowError(
-      "This legacy quote uses unit pricing and cannot be awarded. Bidding has closed; open a new request to collect a whole-job total.",
+      request.status === "open_for_bids"
+        ? "This legacy quote uses unit pricing and cannot be awarded. Ask the provider for a whole-job total while bidding is open."
+        : "This legacy quote uses unit pricing and cannot be awarded. Open a new request to collect a whole-job total.",
       409,
     );
   }
@@ -1824,6 +1884,20 @@ export async function awardBid(
 
   try {
     await db.$transaction([
+      // Claim the complete bid/audience snapshot before touching any child.
+      db.hoaServiceRequest.update({
+        where: {
+          id: request.id, status: request.status, updatedAt: request.updatedAt,
+          participantsLockedAt: { not: null }, agreement: { is: null },
+        },
+        data: {
+          status: "awarded", awardedAt: now, updatedAt: nextRequestStamp(request.updatedAt, now),
+          ...(request.status === "open_for_bids" ? {
+            biddingClosesAt: request.biddingClosesAt && request.biddingClosesAt <= now ? request.biddingClosesAt : now,
+          } : {}),
+        },
+      }),
+      assertPreparedManager(userId, request.id, authority.via),
       db.serviceBid.update({
         where: { id: bid.id, version: bid.version, status: "submitted" },
         data: { status: "accepted", decidedAt: now },
@@ -1831,10 +1905,6 @@ export async function awardBid(
       db.serviceBid.updateMany({
         where: { requestId: request.id, status: "submitted", id: { not: bid.id } },
         data: { status: "rejected", decidedAt: now },
-      }),
-      db.hoaServiceRequest.update({
-        where: { id: request.id },
-        data: { status: "awarded", awardedAt: now },
       }),
       db.serviceAgreement.create({
         data: {
@@ -1856,8 +1926,8 @@ export async function awardBid(
           endDate,
         },
       }),
-      db.serviceOccurrence.createMany({ data: occurrenceRows, skipDuplicates: true }),
-      db.serviceVisit.createMany({ data: visitRows, skipDuplicates: true }),
+      db.serviceOccurrence.createMany({ data: occurrenceRows }),
+      db.serviceVisit.createMany({ data: visitRows }),
       db.adminAuditLog.create({
         data: buildAuditEntry({
           actorUserId: userId,
@@ -1899,6 +1969,8 @@ export async function awardBid(
       ])),
     ]);
   } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
     const code = (error as { code?: string }).code;
     if (code === "P2002" || code === "P2025") {
       const existing = await db.serviceAgreement.findUnique({

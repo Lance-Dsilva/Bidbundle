@@ -64,3 +64,55 @@ and append-only audit triggers remain enabled. This is a rollback probe, not a
 normal business event. Fixtures remain in the disposable database until its owner
 destroys it; no shared tables are truncated. No live Clerk, Redis, email delivery,
 production deployment or exhaustive interleaving coverage is implied.
+
+## Open-bidding awards (issue #17)
+
+Supply an explicitly identified disposable **loopback** PostgreSQL database
+named `bundleen_issue17_test` (or that name with a unique suffix), apply the
+branch's complete migration chain including
+`20261028190000_early_award_bid_and_visit_guards` separately, and run:
+
+```sh
+npx vitest run --config tests/postgres/early-award.config.mts
+```
+
+The configuration and suite both refuse remote or differently named databases.
+They load no environment files, select no fallback database, perform no
+migrations, and remain outside ordinary unit discovery. Credentials belong in
+the environment or an external private runner, never committed files or output.
+Only unique owned fixtures are inserted; audit records remain append-only and
+the resource owner removes the disposable database after verification.
+
+The initial baseline uses actual open-bidding, quote submission, manual closing,
+and award domain operations. A successful closed HOA award is the control;
+open HOA and closed neighbourhood awards express the expected product behavior.
+Neighbourhood participants are active homeowners with address coordinates and
+no HOA unit. The database client substitution only chooses an actual Prisma
+client per async context; SQL, authorization, transaction results and constraints
+remain real. The driver observer records only SQLSTATE and constraint names.
+
+The final matrix covers open and closed HOA/neighbourhood awards, compulsory
+unit snapshots and recurrence materialization, deadline/version/provider guards,
+authority and tenant denials, both orderings of quote revisions/withdrawals,
+first bids/resubmissions, close/cancel, and competing awards. It checks that
+late bids leave no manager notifications/outbox rows, new losing bids invalidate
+a prepared audience, independent providers can both quote, and ignored inserts
+or no-op updates do not manufacture parent snapshot changes. Visit identity and
+physical snapshot constraints remain enabled.
+
+Two timing cases hold a selected provider profile row with a second real
+transaction. Read-only `pg_stat_activity`/`pg_blocking_pids` inspection proves
+the actual bid UPDATE or INSERT is waiting on that lock; the database clock
+must confirm release occurs after quote validity or the bidding deadline.
+Both operations must then refuse and leave no partial award or late bid/intents.
+The bounded fixture transactions always release their own locks in `finally`.
+
+One approved fault probe adds a uniquely named audit INSERT trigger restricted
+to one owned community and the award action. This deliberately injected fault is
+not a normal business event. A pass-through driver observer must show successful
+parent award and accepted-bid updates before the controlled PostgreSQL error;
+the request/deadline, bids, agreement, occurrences, visits, audit and notification
+outbox must then roll back. `finally` drops only that probe's trigger/function.
+No existing trigger is disabled. This is controlled interleaving evidence, not
+exhaustive concurrency verification or proof of deployed Clerk/Redis, email or
+payment delivery, or a production migration.

@@ -118,7 +118,7 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
     canAward:
       row.status === "submitted" &&
       row.pricingBasis === "total" &&
-      row.request.status === "bidding_closed" &&
+      ["open_for_bids", "bidding_closed"].includes(row.request.status) &&
       managedCommunityIds.has(row.request.communityId),
   })).sort((a, b) => a.requestId.localeCompare(b.requestId) || compareBidQuotes(a, b));
 }

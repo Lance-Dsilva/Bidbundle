@@ -75,13 +75,18 @@ it("treats the native Escape cancel event as dismissal and returns focus without
   expect(event.defaultPrevented).toBe(true); expect(state.mutation).not.toHaveBeenCalled(); expect(opener).toHaveFocus(); expect(focus).toHaveBeenCalledWith({ preventScroll: true });
 });
 
-it.each(["hoa", "neighborhood", "my-bids"])("confirms the exact provider, original currency, total and version through %s award", async (entry) => {
-  if (entry === "hoa") render(<HoaManagerWorkspace dashboard={dashboard(request({ status: "bidding_closed" }))} />);
-  else if (entry === "neighborhood") { state.hub = hub("bidding_closed"); render(<NeighbourhoodWorkspace />); fireEvent.click(await screen.findByRole("button", { name: /Compare 1 quote/ })); }
-  else render(<HomeownerBidsPage />);
+it.each([
+  ["hoa", "open_for_bids"], ["hoa", "bidding_closed"],
+  ["neighborhood", "open_for_bids"], ["neighborhood", "bidding_closed"],
+  ["my-bids", "open_for_bids"], ["my-bids", "bidding_closed"],
+] as const)("confirms the exact provider, original currency, total and version through %s award during %s", async (entry, status) => {
+  if (entry === "hoa") render(<HoaManagerWorkspace dashboard={dashboard(request({ status }))} />);
+  else if (entry === "neighborhood") { state.hub = hub(status); render(<NeighbourhoodWorkspace />); }
+  else { state.bids[0].requestStatus = status; render(<HomeownerBidsPage />); }
   fireEvent.click(await screen.findByRole("button", { name: entry === "hoa" ? "Accept bid" : "Award this provider" }));
   expect(state.mutation).not.toHaveBeenCalled();
   expect(modal()).toHaveTextContent("Pressure washing"); expect(modal()).toHaveTextContent("Euro Clean"); expect(modal()).toHaveTextContent("€123.45"); expect(modal()).toHaveTextContent(/whole-job total/); expect(modal()).toHaveTextContent(/3 homes × 2 visits each/);
+  if (status === "open_for_bids") expect(modal()).toHaveTextContent(/Awarding now ends bidding immediately/i);
   fireEvent.click(within(modal()).getByRole("button", { name: "Award provider" }));
   await waitFor(() => expect(state.mutation).toHaveBeenCalledOnce());
   expect(state.mutation.mock.calls[0][0]).toBe(entry === "hoa" ? "/api/hoa/requests/request-1/award" : "/homeowner/requests/request-1/award");
@@ -114,10 +119,11 @@ it("prevents confirming a request whose state changed while the dialog was open"
   const confirm = within(modal()).getByRole("button", { name: "Cancel request" }); expect(confirm).toBeDisabled(); fireEvent.click(confirm); expect(state.mutation).not.toHaveBeenCalled();
 });
 
-it.each(["version", "price"])("invalidates a quote confirmation when its %s changes", (change) => {
-  const job = request({ status: "bidding_closed" }); const { rerender } = render(<HoaManagerWorkspace dashboard={dashboard(job)} />);
+it.each(["version", "price", "currency", "quoted-homes", "quoted-visits", "live-homes", "live-visits"])("invalidates a quote confirmation when its %s changes", (change) => {
+  const job = request({ status: "open_for_bids" }); const { rerender } = render(<HoaManagerWorkspace dashboard={dashboard(job)} />);
   fireEvent.click(screen.getByRole("button", { name: "Accept bid" }));
-  rerender(<HoaManagerWorkspace dashboard={dashboard(job, bid(change === "version" ? { version: 2 } : { amountCents: 99999 }))} />);
+  const changedQuote = bid(change === "version" ? { version: 2 } : change === "price" ? { amountCents: 99999 } : change === "currency" ? { currency: "usd" } : change === "quoted-homes" ? { homeCount: 4 } : change === "quoted-visits" ? { totalOccurrences: 4 } : {});
+  rerender(<HoaManagerWorkspace dashboard={dashboard({ ...job, ...(change === "live-homes" ? { joinedCount: 4 } : change === "live-visits" ? { totalOccurrences: 4 } : {}) }, changedQuote)} />);
   expect(within(modal()).getByRole("button", { name: "Award provider" })).toBeDisabled(); expect(modal()).toHaveTextContent("€123.45"); expect(state.mutation).not.toHaveBeenCalled();
 });
 
@@ -139,7 +145,7 @@ it("deduplicates pending confirmations, blocks dismissal while saving, and keeps
 
 it.each(["hoa", "neighborhood", "my-bids"])("keeps legacy unit quotes unawardable through the %s confirmation entry point", async (entry) => {
   if (entry === "hoa") render(<HoaManagerWorkspace dashboard={dashboard(request({ status: "bidding_closed" }), bid({ pricingBasis: "per_home" }))} />);
-  else if (entry === "neighborhood") { state.hub = hub("bidding_closed"); state.hub.requests[0].bids = [bid({ pricingBasis: "per_visit" })]; render(<NeighbourhoodWorkspace />); fireEvent.click(await screen.findByRole("button", { name: /Compare 1 quote/ })); }
+  else if (entry === "neighborhood") { state.hub = hub("bidding_closed"); state.hub.requests[0].bids = [bid({ pricingBasis: "per_visit" })]; render(<NeighbourhoodWorkspace />); }
   else { state.bids[0].pricingBasis = "per_visit"; render(<HomeownerBidsPage />); }
   const button = await screen.findByRole("button", { name: entry === "hoa" ? "Accept bid" : "Award this provider" });
   expect(button).toBeDisabled(); fireEvent.click(button); expect(screen.queryByRole("dialog")).not.toBeInTheDocument(); expect(state.mutation).not.toHaveBeenCalled();
@@ -162,4 +168,39 @@ it("explicitly wraps both Tab boundaries and contains focus when saving disables
   const pendingTab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }); fireEvent(dialog, pendingTab);
   expect(pendingTab.defaultPrevented).toBe(true); expect(dialog).toHaveFocus(); expect(state.mutation).toHaveBeenCalledOnce();
   await act(async () => { resolve({}); });
+});
+
+it("shows neighborhood quotes initially and preserves the accessible collapse control", async () => {
+  state.hub = hub("open_for_bids"); render(<NeighbourhoodWorkspace />);
+  expect(await screen.findByText("Euro Clean")).toBeVisible();
+  const toggle = screen.getByRole("button", { name: /Hide 1 quote/ });
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const target = toggle.getAttribute("aria-controls"); expect(target).toBeTruthy();
+  expect(document.getElementById(target!)).toContainElement(screen.getByText("Euro Clean"));
+  fireEvent.click(toggle);
+  expect(screen.getByRole("button", { name: /Compare 1 quote/ })).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText("Euro Clean")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Compare 1 quote/ }));
+  expect(screen.getByText("Euro Clean")).toBeVisible(); expect(state.mutation).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("lets a request owner compare without granting manager award authority (named manager: %s)", async (named) => {
+  state.hub = hub("open_for_bids"); state.hub.isManager = false; state.hub.managerName = named ? "Taylor" : null;
+  state.hub.requests[0].permissions.canManage = false;
+  render(<NeighbourhoodWorkspace />);
+  expect(await screen.findByText("Euro Clean")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Award this provider" })).not.toBeInTheDocument();
+  if (named) expect(screen.getByText(/Taylor, your neighbourhood manager, chooses the provider/)).toBeVisible();
+  else expect(screen.getByText(/No neighbourhood manager is assigned yet\. Bundleen must assign a manager before a provider can be chosen/)).toBeVisible();
+  expect(state.mutation).not.toHaveBeenCalled();
+});
+
+it("invalidates an open-bidding award confirmation when bidding closes before confirmation", () => {
+  const { rerender } = render(<HoaManagerWorkspace dashboard={dashboard(request({ status: "open_for_bids" }))} />);
+  fireEvent.click(screen.getByRole("button", { name: "Accept bid" }));
+  expect(modal()).toHaveTextContent(/Awarding now ends bidding immediately/);
+  rerender(<HoaManagerWorkspace dashboard={dashboard(request({ status: "bidding_closed" }))} />);
+  expect(within(modal()).getByRole("button", { name: "Award provider" })).toBeDisabled();
+  expect(within(modal()).getByRole("alert")).toHaveTextContent(/details have changed/);
+  expect(state.mutation).not.toHaveBeenCalled();
 });
