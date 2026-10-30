@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { HomeAddressCompletion } from "@/components/homeowner/HomeAddressCompletion";
 import { Button } from "@/components/ui/Button";
 import type { BidSummary } from "@/lib/hoa-types";
 import type { NeighborhoodRequestView } from "@/lib/neighborhood-types";
@@ -68,7 +69,11 @@ function defaultBiddingDeadline(): string {
 }
 
 export function NeighbourhoodWorkspace() {
-  const { hub, loading, error, busy, missingAddresses, act, setError, ownerError, ownerSuccess, clearOwnerFeedback } = useNeighbourhood();
+  const {
+    hub, loading, error, busy, missingAddresses, act,
+    addressRequiredRequestId, resumeJoin, cancelAddress,
+    setError, ownerError, ownerSuccess, clearOwnerFeedback,
+  } = useNeighbourhood();
 
   if (loading) {
     return (
@@ -111,8 +116,8 @@ export function NeighbourhoodWorkspace() {
         </p>
         {!hub.addressReady ? (
           <p className="mt-2 text-sm" style={{ color: "#b45309" }} role="status">
-            Add your home address to your profile — a provider cannot be sent to your home without
-            it, and requests you join will be held back until it is on file.
+            Add your home address before joining a request so a provider can find your home.
+            You can do this when you choose to join.
           </p>
         ) : null}
       </header>
@@ -155,7 +160,20 @@ export function NeighbourhoodWorkspace() {
         </div>
       ) : (
         hub.requests.map((request) => (
-          <RequestCard key={request.id} busy={busy} onAct={act} request={request} managerName={hub.managerName} actionError={error} ownerError={ownerError?.requestId === request.id ? ownerError : null} ownerSuccess={ownerSuccess?.requestId === request.id ? ownerSuccess.action : null} onPrepare={() => { setError(null); clearOwnerFeedback?.(); }} />
+          <RequestCard
+            key={request.id}
+            busy={busy || Boolean(addressRequiredRequestId)}
+            onAct={act}
+            request={request}
+            managerName={hub.managerName}
+            actionError={error}
+            ownerError={ownerError?.requestId === request.id ? ownerError : null}
+            ownerSuccess={ownerSuccess?.requestId === request.id ? ownerSuccess.action : null}
+            onPrepare={() => { setError(null); clearOwnerFeedback?.(); }}
+            needsAddress={addressRequiredRequestId === request.id}
+            onAddressComplete={resumeJoin}
+            onAddressCancel={cancelAddress}
+          />
         ))
       )}
     </div>
@@ -171,6 +189,9 @@ function RequestCard({
   ownerError,
   ownerSuccess,
   onPrepare,
+  needsAddress,
+  onAddressComplete,
+  onAddressCancel,
 }: {
   request: NeighborhoodRequestView;
   busy: boolean;
@@ -180,6 +201,9 @@ function RequestCard({
   ownerError: { message: string; fields?: Record<string, string> } | null;
   ownerSuccess: "edit" | "cancel" | null;
   onPrepare: () => void;
+  needsAddress: boolean;
+  onAddressComplete: () => Promise<void>;
+  onAddressCancel: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -220,6 +244,14 @@ function RequestCard({
         : confirmation.action === "owner_cancel" ? ["draft", "collecting_interest"].includes(request.status)
           : ["collecting_interest", "open_for_bids", "bidding_closed"].includes(request.status)));
 
+  const joinButtonId = useId();
+  const hadAddressPrompt = useRef(false);
+  useEffect(() => {
+    if (hadAddressPrompt.current && !needsAddress) {
+      document.getElementById(joinButtonId)?.focus();
+    }
+    hadAddressPrompt.current = needsAddress;
+  }, [needsAddress, joinButtonId]);
 
   return (
     <article aria-labelledby={headingId} className="p-5" style={card}>
@@ -290,10 +322,19 @@ function RequestCard({
           }} />
       ) : null}
 
+      {request.status === "collecting_interest" && request.enrollmentClosesAt ? (
+        <p className="mt-3 text-xs" style={{ color: "var(--ink-700)" }}>
+          After sign-ups close, bidding opens automatically if at least {request.minHomes}{" "}
+          {request.minHomes === 1 ? "home has" : "homes have"} joined. The update can take a few
+          minutes. If fewer homes join, the request expires.
+        </p>
+      ) : null}
+
       {/* ── Neighbour: join or decline ─────────────────────────────────── */}
       {request.permissions.canRespond ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
+            id={joinButtonId}
             disabled={busy}
             onClick={() =>
               void onAct({ kind: "respond", requestId: request.id, response: "joined" })
@@ -312,6 +353,10 @@ function RequestCard({
             {request.viewerResponse === "declined" ? "You declined" : "No thanks"}
           </Button>
         </div>
+      ) : null}
+
+      {needsAddress ? (
+        <HomeAddressCompletion onComplete={onAddressComplete} onCancel={onAddressCancel} />
       ) : null}
 
       {/* ── Manager: lifecycle ─────────────────────────────────────────── */}
