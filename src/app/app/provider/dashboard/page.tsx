@@ -7,6 +7,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 import { useProviderOverview } from "@/hooks/useProviderOverview";
 import { initialsFromName } from "@/lib/display-name";
+import { serviceCategoryLabel } from "@/lib/service-categories";
 
 const cardStyle: CSSProperties = {
   background: "var(--bg-card)",
@@ -430,7 +431,7 @@ export default function ProviderDashboardPage() {
                         ? `Top nearby · ${topJob.homeCount} home${topJob.homeCount !== 1 ? "s" : ""}`
                         : "Live locality feed"}
                     </span>
-                    <span style={neutralChipStyle()}>{topJob?.category ?? "Job feed"}</span>
+                    <span style={neutralChipStyle()}>{topJob ? serviceCategoryLabel(topJob.category) : "Job feed"}</span>
                     <span style={{ fontSize: 12, color: "var(--ink-500)" }}>{topJob ? formatDateMeta(topJob.biddingClosesAt) : "Waiting for the next request in your area"}</span>
                   </div>
                   <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 500, letterSpacing: "-0.01em", color: "var(--ink-900)" }}>
@@ -542,7 +543,7 @@ export default function ProviderDashboardPage() {
                             : "Open quote"}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--ink-500)", marginTop: 2 }}>
-                          {index === 0 ? "Best current fit" : `${job.category} request`}
+                          {index === 0 ? "Best current fit" : `${serviceCategoryLabel(job.category)} request`}
                         </div>
                       </div>
                       <Link href="/app/provider/job-feed" style={{ ...(isBidding ? smallPrimaryButtonStyle : smallGhostButtonStyle), textDecoration: "none" }}>

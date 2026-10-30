@@ -50,7 +50,7 @@ function fillValidRequest() {
   fireEvent.change(screen.getByLabelText("Title"), {
     target: { value: "Pressure washing" },
   });
-  fireEvent.change(screen.getByLabelText("Category"), { target: { value: "cleaning" } });
+  fireEvent.click(screen.getByRole("radio", { name: "Cleaning" }));
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Driveway and back patio." },
   });
@@ -68,6 +68,24 @@ afterEach(() => {
 });
 
 describe("new request page", () => {
+  it("offers the same canonical services as provider onboarding", async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonOnce({ requests: [], eligibility: eligible })) as unknown as typeof fetch;
+    render(<HomeownerRequestPage />);
+    await screen.findByText("For Oakwood Heights");
+    const category = screen.getByRole("group", { name: /^Category/ });
+    for (const [label, slug] of [
+      ["Lawn care", "lawn"], ["Pool care", "pool_care"], ["Gutters", "gutter"],
+      ["Landscaping", "landscaping"], ["Seasonal maintenance", "seasonal_maintenance"],
+      ["Painting", "painting"], ["Pest control", "pest_control"],
+    ]) {
+      const choice = screen.getByRole("radio", { name: label });
+      expect(category).toContainElement(choice);
+      expect(choice).toHaveAttribute("value", slug);
+      fireEvent.click(choice);
+      expect(choice).toBeChecked();
+    }
+  });
+
   it("asks the canonical endpoint for eligibility, and nothing else, on load", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonOnce({ requests: [], eligibility: eligible }),

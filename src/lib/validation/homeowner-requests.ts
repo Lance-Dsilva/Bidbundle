@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import { normalizeServiceCategory, SERVICE_CATEGORIES } from "@/lib/service-categories";
+
+export { CATEGORY_LABELS, SERVICE_CATEGORIES, type ServiceCategory } from "@/lib/service-categories";
+
 /**
  * The contract for an individual (non-HOA) homeowner service request.
  *
@@ -24,40 +28,6 @@ export const MAX_REQUEST_DESCRIPTION_LENGTH = 4_000;
 
 /** $1,000,000. Far above any real home service, and safely inside INT4. */
 export const MAX_BUDGET_CENTS = 100_000_000;
-
-/**
- * The supported service categories.
- *
- * Lowercase slugs, because provider eligibility compares them against
- * `ProviderProfile.trades` lowercased. A closed list rather than free text: the
- * homeowner form, the provider trade filter, and the request feed have to agree
- * on the same word for a match to ever happen.
- */
-export const SERVICE_CATEGORIES = [
-  "cleaning",
-  "electrical",
-  "gutter",
-  "handyman",
-  "hvac",
-  "lawn",
-  "plumbing",
-  "roofing",
-  "other",
-] as const;
-
-export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number];
-
-export const CATEGORY_LABELS: Record<ServiceCategory, string> = {
-  cleaning: "Cleaning",
-  electrical: "Electrical",
-  gutter: "Gutter",
-  handyman: "Handyman",
-  hvac: "HVAC",
-  lawn: "Lawn",
-  plumbing: "Plumbing",
-  roofing: "Roofing",
-  other: "Other",
-};
 
 /** Collapses control characters and runaway blank lines a paste can carry. */
 export function normalizeRequestText(value: string): string {
@@ -95,9 +65,12 @@ const budgetCents = z
 export const createHomeownerRequestSchema = z
   .object({
     title: boundedText(MAX_REQUEST_TITLE_LENGTH, "Give your request a short title."),
-    category: z.enum(SERVICE_CATEGORIES, {
-      message: "Choose one of the supported service categories.",
-    }),
+    category: z
+      .string()
+      .transform((value) => normalizeServiceCategory(value) ?? value)
+      .pipe(z.enum(SERVICE_CATEGORIES, {
+        message: "Choose one of the supported service categories.",
+      })),
     description: boundedText(
       MAX_REQUEST_DESCRIPTION_LENGTH,
       "Describe the work you need done.",

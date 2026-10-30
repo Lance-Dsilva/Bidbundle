@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
 import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
+import { SERVICE_CATEGORIES } from "@/lib/service-categories";
 
 /**
  * The one provider business editor.
@@ -104,6 +105,31 @@ afterEach(() => {
 });
 
 describe("provider business details editor", () => {
+  it("does not silently discard a pending thirteenth service on save", () => {
+    const { saves } = renderDialog({ provider: { ...PROVIDER, trades: SERVICE_CATEGORIES.slice(0, 12) } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Add a service" }), { target: { value: "landscaping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    expect(saves).toHaveLength(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(/at most 12 services/i);
+  });
+
+  it("preserves unsupported legacy services visibly and requires explicit remediation", async () => {
+    const { saves } = renderDialog({ provider: { ...PROVIDER, trades: ["Plumbing", "Drain clearing"] } });
+    expect(screen.getByRole("button", { name: "Remove Drain clearing" })).toBeInTheDocument();
+    expect(screen.getByText(/Your saved choices have not been removed automatically/i)).toBeInTheDocument();
+    const choice = screen.getByRole("combobox", { name: "Add a service" });
+    expect(within(choice).queryByRole("option", { name: "Drain clearing" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    expect(saves).toHaveLength(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Replace unsupported saved services/i);
+    fireEvent.change(choice, { target: { value: "lawn" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Drain clearing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0]!.business.trades).toEqual(["plumbing", "lawn"]);
+  });
+
   it("edits every section and saves them together, with no admin-owned field", async () => {
     const { saves, onClose } = renderDialog();
 
@@ -127,20 +153,20 @@ describe("provider business details editor", () => {
     fireEvent.change(screen.getByLabelText("Closes at"), { target: { value: "18:30" } });
     fireEvent.click(screen.getByRole("button", { name: "Wed" }));
 
-    // Trades are chips, so a duplicate and a blank are refused where the
-    // provider can see it rather than silently dropped by the server.
+    // Issue #7 replaces arbitrary free text with the shared category catalog.
+    // Duplicate and empty selections still fail visibly, and saves use slugs.
     const tradeInput = screen.getByLabelText("Add a service");
     fireEvent.change(tradeInput, { target: { value: "plumbing" } });
-    fireEvent.keyDown(tradeInput, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/already on your list/i);
 
-    fireEvent.change(tradeInput, { target: { value: "  " } });
+    fireEvent.change(tradeInput, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(screen.getByRole("alert")).toHaveTextContent(/Enter a service/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Choose a supported service/i);
 
-    fireEvent.change(tradeInput, { target: { value: "Drain clearing" } });
-    fireEvent.keyDown(tradeInput, { key: "Enter" });
-    expect(screen.getByRole("button", { name: "Remove Drain clearing" })).toBeInTheDocument();
+    fireEvent.change(tradeInput, { target: { value: "lawn" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByRole("button", { name: "Remove Lawn care" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
     await waitFor(() => expect(saves).toHaveLength(1));
@@ -154,7 +180,7 @@ describe("provider business details editor", () => {
     expect(saves[0]!.business).toMatchObject({
       companyName: "ProFix & Co",
       bio: "Two decades of drains.",
-      trades: ["Plumbing", "Drain clearing"],
+      trades: ["plumbing", "lawn"],
       workingDays: ["mon", "wed"],
       workingHoursStart: "08:00",
       workingHoursEnd: "18:30",

@@ -6,6 +6,7 @@ import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { Button } from "@/components/ui/Button";
 import type { ProviderFeedItem } from "@/lib/hoa-types";
 import { apiFetch } from "@/lib/api";
+import { serviceCategoryLabel } from "@/lib/service-categories";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 
 /**
@@ -162,7 +163,7 @@ export function ProviderMarketplaceFeed() {
             }
             type="button"
           >
-            {value === "all" ? "All trades" : value}
+            {value === "all" ? "All trades" : serviceCategoryLabel(value)}
           </button>
         ))}
       </div>

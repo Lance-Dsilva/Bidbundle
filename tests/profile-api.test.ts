@@ -516,7 +516,8 @@ describe("PATCH /api/profile/provider", () => {
     const providerUpdate = state.calls.find(
       (call) => call.model === "providerProfile" && call.operation === "update",
     )!.args as { data: Record<string, unknown> };
-    expect(providerUpdate.data).toMatchObject(business);
+    // The shared catalog now stores canonical values while accepting legacy labels.
+    expect(providerUpdate.data).toMatchObject({ ...business, trades: ["plumbing", "hvac"] });
 
     const userUpdate = state.calls.find(
       (call) => call.model === "user" && call.operation === "update",

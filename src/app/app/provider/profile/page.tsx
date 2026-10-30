@@ -12,6 +12,7 @@ import { useProviderOverview } from "@/hooks/useProviderOverview";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderRatings } from "@/hooks/useProviderRatings";
 import { initialsFromName } from "@/lib/display-name";
+import { serviceCategoryLabel } from "@/lib/service-categories";
 import type { ProviderProfile } from "@/lib/profile-types";
 import type {
   CommonProfileUpdate,
@@ -446,7 +447,7 @@ export default function ProviderProfilePage() {
                 ) : (
                   provider.trades.map((trade) => (
                     <span key={trade} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 24, padding: "0 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: "var(--terracotta-50)", color: "var(--terracotta-600)" }}>
-                      {trade}
+                      {serviceCategoryLabel(trade)}
                     </span>
                   ))
                 )}
