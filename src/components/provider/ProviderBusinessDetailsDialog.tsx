@@ -25,6 +25,7 @@ import {
 import {
   MAX_BIO_LENGTH,
   MAX_TRADES,
+  MAX_TRADE_LENGTH,
   WEEKDAYS,
   type CommonProfileUpdate,
   type ProviderProfileUpdate,
