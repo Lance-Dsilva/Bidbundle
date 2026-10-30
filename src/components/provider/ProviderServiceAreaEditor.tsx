@@ -148,18 +148,49 @@ export function ProviderServiceAreaEditor({
   const valueRef = useRef(value);
   valueRef.current = value;
 
+  const mountedRef = useRef(true);
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
+  const locationGenerationRef = useRef(0);
+  const locationControllerRef = useRef<AbortController | null>(null);
+
+  // Abort saves work; the generation also protects against transports that
+  // complete after abort, including a previous editor session's requests.
+  const invalidateLocation = useCallback(() => {
+    locationGenerationRef.current += 1;
+    locationControllerRef.current?.abort();
+    locationControllerRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      invalidateLocation();
+    };
+  }, [invalidateLocation]);
+
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<GeoapifyPlace[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [autocompleting, setAutocompleting] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   /** Mirrors the numeric input while the user is mid-edit ("" or "1."). */
   const [radiusText, setRadiusText] = useState(
     String(value?.radiusMiles ?? SERVICE_RADIUS_DEFAULT_MILES),
   );
+
+  useEffect(() => {
+    if (!disabled) return;
+    invalidateLocation();
+    setSearching(false);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+  }, [disabled, invalidateLocation]);
 
   const configured = Boolean(geoapifyConfig.apiKey);
   const radiusMiles = value?.radiusMiles ?? SERVICE_RADIUS_DEFAULT_MILES;
@@ -194,6 +225,7 @@ export function ProviderServiceAreaEditor({
   /* ── Draft mutation helpers ─────────────────────────────────────────── */
 
   const applyPlace = useCallback((place: GeoapifyPlace) => {
+    if (!mountedRef.current || disabledRef.current) return;
     const current = valueRef.current;
     const fields = placeToDraftFields(place);
     onChangeRef.current({
@@ -209,6 +241,7 @@ export function ProviderServiceAreaEditor({
   }, []);
 
   const setRadius = useCallback((next: number) => {
+    if (!mountedRef.current || disabledRef.current) return;
     const current = valueRef.current;
     if (!current) return;
     onChangeRef.current({ ...current, radiusMiles: clampRadiusMiles(next) });
@@ -220,12 +253,22 @@ export function ProviderServiceAreaEditor({
    * reverse lookup must not discard a centre the provider deliberately placed.
    */
   const moveCenter = useCallback(async (latitude: number, longitude: number) => {
+    if (!mountedRef.current || disabledRef.current) return;
+    invalidateLocation();
+    setSearching(false);
+    setSuggestionsOpen(false);
+    const generation = locationGenerationRef.current;
+    const controller = new AbortController();
+    locationControllerRef.current = controller;
+    const isCurrent = () => mountedRef.current && !disabledRef.current &&
+      generation === locationGenerationRef.current;
     const current = valueRef.current;
     if (!current) return;
     onChangeRef.current({ ...current, centerLatitude: latitude, centerLongitude: longitude });
     if (!geoapifyConfig.apiKey) return;
     try {
-      const place = await reverseGeocode(latitude, longitude);
+      const place = await reverseGeocode(latitude, longitude, controller.signal);
+      if (!isCurrent()) return;
       const latest = valueRef.current;
       if (!place || !latest) return;
       // Ignore a late answer for a point the user has already moved away from.
@@ -238,11 +281,12 @@ export function ProviderServiceAreaEditor({
       });
       setLookupError(null);
     } catch {
+      if (!isCurrent()) return;
       setLookupError(
         "We moved your centre but could not name that spot. The coordinates are still saved.",
       );
     }
-  }, []);
+  }, [invalidateLocation]);
 
   /* ── Map lifecycle ──────────────────────────────────────────────────── */
 
@@ -262,6 +306,9 @@ export function ProviderServiceAreaEditor({
           center,
           zoom: draft ? zoomForRadius(draft.radiusMiles) : 4,
           zoomControl: true,
+          // Leaflet's CSS zoom timeout survives remove(); sessions can end
+          // immediately on Cancel or selection, so keep zoom changes instant.
+          zoomAnimation: false,
           scrollWheelZoom: false,
           keyboard: true,
         });
@@ -284,6 +331,7 @@ export function ProviderServiceAreaEditor({
       markerRef.current = null;
       circleRef.current = null;
       contextLayersRef.current = [];
+      mapRef.current?.stop();
       mapRef.current?.remove();
       mapRef.current = null;
       setMapReady(false);
@@ -359,7 +407,7 @@ export function ProviderServiceAreaEditor({
     if (lastFitRef.current === key) return;
     lastFitRef.current = key;
     map.setView([value.centerLatitude, value.centerLongitude], zoomForRadius(value.radiusMiles), {
-      animate: true,
+      animate: false,
     });
   }, [mapReady, value]);
 
@@ -402,54 +450,68 @@ export function ProviderServiceAreaEditor({
   /* ── Address search ─────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!suggestionsOpen || query.trim().length < 3 || !configured) {
+    if (disabled || !suggestionsOpen || query.trim().length < 3 || !configured) {
       setSuggestions([]);
-      setSearching(false);
+      setAutocompleting(false);
       return;
     }
 
+    let active = true;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      setSearching(true);
+      setAutocompleting(true);
       void autocompleteAddress(query, controller.signal)
         .then((places) => {
+          if (!active || !mountedRef.current || disabledRef.current) return;
           setSuggestions(places);
           setLookupError(
             places.length ? null : "No matching address found. Try adding a city or postcode.",
           );
         })
         .catch((error) => {
-          if ((error as Error).name === "AbortError") return;
+          if (!active || !mountedRef.current || disabledRef.current ||
+              (error as Error).name === "AbortError") return;
           setSuggestions([]);
           setLookupError("Address search is unavailable right now. Please try again.");
         })
-        .finally(() => setSearching(false));
+        .finally(() => {
+          if (active && mountedRef.current && !disabledRef.current) setAutocompleting(false);
+        });
     }, 350);
 
     return () => {
+      active = false;
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, suggestionsOpen, configured]);
+  }, [query, suggestionsOpen, configured, disabled]);
 
   const searchExact = async () => {
     const trimmed = query.trim();
-    if (!trimmed || !configured) return;
+    if (!trimmed || !configured || disabledRef.current) return;
+    invalidateLocation();
+    const generation = locationGenerationRef.current;
+    const controller = new AbortController();
+    locationControllerRef.current = controller;
+    const isCurrent = () => mountedRef.current && !disabledRef.current &&
+      generation === locationGenerationRef.current;
+    setSuggestionsOpen(false);
+    setSuggestions([]);
     setSearching(true);
     setLookupError(null);
     try {
-      const place = await geocodeAddress(trimmed);
+      const place = await geocodeAddress(trimmed, controller.signal);
+      if (!isCurrent()) return;
       if (!place) {
         setLookupError("We could not locate that address. Add more detail or pick a suggestion.");
         return;
       }
       applyPlace(place);
-      setSuggestions([]);
-      setSuggestionsOpen(false);
+      setQuery("");
     } catch {
-      setLookupError("Address search is unavailable right now. Please try again.");
+      if (isCurrent()) setLookupError("Address search is unavailable right now. Please try again.");
     } finally {
-      setSearching(false);
+      if (isCurrent()) setSearching(false);
     }
   };
 
@@ -493,6 +555,9 @@ export function ProviderServiceAreaEditor({
             value={query}
             onFocus={() => setSuggestionsOpen(true)}
             onChange={(event) => {
+              invalidateLocation();
+              setSearching(false);
+              setSuggestions([]);
               setQuery(event.target.value);
               setSuggestionsOpen(true);
             }}
@@ -507,11 +572,11 @@ export function ProviderServiceAreaEditor({
           />
           <button
             type="button"
-            disabled={disabled || searching || query.trim().length < 3}
+            disabled={disabled || searching || autocompleting || query.trim().length < 3}
             onClick={() => void searchExact()}
             className="h-11 shrink-0 rounded-xl bg-slate-900 px-4 text-[13px] font-semibold text-white transition disabled:opacity-40"
           >
-            {searching ? "Searching…" : "Search"}
+            {searching || autocompleting ? "Searching…" : "Search"}
           </button>
         </div>
 
@@ -525,9 +590,12 @@ export function ProviderServiceAreaEditor({
               <li key={place.placeId ?? `${place.latitude}-${place.longitude}-${place.formatted}`}>
                 <button
                   type="button"
-                  className="w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+                  disabled={disabled}
+                  className="min-h-11 w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
+                    invalidateLocation();
+                    setSearching(false);
                     applyPlace(place);
                     setQuery("");
                     setSuggestions([]);
@@ -597,7 +665,7 @@ export function ProviderServiceAreaEditor({
   );
 
   const settingsBlock = (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* ── Radius ──────────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -627,7 +695,7 @@ export function ProviderServiceAreaEditor({
                 }
               }}
               onBlur={() => setRadiusText(String(normalizeRadiusMiles(radiusMiles)))}
-              className="h-10 w-24 rounded-lg border border-slate-300 px-3 text-right text-[14px] font-semibold text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+              className="h-11 w-24 rounded-lg border border-slate-300 px-3 text-right text-[14px] font-semibold text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             />
             <span className="text-[13px] font-medium text-slate-600">miles</span>
           </div>
@@ -642,7 +710,7 @@ export function ProviderServiceAreaEditor({
           step={SERVICE_RADIUS_STEP_MILES}
           value={radiusMiles}
           onChange={(event) => setRadius(Number(event.target.value))}
-          className="mt-3 h-6 w-full cursor-pointer accent-teal-600"
+          className="mt-3 h-11 w-full cursor-pointer accent-teal-600"
         />
         <div className="flex justify-between text-[11px] font-medium text-slate-400">
           <span>{SERVICE_RADIUS_MIN_MILES} mi</span>
@@ -652,7 +720,7 @@ export function ProviderServiceAreaEditor({
         <p
           id={summaryId}
           aria-live="polite"
-          className="mt-3 rounded-xl bg-teal-50 px-3.5 py-2.5 text-[13px] font-semibold text-teal-900"
+          className="mt-3 break-words rounded-xl bg-teal-50 px-3.5 py-2.5 text-[13px] font-semibold text-teal-900"
         >
           {summary ?? "Pick an address to see your coverage summary."}
         </p>
