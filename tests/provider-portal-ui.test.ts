@@ -80,11 +80,9 @@ describe("issue #1: one obvious, complete business editor", () => {
     expect(DIALOG).toContain('event.key !== "Tab"');
   });
 
-  it("does not offer raw coordinates as editable profile fields", () => {
-    // Coverage geometry belongs to the service-area map, which owns the
-    // server-stored centre the matcher actually uses.
-    expect(DIALOG).not.toMatch(/latitude|longitude/i);
-  });
+  // The no-raw-coordinate-control contract is exercised against the actual
+  // dialog DOM in provider-business-address.test.tsx. A selected address may
+  // carry point metadata without offering editable coverage geometry here.
 
   it("keeps touch targets usable on a phone", () => {
     // 44px minimum on the controls a thumb has to hit.

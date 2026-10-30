@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
+import { geoapifyConfig } from "@/lib/geoapify";
 import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
 import { SERVICE_CATEGORIES } from "@/lib/service-categories";
 
@@ -17,6 +18,8 @@ import { SERVICE_CATEGORIES } from "@/lib/service-categories";
  * administrator-owned field does, and unsaved work is not thrown away by a
  * stray click on the backdrop.
  */
+
+const initialGeocoderKey = geoapifyConfig.apiKey;
 
 const PROFILE: CommonProfile = {
   id: "user-1",
@@ -68,6 +71,7 @@ function renderDialog(
     saveError: string | null;
     fieldErrors: Record<string, string>;
     onSaveResult: boolean;
+    onSaveImpl: () => Promise<boolean>;
     provider: ProviderProfile;
   }> = {},
 ) {
@@ -78,14 +82,13 @@ function renderDialog(
       common: common as Record<string, unknown>,
       business: business as Record<string, unknown>,
     });
-    return overrides.onSaveResult ?? true;
+    return overrides.onSaveImpl ? overrides.onSaveImpl() : overrides.onSaveResult ?? true;
   });
 
-  render(
-    <ProviderBusinessDetailsDialog
+  const dialog = (saving: boolean) => <ProviderBusinessDetailsDialog
       profile={PROFILE}
       provider={overrides.provider ?? PROVIDER}
-      saving={overrides.saving ?? false}
+      saving={saving}
       saveError={overrides.saveError ?? null}
       fieldErrors={overrides.fieldErrors ?? {}}
       uploadProgress={null}
@@ -93,15 +96,19 @@ function renderDialog(
       onClearAvatar={() => {}}
       onSave={onSave}
       onClose={onClose}
-    />,
-  );
+    />;
+  const rendered = render(dialog(overrides.saving ?? false));
 
-  return { saves, onClose, onSave };
+  return { saves, onClose, onSave, ...rendered,
+    rerenderSaving: (saving: boolean) => rendered.rerender(dialog(saving)),
+  };
 }
 
 afterEach(() => {
+  geoapifyConfig.apiKey = initialGeocoderKey;
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("provider business details editor", () => {
@@ -131,6 +138,13 @@ describe("provider business details editor", () => {
   });
 
   it("edits every section and saves them together, with no admin-owned field", async () => {
+    // A changed address now requires an explicit map-location choice. Keep the
+    // issue1 complete-form regression while supplying a real geocoder-shaped fixture.
+    const originalKey = geoapifyConfig.apiKey;
+    geoapifyConfig.apiKey = "synthetic-test-key";
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ results: [
+      { formatted: "9 Elm Ave", neighbourhood: "North Austin", lat: 30.41, lon: -97.71 },
+    ] }) } as Response)));
     const { saves, onClose } = renderDialog();
 
     // All five sections are present and named, rather than one flat grid.
@@ -150,6 +164,8 @@ describe("provider business details editor", () => {
     fireEvent.change(screen.getByLabelText("Business address"), {
       target: { value: "9 Elm Ave" },
     });
+    fireEvent.click(await screen.findByRole("option", { name: "9 Elm Ave" }));
+    geoapifyConfig.apiKey = originalKey;
     fireEvent.change(screen.getByLabelText("Closes at"), { target: { value: "18:30" } });
     fireEvent.click(screen.getByRole("button", { name: "Wed" }));
 
@@ -237,8 +253,7 @@ describe("provider business details editor", () => {
   });
 
   it("shows the pending-review warning, the saving state, and a server failure", () => {
-    const { onClose } = renderDialog({
-      saving: true,
+    const { onClose, rerenderSaving } = renderDialog({
       saveError: "We could not save your changes.",
       fieldErrors: { licenseState: "Add the licence number this state belongs to." },
     });
@@ -251,6 +266,10 @@ describe("provider business details editor", () => {
     // Only the licence is named: the untouched insurance is not implicated.
     expect(screen.getByRole("status")).not.toHaveTextContent(/insurance to pending/i);
 
+    // The user edits before submission; a pending request then locks its draft.
+    rerenderSaving(true);
+    expect(screen.getByLabelText("Licence number")).toBeDisabled();
+
     const saveButton = screen.getByRole("button", { name: "Saving…" });
     expect(saveButton).toBeDisabled();
 
@@ -259,5 +278,89 @@ describe("provider business details editor", () => {
     expect(alerts).toContain("Add the licence number this state belongs to.");
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unadded service draft when cancelling and focuses its discard confirmation", () => {
+    const { onClose, onSave } = renderDialog();
+    const input = screen.getByLabelText("Add a service");
+    fireEvent.change(input, { target: { value: "Drain clearing" } });
+    input.focus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    const confirmation = screen.getByRole("alertdialog");
+    expect(within(confirmation).getByRole("button", { name: "Keep editing" })).toHaveFocus();
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Keep editing" }));
+    expect(input).toHaveValue("Drain clearing");
+    expect(input).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Discard" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("refuses to silently drop a thirteenth service typed immediately before Save", async () => {
+    const trades = Array.from({ length: 12 }, (_, index) => `Service ${index + 1}`);
+    const { onSave } = renderDialog({ provider: { ...PROVIDER, trades } });
+    const input = screen.getByLabelText("Add a service");
+    fireEvent.change(input, { target: { value: "One more service" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/at most 12 services/i);
+    expect(input).toHaveValue("One more service");
+  });
+
+  it("locks draft and every dismissal path during the actual pending save", async () => {
+    let resolve!: (saved: boolean) => void;
+    const pending = new Promise<boolean>((done) => { resolve = done; });
+    const { onSave, onClose } = renderDialog({ onSaveImpl: () => pending });
+    const company = screen.getByLabelText("Company name");
+    fireEvent.change(company, { target: { value: "Pending company" } });
+    const save = screen.getByRole("button", { name: "Save business details" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(company).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    resolve(false);
+    await waitFor(() => expect(company).not.toBeDisabled());
+    expect(company).toHaveValue("Pending company");
+    expect(onClose).not.toHaveBeenCalled();
+    // Failure releases the lock and retains the exact intended draft for retry.
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+  });
+
+  it("ignores a save completion from an already unmounted editor", async () => {
+    let resolve!: (saved: boolean) => void;
+    const pending = new Promise<boolean>((done) => { resolve = done; });
+    const { onClose, unmount } = renderDialog({ onSaveImpl: () => pending });
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    unmount();
+    await act(async () => { resolve(true); await pending; });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("keeps keyboard focus inside after a failed save (Shift=%s)", async (shiftKey) => {
+    // jsdom has no layout: expose visible controls to the production trap's
+    // offsetParent visibility check; browser review verifies actual geometry.
+    vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
+      return this.style.display === "none" ? null : this.parentElement;
+    });
+    let resolve!: (saved: boolean) => void;
+    const pending = new Promise<boolean>((done) => { resolve = done; });
+    renderDialog({ onSaveImpl: () => pending });
+    fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveFocus();
+    await act(async () => { resolve(false); await pending; });
+    expect(screen.getByLabelText("Company name")).not.toBeDisabled();
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey });
+    expect(screen.getByRole("button", { name: shiftKey ? "Save business details" : "Close" })).toHaveFocus();
   });
 });

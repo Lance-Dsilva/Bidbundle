@@ -46,9 +46,13 @@ beforeEach(() => {
   state.provider = {
     accountStatus: "pending",
     licenseNumber: "LIC-1",
+    licenseState: "TX",
     licenseVerifiedAt: null,
+    licenseVerifiedByUserId: null,
     insuranceProvider: "Acme Mutual",
+    insurancePolicyNumber: "POL-1",
     insuranceVerifiedAt: null,
+    insuranceVerifiedByUserId: null,
     user: { email: "provider@example.com" },
     updatedAt: new Date("2026-08-12T12:00:00.000Z"),
   };

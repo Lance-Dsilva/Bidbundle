@@ -14,6 +14,11 @@ import { buildAuditEntry, serializeAuditEntry } from "@/lib/server/audit";
 import { auditSelect, toPersonSummary } from "@/lib/server/communities";
 import { db } from "@/lib/server/db";
 import { buildPreferenceAwareNotificationOps } from "@/lib/server/notifications";
+import {
+  nextProviderUpdatedAt,
+  providerWriteSnapshotSelect,
+  providerWriteSnapshotWhere,
+} from "@/lib/server/profile";
 import type {
   ProviderAccountStatus,
   ProviderAdminUpdateInput,
@@ -236,11 +241,8 @@ export async function updateProviderAdministration(
   const provider = await db.providerProfile.findUnique({
     where: { userId },
     select: {
+      ...providerWriteSnapshotSelect,
       accountStatus: true,
-      licenseNumber: true,
-      licenseVerifiedAt: true,
-      insuranceProvider: true,
-      insuranceVerifiedAt: true,
       user: { select: { email: true } },
     },
   });
@@ -258,7 +260,8 @@ export async function updateProviderAdministration(
 
   if (
     (input.accountStatus || input.license || input.insurance) &&
-    (!input.expectedUpdatedAt || !Number.isFinite(new Date(input.expectedUpdatedAt).getTime()))
+    (!input.expectedUpdatedAt ||
+      new Date(input.expectedUpdatedAt).getTime() !== provider.updatedAt.getTime())
   ) {
     throw new CommunityRuleError(
       "stale_review",
@@ -377,19 +380,32 @@ export async function updateProviderAdministration(
       ])
     : [];
 
-  await db.$transaction([
-    db.providerProfile.update({
-      where: {
-        userId,
-        ...(input.expectedUpdatedAt
-          ? { updatedAt: new Date(input.expectedUpdatedAt) }
-          : {}),
-      },
-      data,
-    }),
-    ...auditEntries.map((entry) => db.adminAuditLog.create({ data: entry })),
-    ...notificationOps,
-  ]);
+  try {
+    await db.$transaction([
+      db.providerProfile.update({
+        where: {
+          userId,
+          accountStatus: provider.accountStatus,
+          ...providerWriteSnapshotWhere(provider),
+        },
+        data: { ...data, updatedAt: nextProviderUpdatedAt(provider) },
+      }),
+      ...auditEntries.map((entry) => db.adminAuditLog.create({ data: entry })),
+      ...notificationOps,
+    ]);
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      (error as { code?: unknown }).code === "P2025"
+    ) {
+      throw new CommunityRuleError(
+        "stale_review",
+        "Reload this provider and review the latest account state before making this change.",
+      );
+    }
+    throw error;
+  }
 
   return { changed: true };
 }

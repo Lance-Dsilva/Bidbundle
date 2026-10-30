@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
 
@@ -182,4 +182,67 @@ describe("provider service areas panel", () => {
     expect(post.url).toBe("/api/provider/service-areas");
     expect(post.body).toMatchObject({ label: "South", radiusMiles: 15 });
   });
+  it("retains a rejected edit and retries the exact draft without claiming it was saved", async () => {
+    let attempts = 0;
+    const canonical = { ...AREAS[0], label: "Canonical saved area", radiusMiles: 23 };
+    const calls = stubFetch((call) => {
+      if (call.method === "GET" && attempts > 1) {
+        return { ok: true, status: 200, json: async () => ({ areas: [canonical, AREAS[1]] }) } as Response;
+      }
+      if (call.method !== "PUT") return undefined;
+      attempts += 1;
+      return {
+        ok: attempts > 1,
+        status: attempts === 1 ? 503 : 200,
+        json: async () => attempts === 1 ? { error: "Temporarily unavailable" } : { area: canonical },
+      } as unknown as Response;
+    });
+    render(<ProviderServiceAreasPanel />);
+    await screen.findByText("North Austin");
+    fireEvent.change(screen.getByLabelText("Area name"), { target: { value: "KEEP MY UNSAVED NAME" } });
+    fireEvent.change(screen.getByLabelText("Service radius"), { target: { value: "23" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Temporarily unavailable");
+    expect(screen.getByLabelText("Area name")).toHaveValue("KEEP MY UNSAVED NAME");
+    expect(screen.getByLabelText("Service radius")).toHaveValue(23);
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Edit North Austin" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit KEEP MY UNSAVED NAME" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Last saved:/)).toHaveTextContent("15 miles");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(calls.filter((call) => call.method === "PUT")).toHaveLength(2));
+    const puts = calls.filter((call) => call.method === "PUT");
+    expect(puts[0].body).toMatchObject({ label: "KEEP MY UNSAVED NAME", radiusMiles: 23 });
+    expect(puts[1].body).toEqual(puts[0].body);
+    expect(await screen.findByRole("button", { name: "Edit Canonical saved area" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Area name")).toHaveValue("Canonical saved area"));
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
+
+  it("locks draft transitions and duplicate writes while a save is pending", async () => {
+    let resolveSave!: (response: Response) => void;
+    const pendingSave = new Promise<Response>((resolve) => { resolveSave = resolve; });
+    const calls = stubFetch((call) => call.method === "PUT" ? pendingSave : undefined);
+    render(<ProviderServiceAreasPanel />);
+    await screen.findByText("North Austin");
+    fireEvent.click(screen.getByRole("button", { name: "Edit Round Rock" }));
+    fireEvent.change(screen.getByLabelText("Area name"), { target: { value: "Changed Round Rock" } });
+    const north = screen.getByRole("button", { name: "Edit North Austin" }).closest("li")!;
+    fireEvent.click(within(north).getByRole("button", { name: "Remove" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add area" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Make primary" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit North Austin" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Keep it" })).toBeDisabled();
+    expect(screen.getByLabelText("Area name")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Saving…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit North Austin" }));
+    expect(screen.getByLabelText("Area name")).toHaveValue("Changed Round Rock");
+    expect(calls.filter((call) => call.method !== "GET")).toHaveLength(1);
+    await act(async () => { resolveSave({ ok: true, status: 200, json: async () => ({ area: AREAS[1] }) } as Response); await pendingSave; });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
+  });
+
 });

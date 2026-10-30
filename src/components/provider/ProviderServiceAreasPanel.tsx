@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ProviderServiceAreaEditor,
@@ -89,6 +89,8 @@ export function ProviderServiceAreasPanel({
   /** Lets the page refresh matched opportunities right after a saved edit. */
   onAreasChanged?: () => void;
 }) {
+  const mutationPendingRef = useRef(false);
+  const [editorSession, setEditorSession] = useState(0);
   const [areas, setAreas] = useState<ServiceAreaRecord[]>([]);
   const [unmappable, setUnmappable] = useState<ApiArea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,6 +167,8 @@ export function ProviderServiceAreasPanel({
 
   /** Selecting an area is what "edit" means here: the editor follows it. */
   const selectArea = (areaId: string) => {
+    if (mutationPendingRef.current) return;
+    setEditorSession((session) => session + 1);
     setCreating(false);
     setConfirmRemoveId(null);
     setFeedback(null);
@@ -194,7 +198,8 @@ export function ProviderServiceAreasPanel({
   }, [draft, selected]);
 
   const makePrimary = async () => {
-    if (!isServiceAreaDraftValid(draft) || !selectedId) return;
+    if (mutationPendingRef.current || !isServiceAreaDraftValid(draft) || !selectedId) return;
+    mutationPendingRef.current = true;
     setSaving(true);
     setFeedback(null);
     try {
@@ -214,11 +219,14 @@ export function ProviderServiceAreasPanel({
         message: "We could not make this your primary area. Please try again.",
       });
     } finally {
+      mutationPendingRef.current = false;
       setSaving(false);
     }
   };
 
   const startCreate = () => {
+    if (mutationPendingRef.current) return;
+    setEditorSession((session) => session + 1);
     setCreating(true);
     setConfirmRemoveId(null);
     setFeedback(null);
@@ -241,12 +249,15 @@ export function ProviderServiceAreasPanel({
   };
 
   const cancelEdit = () => {
+    if (mutationPendingRef.current) return;
+    setEditorSession((session) => session + 1);
     setCreating(false);
     setFeedback(null);
     setDraft(selected ? { ...selected } : null);
   };
 
   const save = async () => {
+    if (mutationPendingRef.current) return;
     if (!isServiceAreaDraftValid(draft)) {
       setFeedback({
         tone: "error",
@@ -254,6 +265,7 @@ export function ProviderServiceAreasPanel({
       });
       return;
     }
+    mutationPendingRef.current = true;
     setSaving(true);
     setFeedback(null);
 
@@ -262,15 +274,7 @@ export function ProviderServiceAreasPanel({
       : `/api/provider/service-areas/${selectedId}`;
     const method = creating ? "POST" : "PUT";
 
-    // Optimistic only for an edit, where the previous row is known and can be
-    // put back verbatim. A create has nothing to roll back to.
-    const previous = areas;
-    if (!creating && selectedId) {
-      setAreas((current) =>
-        current.map((area) => (area.id === selectedId ? { ...area, ...draft } : area)),
-      );
-    }
-
+    // Keep saved cards canonical; a rejected request must leave the draft intact.
     try {
       const response = await fetch(url, {
         method,
@@ -283,7 +287,6 @@ export function ProviderServiceAreasPanel({
         | null;
 
       if (!response.ok || !payload?.area) {
-        setAreas(previous);
         const firstFieldError = payload?.fields ? Object.values(payload.fields)[0] : undefined;
         setFeedback({
           tone: "error",
@@ -307,17 +310,19 @@ export function ProviderServiceAreasPanel({
       await load({ keepSelection: true });
       onAreasChanged?.();
     } catch {
-      setAreas(previous);
       setFeedback({
         tone: "error",
         message: "We could not reach Bundleen. Check your connection and try again.",
       });
     } finally {
+      mutationPendingRef.current = false;
       setSaving(false);
     }
   };
 
   const remove = async (areaId: string) => {
+    if (mutationPendingRef.current) return;
+    mutationPendingRef.current = true;
     setSaving(true);
     setFeedback(null);
     try {
@@ -345,6 +350,7 @@ export function ProviderServiceAreasPanel({
         message: "We could not reach Bundleen. Check your connection and try again.",
       });
     } finally {
+      mutationPendingRef.current = false;
       setSaving(false);
     }
   };
@@ -355,6 +361,7 @@ export function ProviderServiceAreasPanel({
   return (
     <section
       id="service-areas"
+      tabIndex={-1}
       aria-labelledby="service-areas-heading"
       className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
     >
@@ -375,7 +382,7 @@ export function ProviderServiceAreasPanel({
           type="button"
           onClick={startCreate}
           disabled={loading || saving || atMax || creating}
-          className="h-10 shrink-0 rounded-xl bg-teal-600 px-4 text-[13px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-40"
+          className="h-11 shrink-0 rounded-xl bg-teal-600 px-4 text-[13px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-40"
         >
           Add area
         </button>
@@ -398,7 +405,7 @@ export function ProviderServiceAreasPanel({
           <button
             type="button"
             onClick={() => void load()}
-            className="mt-2 text-[12px] font-bold text-red-700 underline"
+            className="mt-2 min-h-11 min-w-11 text-[12px] font-bold text-red-700 underline"
           >
             Try again
           </button>
@@ -435,10 +442,11 @@ export function ProviderServiceAreasPanel({
                       aria-current={active ? "true" : undefined}
                       aria-label={`Edit ${area.label}`}
                       onClick={() => selectArea(area.id)}
-                      className="block w-full text-left"
+                      disabled={saving}
+                      className="block min-h-11 w-full text-left disabled:opacity-40"
                     >
-                      <span className="flex items-center gap-2">
-                        <span className="min-w-0 truncate text-[13px] font-bold text-slate-900">
+                      <span className="flex min-w-0 items-start gap-2">
+                        <span className="min-w-0 break-words text-[13px] font-bold text-slate-900">
                           {area.label}
                         </span>
                         {area.isPrimary ? (
@@ -447,7 +455,7 @@ export function ProviderServiceAreasPanel({
                           </span>
                         ) : null}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+                      <span className="mt-0.5 block break-words text-[11px] text-slate-500">
                         {coverageListLabel({ radiusMiles: area.radiusMiles, place: area })}
                       </span>
                     </button>
@@ -470,6 +478,7 @@ export function ProviderServiceAreasPanel({
                           </button>
                           <button
                             type="button"
+                            disabled={saving}
                             onClick={() => setConfirmRemoveId(null)}
                             className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-[12px] font-semibold text-slate-700"
                           >
@@ -482,7 +491,8 @@ export function ProviderServiceAreasPanel({
                         <button
                           type="button"
                           onClick={() => selectArea(area.id)}
-                          className="text-[11px] font-bold text-teal-700 hover:underline"
+                          disabled={saving}
+                          className="min-h-11 min-w-11 text-[11px] font-bold text-teal-700 hover:underline disabled:opacity-40"
                         >
                           {active ? "Editing" : "Edit"}
                         </button>
@@ -490,7 +500,7 @@ export function ProviderServiceAreasPanel({
                           type="button"
                           disabled={saving}
                           onClick={() => setConfirmRemoveId(area.id)}
-                          className="text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
+                          className="min-h-11 min-w-11 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
                         >
                           Remove
                         </button>
@@ -511,6 +521,7 @@ export function ProviderServiceAreasPanel({
           {/* ── Editor ───────────────────────────────────────────────────── */}
           {draft || creating ? (
             <ProviderServiceAreaEditor
+              key={editorSession}
               value={draft}
               onChange={setDraft}
               contextCircles={contextCircles}
@@ -564,7 +575,7 @@ export function ProviderServiceAreasPanel({
                   ) : null}
 
                   {selected && !creating ? (
-                    <p className="text-[12px] leading-5 text-slate-500">
+                    <p className="break-words text-[12px] leading-5 text-slate-500">
                       Last saved:{" "}
                       {coverageSummary({
                         radiusMiles: selected.radiusMiles,
@@ -599,12 +610,12 @@ export function ProviderServiceAreasPanel({
                     key={area.id}
                     className="flex items-center justify-between gap-2 text-[12px] text-slate-700"
                   >
-                    <span className="min-w-0 truncate">{area.label}</span>
+                    <span className="min-w-0 break-words">{area.label}</span>
                     <button
                       type="button"
                       disabled={saving}
                       onClick={() => void remove(area.id)}
-                      className="shrink-0 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
+                      className="min-h-11 min-w-11 shrink-0 text-[11px] font-bold text-red-600 hover:underline disabled:opacity-40"
                     >
                       Remove
                     </button>
