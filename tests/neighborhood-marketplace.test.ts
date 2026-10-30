@@ -95,6 +95,7 @@ vi.mock("@/lib/server/db", () => ({
     providerServiceArea: { findMany: async () => [] },
     providerProfile: { findMany: async () => [] },
     homeownerProfile: { findMany: async () => [] },
+    $executeRaw: (query: unknown) => op("managerAuthority", "assert")({ query }),
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;
@@ -124,6 +125,7 @@ function collectingRequest(overrides: Record<string, unknown> = {}) {
     id: "request-1",
     communityId: "hood-1",
     status: "collecting_interest",
+    updatedAt: new Date(),
     kind: "optional_group",
     title: "Pressure washing",
     category: "cleaning",
@@ -533,12 +535,11 @@ describe("awarding a neighbourhood request", () => {
     expect(state.batches).toHaveLength(0);
   });
 
-  it("refuses while bidding is still open", async () => {
+  it("permits a manager award while bidding is still open", async () => {
     state.request = { ...state.request!, status: "open_for_bids" };
-    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toThrow(
-      /Close bidding/,
-    );
-    expect(state.batches).toHaveLength(0);
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).resolves.toBeTypeOf("string");
+    expect(state.batches).toHaveLength(1);
+    expect(state.batches[0][0]).toMatchObject({ model: "hoaServiceRequest", action: "update", args: { where: { status: "open_for_bids", updatedAt: state.request.updatedAt }, data: { status: "awarded", biddingClosesAt: expect.any(Date) } } });
   });
 
   it("is idempotent under a double-click", async () => {

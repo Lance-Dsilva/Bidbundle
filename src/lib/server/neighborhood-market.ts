@@ -24,7 +24,11 @@ import {
   serializeVisitForViewer,
   visitViewInclude,
 } from "@/lib/server/visit-views";
-import { CATEGORY_LABELS, type ServiceCategory } from "@/lib/validation/homeowner-requests";
+import {
+  CATEGORY_LABELS,
+  type OwnerRequestMutationInput,
+  type ServiceCategory,
+} from "@/lib/validation/homeowner-requests";
 
 /**
  * The neighbourhood side of the marketplace: enrolment, transparency, and the
@@ -173,6 +177,139 @@ export async function respondToNeighborhoodRequest(
   return { response, joinedCount };
 }
 
+/* ── Request owner changes ───────────────────────────────────────────────── */
+
+/**
+ * A creator can correct or withdraw their own unlocked request, never manage
+ * someone else's lifecycle. The conditional write is the first operation in
+ * the same transaction as its audit and notification intents. Losing a race
+ * with bidding, another edit, or revoked membership therefore writes nothing.
+ */
+export async function mutateOwnedNeighborhoodRequest(
+  userId: string,
+  requestId: string,
+  input: OwnerRequestMutationInput,
+): Promise<void> {
+  const request = await db.hoaServiceRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      id: true,
+      communityId: true,
+      createdByUserId: true,
+      createdBy: { select: { role: true } },
+      title: true,
+      category: true,
+      description: true,
+      budgetMinCents: true,
+      budgetMaxCents: true,
+      kind: true,
+      status: true,
+      updatedAt: true,
+      participantsLockedAt: true,
+      agreement: { select: { id: true } },
+      bids: { select: { id: true }, take: 1 },
+      community: { select: { type: true } },
+    },
+  });
+  if (!request || request.community.type !== "neighborhood") {
+    throw new HoaWorkflowError("That service request does not exist.", 404);
+  }
+  const membership = await requireActiveNeighborhoodMember(userId, request.communityId);
+  if (request.createdByUserId !== userId || request.createdBy.role !== "homeowner") {
+    throw new HoaWorkflowError("Only the homeowner who opened this request can change it.", 403);
+  }
+  if (request.kind !== "optional_group" || !PRE_BIDDING_STATUSES.has(request.status) ||
+    request.participantsLockedAt !== null || request.agreement || request.bids.length > 0) {
+    throw new HoaWorkflowError("This request can no longer be edited or cancelled. Refresh to see its current status.", 409);
+  }
+
+  const changedFields = input.action === "edit"
+    ? (["title", "category", "description", "budgetMinCents", "budgetMaxCents"] as const)
+      .filter((field) => request[field] !== input[field])
+    : ["status"];
+  if (changedFields.length === 0) return;
+
+  // Advance even when two changes land within one millisecond. The value is
+  // also part of a per-edit event key, not a request-wide notification key.
+  const updatedAt = new Date(Math.max(Date.now(), request.updatedAt.getTime() + 1));
+  const title = input.action === "edit" ? input.title : request.title;
+  const nextStatus = input.action === "cancel" ? "cancelled" : request.status;
+  const recipients = request.status === "collecting_interest"
+    ? await db.communityMembership.findMany({
+      where: { communityId: request.communityId, status: "active", NOT: { userId } },
+      select: { user: { select: { id: true, email: true } } },
+    })
+    : [];
+  const notificationOps = await buildPreferenceAwareNotificationOps(recipients.map(({ user }) => ({
+    userId: user.id,
+    email: user.email,
+    kind: "request" as const,
+    title: `${membership.communityName}: service request ${input.action === "cancel" ? "cancelled" : "updated"}`,
+    body: input.action === "cancel"
+      ? `“${title}” was cancelled by the homeowner who opened it. No service is scheduled for this request.`
+      : `The homeowner updated “${title}”. Review the scope and budget before deciding whether to take part.`,
+    linkPath: "/app/homeowner/neighbourhood",
+    dedupeKey: `owner-request:${request.id}:${input.action}:${updatedAt.toISOString()}:${user.id}`,
+  })));
+
+  try {
+    await db.$transaction([
+      db.hoaServiceRequest.update({
+        where: {
+          id: request.id,
+          createdByUserId: userId,
+          createdBy: { role: "homeowner" },
+          communityId: request.communityId,
+          community: {
+            type: "neighborhood",
+            status: "active",
+            memberships: { some: { userId, status: "active" } },
+          },
+          kind: "optional_group",
+          status: request.status,
+          updatedAt: request.updatedAt,
+          participantsLockedAt: null,
+          agreement: { is: null },
+          bids: { none: {} },
+        },
+        data: input.action === "cancel"
+          ? { status: "cancelled", updatedAt }
+          : {
+            title: input.title,
+            category: input.category,
+            description: input.description,
+            budgetMinCents: input.budgetMinCents,
+            budgetMaxCents: input.budgetMaxCents,
+            updatedAt,
+          },
+      }),
+      db.adminAuditLog.create({
+        data: buildAuditEntry({
+          actorUserId: userId,
+          action: "hoa_request_status_changed",
+          targetType: "hoa_request",
+          targetId: request.id,
+          communityId: request.communityId,
+          metadata: {
+            context: "neighborhood",
+            via: "request_owner",
+            reason: input.action === "edit" ? "owner_edit" : "owner_cancel",
+            previousStatus: request.status,
+            nextStatus,
+            changedFields,
+          },
+        }),
+      }),
+      ...notificationOps,
+    ]);
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025") {
+      throw new HoaWorkflowError("This request changed before your update was saved. Refresh and try again.", 409);
+    }
+    throw error;
+  }
+}
+
 /* ── Reads ───────────────────────────────────────────────────────────────── */
 
 const requestSelect = {
@@ -184,6 +321,7 @@ const requestSelect = {
   status: true,
   budgetMinCents: true,
   budgetMaxCents: true,
+  totalOccurrences: true,
   minHomes: true,
   maxHomes: true,
   enrollmentClosesAt: true,
@@ -193,8 +331,11 @@ const requestSelect = {
   startDate: true,
   createdByUserId: true,
   createdAt: true,
+  kind: true,
+  agreement: { select: { id: true } },
+  bids: { select: { id: true }, take: 1 },
   community: { select: { id: true, name: true } },
-  createdBy: { select: { fullName: true } },
+  createdBy: { select: { fullName: true, role: true } },
   participations: {
     select: {
       response: true,
@@ -235,7 +376,8 @@ function permissionsFor(input: {
     // Transparent comparison for everyone taking part, but never for a
     // neighbour who declined or never answered.
     canViewBids: isManager || isOwner || viewerResponse === "joined",
-    canEdit: isOwner && PRE_BIDDING_STATUSES.has(row.status),
+    canEdit: isOwner && row.createdBy.role === "homeowner" && row.kind === "optional_group" && PRE_BIDDING_STATUSES.has(row.status) &&
+      row.participantsLockedAt === null && row.agreement === null && row.bids.length === 0,
   };
 }
 
@@ -355,6 +497,7 @@ async function serializeRequest(input: {
     participantsLockedAt: row.participantsLockedAt?.toISOString() ?? null,
     awardedAt: row.awardedAt?.toISOString() ?? null,
     startDate: row.startDate?.toISOString() ?? null,
+    totalOccurrences: row.totalOccurrences,
     joinedCount: joined.length,
     declinedCount: declined.length,
     bidCount: row._count.bids,
@@ -430,7 +573,10 @@ export async function getNeighborhoodHub(userId: string): Promise<NeighborhoodHu
     findNeighborhoodManager(communityId),
     db.communityMembership.count({ where: { communityId, status: "active" } }),
     db.hoaServiceRequest.findMany({
-      where: { communityId, status: { not: "draft" } },
+      where: {
+        communityId,
+        OR: [{ status: { not: "draft" } }, { createdByUserId: userId }],
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: requestSelect,
@@ -464,7 +610,11 @@ export async function getNeighborhoodRequest(
   requestId: string,
 ): Promise<NeighborhoodRequestView> {
   const row = await db.hoaServiceRequest.findFirst({
-    where: { id: requestId, community: { type: "neighborhood" } },
+    where: {
+      id: requestId,
+      community: { type: "neighborhood" },
+      OR: [{ status: { not: "draft" } }, { createdByUserId: userId }],
+    },
     select: requestSelect,
   });
   if (!row) throw new HoaWorkflowError("That service request does not exist.", 404);

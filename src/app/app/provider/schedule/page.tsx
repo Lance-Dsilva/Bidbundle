@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { apiFetch } from "@/lib/api";
@@ -38,6 +39,18 @@ export default function ProviderSchedulePage() {
   const { workspace, loading, error, refresh } = useProviderMarketplace();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const [confirmation, setConfirmation] = useState<{
+    agreementId: string; occurrenceId: string; visitId: string; previousStatus: string;
+    status: "completed" | "skipped" | "blocked"; stopLabel: string; serviceDate: string; title: string;
+  } | null>(null);
+  const currentOccurrence = confirmation ? workspace?.occurrencesByAgreement[confirmation.agreementId]?.find((item) => item.id === confirmation.occurrenceId) : null;
+  const currentVisit = confirmation ? currentOccurrence?.visits.find((visit) => visit.id === confirmation.visitId) : null;
+  const validConfirmation = Boolean(confirmation && currentVisit && currentVisit.status === confirmation.previousStatus &&
+    currentVisit.stopLabel === confirmation.stopLabel && currentOccurrence?.serviceDate === confirmation.serviceDate &&
+    workspace?.agreements.some((agreement) => agreement.id === confirmation.agreementId && agreement.status === "active") &&
+    (NEXT_STATUSES[currentVisit.status] ?? []).includes(confirmation.status));
+
 
   const agreementsById = useMemo(() => {
     const map = new Map<string, AgreementSummary>();
@@ -46,14 +59,19 @@ export default function ProviderSchedulePage() {
   }, [workspace]);
 
   const call = async (path: string, body: unknown) => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
     setBusy(true);
     setActionError(null);
     try {
       await apiFetch(path, { method: "POST", body: JSON.stringify(body) });
       await refresh();
+      return true;
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : "That change was not saved.");
+      return false;
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -128,21 +146,50 @@ export default function ProviderSchedulePage() {
                       publish: true,
                     })
                   }
-                  onStatus={(visitId, status) =>
-                    void call(`/provider/marketplace/visits/${visitId}/status`, {
-                      status,
-                      completionNote:
-                        status === "skipped" || status === "blocked"
-                          ? "Reported from the provider schedule."
-                          : null,
-                    })
-                  }
+                  onStatus={(visitId, status) => {
+                    if (status === "completed" || status === "skipped" || status === "blocked") {
+                      const visit = occurrence.visits.find((item) => item.id === visitId);
+                      if (!visit) return;
+                      setActionError(null);
+                      setConfirmation({
+                        agreementId, occurrenceId: occurrence.id, visitId, previousStatus: visit.status,
+                        status, stopLabel: visit.stopLabel, serviceDate: occurrence.serviceDate,
+                        title: agreementsById.get(agreementId)?.requestTitle ?? "Awarded work",
+                      });
+                    } else {
+                      void call(`/provider/marketplace/visits/${visitId}/status`, { status, completionNote: null });
+                    }
+                  }}
                 />
               ))}
             </section>
           ))}
         </div>
       )}
+      {confirmation ? (
+        <ConfirmAction
+          open
+          title={confirmation.status === "completed" ? "Mark this visit complete?" : `Mark this visit ${confirmation.status}?`}
+          confirmLabel={confirmation.status === "completed" ? "Mark complete" : `Mark ${confirmation.status}`}
+          destructive={confirmation.status !== "completed"}
+          valid={validConfirmation} error={actionError}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => {
+            if (!validConfirmation || busy) return false;
+            return call(`/provider/marketplace/visits/${confirmation.visitId}/status`, {
+              status: confirmation.status,
+              completionNote: confirmation.status === "skipped" || confirmation.status === "blocked"
+                ? "Reported from the provider schedule." : null,
+            });
+          }}
+          description={<>
+            <p>“{confirmation.title}” — {confirmation.stopLabel}, service day {new Date(confirmation.serviceDate).toLocaleDateString()}.</p>
+            <p>{confirmation.status === "completed"
+              ? "This marks this visit complete. The resident may be notified and asked to review the service, according to their preferences."
+              : `This marks this visit ${confirmation.status}. The resident may be notified according to their preferences. It does not automatically schedule another visit.`}</p>
+          </>}
+        />
+      ) : null}
     </div>
   );
 }

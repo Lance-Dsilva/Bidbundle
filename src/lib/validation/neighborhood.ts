@@ -35,7 +35,10 @@ export const neighborhoodTransitionSchema = z
 export type NeighborhoodTransitionInput = z.infer<typeof neighborhoodTransitionSchema>;
 
 export const neighborhoodAwardSchema = z
-  .object({ bidId: z.string().trim().min(1).max(64) })
+  .object({
+    bidId: z.string().trim().min(1).max(64),
+    expectedBidVersion: z.number().int().positive().optional(),
+  })
   .strict();
 
 export type NeighborhoodAwardInput = z.infer<typeof neighborhoodAwardSchema>;

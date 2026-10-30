@@ -1,5 +1,6 @@
 import "server-only";
 
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import type { BidSummary } from "@/lib/hoa-types";
 import { db } from "@/lib/server/db";
 
@@ -56,7 +57,7 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
         ],
       },
     },
-    orderBy: [{ status: "asc" }, { amountCents: "asc" }],
+    orderBy: { id: "asc" },
     take: 200,
     include: {
       request: {
@@ -65,6 +66,8 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
           status: true,
           category: true,
           communityId: true,
+          totalOccurrences: true,
+          _count: { select: { participations: { where: { response: "joined" } } } },
           community: { select: { name: true } },
         },
       },
@@ -98,6 +101,8 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
     currency: row.currency,
     pricingBasis: row.pricingBasis,
     perHomeCents: row.perHomeCents,
+    homeCount: row.request._count?.participations,
+    totalOccurrences: row.request.totalOccurrences,
     proposedStartDate: row.proposedStartDate?.toISOString() ?? null,
     estimatedDurationLabel: row.estimatedDurationLabel,
     scope: row.scope,
@@ -112,9 +117,10 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
     communityName: row.request.community.name,
     canAward:
       row.status === "submitted" &&
-      row.request.status === "bidding_closed" &&
+      row.pricingBasis === "total" &&
+      ["open_for_bids", "bidding_closed"].includes(row.request.status) &&
       managedCommunityIds.has(row.request.communityId),
-  }));
+  })).sort((a, b) => a.requestId.localeCompare(b.requestId) || compareBidQuotes(a, b));
 }
 
 /* ── Provider: earnings ──────────────────────────────────────────────────── */

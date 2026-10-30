@@ -2,7 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import type {
   AgreementSummary,
   BidSummary,
@@ -49,6 +50,7 @@ import {
   contentHash,
   type NotificationIntent,
 } from "@/lib/server/notifications";
+import { MAX_BID_AMOUNT_CENTS } from "@/lib/validation/hoa";
 import type {
   AwardInput,
   BidSubmitInput,
@@ -69,6 +71,34 @@ import type {
  * Everything here re-derives authority from live Neon rows on every call —
  * a request/unit/bid id in the URL never grants access by itself.
  */
+
+/** Parent-before-child ordering is part of each batch, never an autocommit lock. */
+function lockRequestForBid(requestId: string) {
+  return db.$queryRaw(Prisma.sql`SELECT "id" FROM "HoaServiceRequest" WHERE "id" = ${requestId} FOR UPDATE`);
+}
+
+function assertPreparedManager(userId: string, requestId: string, via: string) {
+  return db.$executeRaw(Prisma.sql`SELECT "bundleen_assert_request_manager"(${userId}, ${requestId}, ${via})`);
+}
+
+/** Only our named SQL guard codes become a retryable workflow conflict. */
+function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
+  const object = (value: unknown): Record<string, unknown> | null =>
+    typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
+  const entry = object(error);
+  const meta = object(entry?.meta);
+  const cause = object(object(meta?.driverAdapterError)?.cause);
+  const directCause = object(entry?.cause);
+  const codes = [entry?.code, meta?.code, cause?.originalCode, cause?.code, directCause?.code];
+  if (codes.includes("P1701")) return new HoaWorkflowError("This bid or bidding window changed. Refresh before trying again.", 409);
+  if (codes.includes("P1702")) return new HoaWorkflowError("This quote or provider changed since you reviewed it. Refresh and review the current quote.", 409);
+  if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
+  return null;
+}
+
+function nextRequestStamp(previous: Date, now: Date): Date {
+  return new Date(Math.max(now.getTime(), previous.getTime() + 1));
+}
 
 /* ── Serializers ─────────────────────────────────────────────────────────── */
 
@@ -151,6 +181,10 @@ type BidRow = {
   validUntil: Date | null;
   version: number;
   submittedAt: Date;
+  request?: {
+    totalOccurrences: number;
+    _count: { participations: number };
+  };
   provider: {
     fullName: string;
     providerProfile: {
@@ -162,6 +196,12 @@ type BidRow = {
 };
 
 const bidInclude = {
+  request: {
+    select: {
+      totalOccurrences: true,
+      _count: { select: { participations: { where: { response: "joined" } } } },
+    },
+  },
   provider: {
     select: {
       fullName: true,
@@ -188,6 +228,8 @@ function serializeBid(row: BidRow): BidSummary {
     currency: row.currency,
     pricingBasis: row.pricingBasis,
     perHomeCents: row.perHomeCents,
+    homeCount: row.request?._count?.participations,
+    totalOccurrences: row.request?.totalOccurrences,
     proposedStartDate: row.proposedStartDate?.toISOString() ?? null,
     estimatedDurationLabel: row.estimatedDurationLabel,
     scope: row.scope,
@@ -482,33 +524,48 @@ export async function transitionHoaRequest(
               : request.biddingClosesAt,
           })
         : [];
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: {
-            status: isCompulsory ? "open_for_bids" : "collecting_interest",
-            opensAt: request.opensAt ?? now,
-            participantsLockedAt: isCompulsory ? now : null,
-            ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
-          },
-        }),
-        ...(isCompulsory
-          ? [
-              db.hoaRequestParticipation.createMany({
-                data: audience.map((unit) => ({
-                  id: randomUUID(),
-                  requestId: request.id,
-                  unitId: unit.id,
-                  userId: unit.memberships[0]?.userId ?? null,
-                  response: "joined" as const,
-                })),
-                skipDuplicates: true,
-              }),
-            ]
-          : []),
-        audit(isCompulsory ? "open_for_bids" : "collecting_interest"),
-        ...(await buildPreferenceAwareNotificationOps([...intents, ...providerIntents])),
-      ]);
+      // Publishing a draft competes with its owner's corrections/withdrawal.
+      // Only the still-unlocked snapshot may publish and enqueue its audience.
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: {
+              id: request.id,
+              status: "draft",
+              updatedAt: request.updatedAt,
+              participantsLockedAt: null,
+              agreement: { is: null },
+            },
+            data: {
+              status: isCompulsory ? "open_for_bids" : "collecting_interest",
+              opensAt: request.opensAt ?? now,
+              participantsLockedAt: isCompulsory ? now : null,
+              ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
+            },
+          }),
+          ...(isCompulsory
+            ? [
+                db.hoaRequestParticipation.createMany({
+                  data: audience.map((unit) => ({
+                    id: randomUUID(),
+                    requestId: request.id,
+                    unitId: unit.id,
+                    userId: unit.memberships[0]?.userId ?? null,
+                    response: "joined" as const,
+                  })),
+                  skipDuplicates: true,
+                }),
+              ]
+            : []),
+          audit(isCompulsory ? "open_for_bids" : "collecting_interest"),
+          ...(await buildPreferenceAwareNotificationOps([...intents, ...providerIntents])),
+        ]);
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before it was published. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
 
@@ -549,28 +606,46 @@ export async function transitionHoaRequest(
       });
       // Locking the participant snapshot means providers quote against a
       // stable home count from this point on.
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: {
-            status: "open_for_bids",
-            biddingClosesAt,
-            participantsLockedAt: now,
-          },
-        }),
-        db.adminAuditLog.create({
-          data: buildAuditEntry({
-            actorUserId: userId,
-            action: "hoa_participants_locked",
-            targetType: "hoa_request",
-            targetId: request.id,
-            communityId: request.communityId,
-            metadata: { lockedHomeCount: joinedHomes.length, context: request.community.type },
+      // A homeowner may edit/cancel while we prepare the provider audience.
+      // Claim the same still-unlocked snapshot before committing any intents;
+      // an old manager click must not resurrect a cancellation or invite quotes
+      // against a scope that changed after it was read.
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: {
+              id: request.id,
+              status: "collecting_interest",
+              kind: "optional_group",
+              updatedAt: request.updatedAt,
+              participantsLockedAt: null,
+              agreement: { is: null },
+            },
+            data: {
+              status: "open_for_bids",
+              biddingClosesAt,
+              participantsLockedAt: now,
+            },
           }),
-        }),
-        audit("open_for_bids", { lockedHomeCount: joinedHomes.length }),
-        ...(await buildPreferenceAwareNotificationOps(providerIntents)),
-      ]);
+          db.adminAuditLog.create({
+            data: buildAuditEntry({
+              actorUserId: userId,
+              action: "hoa_participants_locked",
+              targetType: "hoa_request",
+              targetId: request.id,
+              communityId: request.communityId,
+              metadata: { lockedHomeCount: joinedHomes.length, context: request.community.type },
+            }),
+          }),
+          audit("open_for_bids", { lockedHomeCount: joinedHomes.length }),
+          ...(await buildPreferenceAwareNotificationOps(providerIntents)),
+        ]);
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before bidding opened. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
 
@@ -578,13 +653,23 @@ export async function transitionHoaRequest(
       if (request.status !== "open_for_bids") {
         throw new HoaWorkflowError("Bidding is not open on this request.");
       }
-      await db.$transaction([
-        db.hoaServiceRequest.update({
-          where: { id: request.id },
-          data: { status: "bidding_closed", biddingClosesAt: request.biddingClosesAt ?? now },
-        }),
-        audit("bidding_closed"),
-      ]);
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: { id: request.id, status: request.status, updatedAt: request.updatedAt, agreement: { is: null } },
+            data: { status: "bidding_closed", biddingClosesAt: request.biddingClosesAt ?? now, updatedAt: nextRequestStamp(request.updatedAt, now) },
+          }),
+          assertPreparedManager(userId, request.id, authority.via),
+          audit("bidding_closed"),
+        ]);
+      } catch (error) {
+        const conflict = preparedWorkflowConflict(error);
+        if (conflict) throw conflict;
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before bidding closed. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
 
@@ -669,15 +754,28 @@ export async function transitionHoaRequest(
           dedupeKey: `request-cancelled:${request.id}:${provider.id}`,
         })),
       ];
-      await db.$transaction([
-        db.hoaServiceRequest.update({ where: { id: request.id }, data: { status: "cancelled" } }),
-        db.serviceBid.updateMany({
-          where: { requestId: request.id, status: "submitted" },
-          data: { status: "expired", decidedAt: now },
-        }),
-        audit("cancelled"),
-        ...(await buildPreferenceAwareNotificationOps(cancellationIntents)),
-      ]);
+      try {
+        await db.$transaction([
+          db.hoaServiceRequest.update({
+            where: { id: request.id, status: request.status, updatedAt: request.updatedAt, agreement: { is: null } },
+            data: { status: "cancelled", updatedAt: nextRequestStamp(request.updatedAt, now) },
+          }),
+          assertPreparedManager(userId, request.id, authority.via),
+          db.serviceBid.updateMany({
+            where: { requestId: request.id, status: "submitted" },
+            data: { status: "expired", decidedAt: now },
+          }),
+          audit("cancelled"),
+          ...(await buildPreferenceAwareNotificationOps(cancellationIntents)),
+        ]);
+      } catch (error) {
+        const conflict = preparedWorkflowConflict(error);
+        if (conflict) throw conflict;
+        if ((error as { code?: string }).code === "P2025") {
+          throw new HoaWorkflowError("This request changed before cancellation. Refresh and try again.", 409);
+        }
+        throw error;
+      }
       return;
     }
   }
@@ -1316,6 +1414,11 @@ export async function submitBid(
   const gate = await requireProvider(providerUserId);
   const now = new Date();
 
+  if (input.pricingBasis !== "total" || input.perHomeCents != null ||
+      !Number.isSafeInteger(input.amountCents) || input.amountCents < 0 || input.amountCents > MAX_BID_AMOUNT_CENTS) {
+    throw new HoaWorkflowError("Quote the total price for the whole job. Per-home and per-visit amounts are calculated for comparison.", 400);
+  }
+
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     select: {
@@ -1377,8 +1480,8 @@ export async function submitBid(
   const data = {
     status: "submitted" as const,
     amountCents: input.amountCents,
-    pricingBasis: input.pricingBasis,
-    perHomeCents: input.perHomeCents ?? null,
+    pricingBasis: "total" as const,
+    perHomeCents: null,
     proposedStartDate: input.proposedStartDate ? new Date(input.proposedStartDate) : null,
     estimatedDurationLabel: input.estimatedDurationLabel,
     scope: input.scope,
@@ -1399,27 +1502,46 @@ export async function submitBid(
     requestId: request.id,
   });
 
-  await db.$transaction([
-    existing
-      ? db.serviceBid.update({
-          where: { id: bidId },
-          data: { ...data, version: { increment: 1 } },
-        })
-      : db.serviceBid.create({
-          data: { id: bidId, requestId, providerUserId, ...data },
-        }),
-    ...(await buildPreferenceAwareNotificationOps(
-      recipients.map((recipient) => ({
-        userId: recipient.userId,
-        email: recipient.email,
-        kind: "bid" as const,
-        title: `New bid on “${request.title}”`,
-        body: `A provider ${existing ? "revised their" : "submitted a"} bid for ${request.community.name}.`,
-        linkPath: recipient.linkPath,
-        dedupeKey: `bid:${bidId}:v${(existing?.version ?? 0) + 1}:${recipient.userId}`,
-      })),
-    )),
-  ]);
+  try {
+    await db.$transaction([
+      lockRequestForBid(request.id),
+      existing
+        ? db.serviceBid.update({
+            where: {
+              id: bidId,
+              version: existing.version,
+              status: existing.status,
+              request: {
+                status: "open_for_bids",
+                community: { status: "active" },
+                OR: [{ biddingClosesAt: null }, { biddingClosesAt: { gt: new Date() } }],
+              },
+            },
+            data: { ...data, version: { increment: 1 } },
+          })
+        : db.serviceBid.create({
+            data: { id: bidId, requestId, providerUserId, ...data },
+          }),
+      ...(await buildPreferenceAwareNotificationOps(
+        recipients.map((recipient) => ({
+          userId: recipient.userId,
+          email: recipient.email,
+          kind: "bid" as const,
+          title: `New bid on “${request.title}”`,
+          body: `A provider ${existing ? "revised their" : "submitted a"} bid for ${request.community.name}.`,
+          linkPath: recipient.linkPath,
+          dedupeKey: `bid:${bidId}:v${(existing?.version ?? 0) + 1}:${recipient.userId}`,
+        })),
+      )),
+    ]);
+  } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
+    if ((error as { code?: string }).code === "P2025") {
+      throw new HoaWorkflowError("This bid or bidding window changed. Refresh before submitting again.", 409);
+    }
+    throw error;
+  }
 
   const row = await db.serviceBid.findUniqueOrThrow({
     where: { id: bidId },
@@ -1432,17 +1554,37 @@ export async function withdrawBid(providerUserId: string, requestId: string): Pr
   await requireProvider(providerUserId);
   const bid = await db.serviceBid.findUnique({
     where: { requestId_providerUserId: { requestId, providerUserId } },
-    select: { id: true, status: true, request: { select: { status: true } } },
+    select: { id: true, status: true, version: true, request: { select: { status: true } } },
   });
   if (!bid) throw new HoaWorkflowError("You have no bid on this request.", 404);
   if (bid.status !== "submitted") throw new HoaWorkflowError("This bid cannot be withdrawn.");
   if (bid.request.status !== "open_for_bids") {
     throw new HoaWorkflowError("Bidding has closed; the bid can no longer be withdrawn.");
   }
-  await db.serviceBid.update({
-    where: { id: bid.id },
-    data: { status: "withdrawn", withdrawnAt: new Date() },
-  });
+  try {
+    await db.$transaction([
+      lockRequestForBid(requestId),
+      db.serviceBid.update({
+      where: {
+        id: bid.id,
+        version: bid.version,
+        status: "submitted",
+        request: {
+          status: "open_for_bids",
+          OR: [{ biddingClosesAt: null }, { biddingClosesAt: { gt: new Date() } }],
+        },
+      },
+      data: { status: "withdrawn", withdrawnAt: new Date() },
+      }),
+    ]);
+  } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
+    if ((error as { code?: string }).code === "P2025") {
+      throw new HoaWorkflowError("This bid or bidding window changed. Refresh before withdrawing again.", 409);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -1509,10 +1651,10 @@ export async function listRequestBids(
 
   const rows = await db.serviceBid.findMany({
     where: { requestId, status: { in: ["submitted", "accepted", "rejected"] } },
-    orderBy: [{ status: "asc" }, { amountCents: "asc" }],
+    orderBy: { id: "asc" },
     include: bidInclude,
   });
-  return rows.map(serializeBid);
+  return rows.map(serializeBid).sort(compareBidQuotes);
 }
 
 /* ── Award ───────────────────────────────────────────────────────────────── */
@@ -1627,12 +1769,11 @@ export async function awardBid(
     if (request.agreement.bidId === input.bidId) return request.agreement.id;
     throw new HoaWorkflowError("A different bid has already been accepted for this request.");
   }
-  if (request.status !== "bidding_closed") {
-    throw new HoaWorkflowError(
-      request.status === "open_for_bids"
-        ? "Close bidding before accepting a bid."
-        : "This request is not ready for an award.",
-    );
+  if (!["open_for_bids", "bidding_closed"].includes(request.status)) {
+    throw new HoaWorkflowError("This request is not ready for an award.");
+  }
+  if (!request.participantsLockedAt) {
+    throw new HoaWorkflowError("The participating homes must be locked before an award.", 409);
   }
 
   const bid = await db.serviceBid.findUnique({
@@ -1642,8 +1783,19 @@ export async function awardBid(
   if (!bid || bid.requestId !== request.id) {
     throw new HoaWorkflowError("That bid does not belong to this request.", 404);
   }
+  if (input.expectedBidVersion !== undefined && input.expectedBidVersion !== bid.version) {
+    throw new HoaWorkflowError("This quote changed since you reviewed it. Refresh and review the current quote before confirming.", 409);
+  }
   if (bid.status !== "submitted") {
     throw new HoaWorkflowError("Only a submitted bid can be accepted.");
+  }
+  if (bid.pricingBasis !== "total") {
+    throw new HoaWorkflowError(
+      request.status === "open_for_bids"
+        ? "This legacy quote uses unit pricing and cannot be awarded. Ask the provider for a whole-job total while bidding is open."
+        : "This legacy quote uses unit pricing and cannot be awarded. Open a new request to collect a whole-job total.",
+      409,
+    );
   }
   const now = new Date();
   if (bid.validUntil && bid.validUntil <= now) {
@@ -1732,17 +1884,27 @@ export async function awardBid(
 
   try {
     await db.$transaction([
+      // Claim the complete bid/audience snapshot before touching any child.
+      db.hoaServiceRequest.update({
+        where: {
+          id: request.id, status: request.status, updatedAt: request.updatedAt,
+          participantsLockedAt: { not: null }, agreement: { is: null },
+        },
+        data: {
+          status: "awarded", awardedAt: now, updatedAt: nextRequestStamp(request.updatedAt, now),
+          ...(request.status === "open_for_bids" ? {
+            biddingClosesAt: request.biddingClosesAt && request.biddingClosesAt <= now ? request.biddingClosesAt : now,
+          } : {}),
+        },
+      }),
+      assertPreparedManager(userId, request.id, authority.via),
       db.serviceBid.update({
-        where: { id: bid.id },
+        where: { id: bid.id, version: bid.version, status: "submitted" },
         data: { status: "accepted", decidedAt: now },
       }),
       db.serviceBid.updateMany({
         where: { requestId: request.id, status: "submitted", id: { not: bid.id } },
         data: { status: "rejected", decidedAt: now },
-      }),
-      db.hoaServiceRequest.update({
-        where: { id: request.id },
-        data: { status: "awarded", awardedAt: now },
       }),
       db.serviceAgreement.create({
         data: {
@@ -1764,8 +1926,8 @@ export async function awardBid(
           endDate,
         },
       }),
-      db.serviceOccurrence.createMany({ data: occurrenceRows, skipDuplicates: true }),
-      db.serviceVisit.createMany({ data: visitRows, skipDuplicates: true }),
+      db.serviceOccurrence.createMany({ data: occurrenceRows }),
+      db.serviceVisit.createMany({ data: visitRows }),
       db.adminAuditLog.create({
         data: buildAuditEntry({
           actorUserId: userId,
@@ -1807,12 +1969,18 @@ export async function awardBid(
       ])),
     ]);
   } catch (error) {
-    if ((error as { code?: string }).code === "P2002") {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
+    const code = (error as { code?: string }).code;
+    if (code === "P2002" || code === "P2025") {
       const existing = await db.serviceAgreement.findUnique({
         where: { requestId: request.id },
         select: { id: true, bidId: true },
       });
       if (existing?.bidId === input.bidId) return existing.id;
+      if (code === "P2025" && !existing) {
+        throw new HoaWorkflowError("This quote changed since you reviewed it. Refresh and review the current quote before confirming.", 409);
+      }
       throw new HoaWorkflowError("A different bid has already been accepted for this request.");
     }
     throw error;
@@ -2420,12 +2588,12 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
             requestId: { in: requestIds },
             status: { in: ["submitted", "accepted", "rejected"] },
           },
-          orderBy: { amountCents: "asc" },
+          orderBy: { id: "asc" },
           include: bidInclude,
         })
       : [];
     const bidsByRequest: Record<string, BidSummary[]> = {};
-    for (const bid of bids) {
+    for (const bid of bids.sort(compareBidQuotes)) {
       (bidsByRequest[bid.requestId] ??= []).push(serializeBid(bid));
     }
 
@@ -2535,12 +2703,12 @@ export async function getResidentHoaHub(userId: string): Promise<ResidentHoaHub>
             requestId: { in: requestIds },
             status: { in: ["submitted", "accepted", "rejected"] },
           },
-          orderBy: { amountCents: "asc" },
+          orderBy: { id: "asc" },
           include: bidInclude,
         })
       : [];
     const bidsByRequest: Record<string, BidSummary[]> = {};
-    for (const bid of bids) {
+    for (const bid of bids.sort(compareBidQuotes)) {
       (bidsByRequest[bid.requestId] ??= []).push(serializeBid(bid));
     }
 

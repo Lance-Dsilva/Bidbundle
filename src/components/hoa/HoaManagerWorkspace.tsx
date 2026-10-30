@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
+
 import type {
   BidSummary,
   HoaManagerCommunity,
@@ -74,6 +78,21 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
   const [requestState, setRequestState] = useState(IDLE);
   const [awardState, setAwardState] = useState(IDLE);
   const [surveyState, setSurveyState] = useState(IDLE);
+  const [confirmation, setConfirmation] = useState<{
+    action: "cancel" | "complete" | "award"; requestId: string; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary;
+  } | null>(null);
+  const currentRequest = confirmation ? community.requests.find((item) => item.id === confirmation.requestId) : null;
+  const currentBid = confirmation?.bid ? community.bidsByRequest[confirmation.requestId]?.find((bid) => bid.id === confirmation.bid?.id) : null;
+  const validConfirmation = Boolean(confirmation && currentRequest && currentRequest.status === confirmation.status && currentRequest.title === confirmation.title &&
+    (confirmation.action === "award"
+      ? ["open_for_bids", "bidding_closed"].includes(currentRequest.status) &&
+        currentRequest.joinedCount === confirmation.joinedCount && currentRequest.totalOccurrences === confirmation.totalOccurrences && currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+        currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
+        currentBid.providerUserId === confirmation.bid.providerUserId &&
+        currentBid.homeCount === confirmation.bid.homeCount && currentBid.totalOccurrences === confirmation.bid.totalOccurrences && !community.bidsByRequest[confirmation.requestId]?.some((bid) => bid.status === "accepted")
+      : confirmation.action === "complete" ? ["awarded", "scheduled", "in_progress"].includes(currentRequest.status)
+        : ["draft", "collecting_interest", "open_for_bids", "bidding_closed"].includes(currentRequest.status)));
+
   const [requestKind, setRequestKind] = useState<"compulsory_recurring" | "optional_group">(
     "compulsory_recurring",
   );
@@ -87,7 +106,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
     ["collecting_interest", "open_for_bids"].includes(item.status),
   ).length;
   const bidsAwaiting = community.requests.filter(
-    (item) => item.status === "bidding_closed" && (community.bidsByRequest[item.id]?.length ?? 0) > 0,
+    (item) => ["open_for_bids", "bidding_closed"].includes(item.status) && (community.bidsByRequest[item.id]?.some((bid) => bid.status === "submitted") ?? false),
   ).length;
 
   const run = async (
@@ -100,12 +119,14 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
       await action();
       setter({ busy: false, error: null, success });
       router.refresh();
+      return true;
     } catch (error) {
       setter({
         busy: false,
         error: error instanceof Error ? error.message : "Something went wrong.",
         success: null,
       });
+      return false;
     }
   };
 
@@ -167,15 +188,25 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
     });
   };
 
-  const transition = (requestId: string, action: string, success: string) =>
-    run(setRequestState, success, () =>
-      sendJson("PATCH", `/api/hoa/requests/${requestId}`, { action }),
-    );
+  const transition = (requestId: string, action: string, success: string) => {
+    if (action === "cancel" || action === "complete") {
+      const request = community.requests.find((item) => item.id === requestId);
+      if (request) {
+        setRequestState(IDLE);
+        setConfirmation({ action, requestId, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences });
+      }
+      return;
+    }
+    return run(setRequestState, success, () => sendJson("PATCH", `/api/hoa/requests/${requestId}`, { action }));
+  };
 
-  const award = (requestId: string, bidId: string) =>
-    run(setAwardState, "Bid accepted — agreement and visits created.", () =>
-      sendJson("POST", `/api/hoa/requests/${requestId}/award`, { bidId }),
-    );
+  const award = (requestId: string, bidId: string) => {
+    const request = community.requests.find((item) => item.id === requestId);
+    const bid = community.bidsByRequest[requestId]?.find((item) => item.id === bidId);
+    if (!request || !bid) return;
+    setAwardState(IDLE);
+    setConfirmation({ action: "award", requestId, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences, bid: { ...bid } });
+  };
 
   const submitSurvey = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -542,6 +573,31 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
           )}
         </div>
       </section>
+      {confirmation ? (
+        <ConfirmAction
+          open
+          title={confirmation.action === "award" ? "Award this provider?" : confirmation.action === "complete" ? "Mark this request complete?" : "Cancel this request?"}
+          confirmLabel={confirmation.action === "award" ? "Award provider" : confirmation.action === "complete" ? "Mark complete" : "Cancel request"}
+          destructive={confirmation.action === "cancel"}
+          valid={validConfirmation}
+          error={confirmation.action === "award" ? awardState.error : requestState.error}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => {
+            if (!validConfirmation || requestState.busy || awardState.busy) return false;
+            return confirmation.action === "award" && confirmation.bid
+              ? run(setAwardState, "Bid accepted — agreement and visits created.", () => sendJson("POST", `/api/hoa/requests/${confirmation.requestId}/award`, { bidId: confirmation.bid!.id, expectedBidVersion: confirmation.bid!.version }))
+              : run(setRequestState, confirmation.action === "complete" ? "Request completed." : "Request cancelled.", () => sendJson("PATCH", `/api/hoa/requests/${confirmation.requestId}`, { action: confirmation.action }));
+          }}
+          description={confirmation.action === "award" && confirmation.bid ? <>
+            <p>Award “{confirmation.title}” to {confirmation.bid.providerCompany ?? confirmation.bid.providerName} (quote version {confirmation.bid.version})?</p>
+            <BidPrice bid={confirmation.bid} />
+            <p>Current request scope: {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}; {confirmation.totalOccurrences} {confirmation.totalOccurrences === 1 ? "visit" : "visits"} per home.</p>
+            <p>{confirmation.status === "open_for_bids" ? "Awarding now ends bidding immediately. No more quotes can be submitted." : "Bidding is already closed."} This choice cannot be undone here.</p>
+            <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
+          </> : confirmation.action === "complete" ? <p>Mark “{confirmation.title}” and its agreement complete? All service cycles must already be closed. You may receive a prompt to review the provider.</p>
+            : <p>Cancel “{confirmation.title}”? This ends the request and bidding, and expires submitted quotes. Affected residents and quoting providers may be notified according to their preferences.</p>}
+        />
+      ) : null}
     </div>
   );
 }
@@ -556,7 +612,7 @@ function RequestCard({
   request: HoaRequestSummary;
   bids: BidSummary[];
   busy: boolean;
-  onTransition: (requestId: string, action: string, success: string) => Promise<void> | void;
+  onTransition: (requestId: string, action: string, success: string) => Promise<boolean> | void;
   onAward: (requestId: string, bidId: string) => Promise<void> | void;
 }) {
   const submitted = bids.filter((bid) => bid.status === "submitted");
@@ -615,7 +671,7 @@ function RequestCard({
             Bids ({bids.length})
           </h4>
           <ul className="mt-2 space-y-2">
-            {bids.map((bid) => (
+            {[...bids].sort(compareBidQuotes).map((bid) => (
               <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3 text-sm" key={bid.id}>
                 <div className="min-w-0">
                   <p className="font-medium text-[#102a43]">
@@ -626,13 +682,13 @@ function RequestCard({
                       </span>
                     ) : null}
                   </p>
-                  <p className="mt-0.5 text-xs text-[#64748b]">
-                    {money(bid.amountCents, bid.currency)}{" "}
-                    {bid.pricingBasis === "per_home" ? "per home" : bid.pricingBasis === "per_visit" ? "per visit" : "total"}
-                    {bid.cadenceLabel ? ` · ${bid.cadenceLabel}` : ""}
-                    {bid.proposedStartDate ? ` · starts ${dateLabel(bid.proposedStartDate)}` : ""}
-                    {` · v${bid.version}`}
+                  <BidPrice bid={bid} />
+                  <p className="mt-1 text-xs text-[#64748b]">
+                    {bid.cadenceLabel ? `${bid.cadenceLabel} · ` : ""}
+                    {bid.proposedStartDate ? `starts ${dateLabel(bid.proposedStartDate)} · ` : ""}
+                    v{bid.version}
                   </p>
+                  {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={request.status} /> : null}
                   <p className="mt-1 line-clamp-2 text-xs text-[#64748b]">{bid.scope}</p>
                 </div>
                 <div>
@@ -640,10 +696,10 @@ function RequestCard({
                     <Badge tone="green">Accepted</Badge>
                   ) : bid.status === "rejected" ? (
                     <Badge tone="gray">Rejected</Badge>
-                  ) : request.status === "bidding_closed" && !accepted ? (
+                  ) : ["open_for_bids", "bidding_closed"].includes(request.status) && !accepted && bid.status === "submitted" ? (
                     <button
-                      className="rounded-lg bg-[#0f8f83] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                      disabled={busy}
+                      className="min-h-11 rounded-lg bg-[#0f8f83] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      disabled={busy || bid.pricingBasis !== "total"}
                       onClick={() => void onAward(request.id, bid.id)}
                       type="button"
                     >
@@ -657,7 +713,7 @@ function RequestCard({
             ))}
           </ul>
           {request.status === "open_for_bids" && submitted.length > 0 ? (
-            <p className="mt-2 text-xs text-[#64748b]">Close bidding to accept a bid.</p>
+            <p className="mt-2 text-xs text-[#64748b]">You can accept a bid now. Awarding ends bidding immediately.</p>
           ) : null}
         </div>
       ) : null}

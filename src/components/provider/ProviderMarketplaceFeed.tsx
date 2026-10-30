@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { Button } from "@/components/ui/Button";
 import type { ProviderFeedItem } from "@/lib/hoa-types";
 import { apiFetch } from "@/lib/api";
@@ -58,6 +59,7 @@ export function ProviderMarketplaceFeed() {
   const [trade, setTrade] = useState("all");
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   const trades = useMemo(() => {
     const values = new Set((workspace?.feed ?? []).map((item) => item.category));
@@ -71,6 +73,8 @@ export function ProviderMarketplaceFeed() {
   );
 
   const submitBid = async (requestId: string, body: Record<string, unknown>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusyRequestId(requestId);
     setActionError(null);
     try {
@@ -82,11 +86,14 @@ export function ProviderMarketplaceFeed() {
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : "Your bid was not saved.");
     } finally {
+      inFlight.current = false;
       setBusyRequestId(null);
     }
   };
 
   const withdrawBid = async (requestId: string) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusyRequestId(requestId);
     setActionError(null);
     try {
@@ -95,6 +102,7 @@ export function ProviderMarketplaceFeed() {
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : "Your bid was not withdrawn.");
     } finally {
+      inFlight.current = false;
       setBusyRequestId(null);
     }
   };
@@ -169,7 +177,7 @@ export function ProviderMarketplaceFeed() {
       ) : (
         visible.map((item) => (
           <FeedCard
-            busy={busyRequestId === item.requestId}
+            busy={busyRequestId !== null}
             canBid={workspace.eligible}
             item={item}
             key={item.requestId}
@@ -196,17 +204,22 @@ function FeedCard({
   onWithdraw: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const quoteCurrency = item.myBid?.currency ?? "USD";
+  const initialAmount = () => item.myBid?.pricingBasis === "total"
+    ? (item.myBid.amountCents / 100).toString() : "";
+  const [amount, setAmount] = useState(initialAmount);
+  const previewCents = amount.trim() && Number.isFinite(Number(amount)) && Number(amount) >= 0
+    ? Math.round(Number(amount) * 100) : null;
 
   const handle = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const amount = Number(String(data.get("amount") ?? ""));
-    if (!Number.isFinite(amount) || amount < 0) return;
+    if (busy || previewCents === null) return;
     onSubmit({
       // Dollars in the form, whole cents on the wire — the one money unit the
       // marketplace stores.
-      amountCents: Math.round(amount * 100),
-      pricingBasis: String(data.get("pricingBasis") ?? "total"),
+      amountCents: previewCents,
+      pricingBasis: "total",
       scope: String(data.get("scope") ?? "").trim(),
       exclusions: String(data.get("exclusions") ?? "").trim() || null,
       estimatedDurationLabel: String(data.get("duration") ?? "").trim() || null,
@@ -256,23 +269,24 @@ function FeedCard({
           </dd>
         </div>
         <div>
-          <dt>Visits</dt>
+          <dt>Visits per home</dt>
           <dd style={{ color: "var(--ink-900)" }}>{item.totalOccurrences}</dd>
         </div>
       </dl>
 
       {item.myBid ? (
         <div className="mt-3 rounded-xl p-3" style={{ background: "var(--cream-100)" }}>
-          <p className="text-xs" style={{ color: "var(--ink-700)" }}>
-            Your bid: <strong>{money(item.myBid.amountCents)}</strong> ({item.myBid.status}, version{" "}
-            {item.myBid.version})
+          <p className="mb-2 text-xs" style={{ color: "var(--ink-700)" }}>
+            Your bid ({item.myBid.status}, version {item.myBid.version})
           </p>
+          <BidPrice bid={item.myBid} homeCount={item.homeCount} totalOccurrences={item.totalOccurrences} />
+          {item.myBid.pricingBasis !== "total" && item.myBid.status === "submitted" ? <LegacyBidNotice requestStatus="open_for_bids" /> : null}
         </div>
       ) : null}
 
       {canBid ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => setOpen((current) => !current)} variant="warm">
+          <Button disabled={busy} onClick={() => { if (!open) setAmount(initialAmount()); setOpen((current) => !current); }} variant="warm">
             {item.myBid ? "Revise bid" : "Submit bid"}
           </Button>
           {item.myBid && item.myBid.status === "submitted" ? (
@@ -286,9 +300,11 @@ function FeedCard({
       {open && canBid ? (
         <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={handle}>
           <label className="block text-xs" style={{ color: "var(--ink-700)" }}>
-            Amount (USD)
+            Whole-job total ({quoteCurrency.toUpperCase()})
             <input
-              defaultValue={item.myBid ? (item.myBid.amountCents / 100).toString() : ""}
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              disabled={busy}
               min="0"
               name="amount"
               required
@@ -297,18 +313,19 @@ function FeedCard({
               type="number"
             />
           </label>
-          <label className="block text-xs" style={{ color: "var(--ink-700)" }}>
-            Pricing basis
-            <select
-              defaultValue={item.myBid?.pricingBasis ?? "total"}
-              name="pricingBasis"
-              style={input}
-            >
-              <option value="total">Total</option>
-              <option value="per_home">Per home</option>
-              <option value="per_visit">Per visit</option>
-            </select>
-          </label>
+          <div className="sm:col-span-2 space-y-2" role="status" aria-live="polite">
+            <p className="text-xs" style={{ color: "var(--ink-700)" }}>
+              Quote for the complete job across all participating homes and visits. Only the whole-job total is submitted.
+            </p>
+            {previewCents === null && Number.isSafeInteger(item.homeCount) && item.homeCount > 0 && Number.isSafeInteger(item.totalOccurrences) && item.totalOccurrences > 0 ? (
+              <p className="text-xs" style={{ color: "var(--ink-700)" }}>
+                {item.homeCount} {item.homeCount === 1 ? "home" : "homes"} × {item.totalOccurrences} {item.totalOccurrences === 1 ? "visit" : "visits"} each.
+              </p>
+            ) : null}
+            {previewCents !== null ? (
+              <BidPrice bid={{ amountCents: previewCents, currency: quoteCurrency, pricingBasis: "total" }} homeCount={item.homeCount} totalOccurrences={item.totalOccurrences} />
+            ) : null}
+          </div>
           <label className="block text-xs sm:col-span-2" style={{ color: "var(--ink-700)" }}>
             What is included
             <textarea
