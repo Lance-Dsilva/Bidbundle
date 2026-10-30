@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
+import { geoapifyConfig } from "@/lib/geoapify";
 import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
 
 /**
@@ -16,6 +17,8 @@ import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
  * administrator-owned field does, and unsaved work is not thrown away by a
  * stray click on the backdrop.
  */
+
+const initialGeocoderKey = geoapifyConfig.apiKey;
 
 const PROFILE: CommonProfile = {
   id: "user-1",
@@ -101,12 +104,21 @@ function renderDialog(
 }
 
 afterEach(() => {
+  geoapifyConfig.apiKey = initialGeocoderKey;
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("provider business details editor", () => {
   it("edits every section and saves them together, with no admin-owned field", async () => {
+    // A changed address now requires an explicit map-location choice. Keep the
+    // issue1 complete-form regression while supplying a real geocoder-shaped fixture.
+    const originalKey = geoapifyConfig.apiKey;
+    geoapifyConfig.apiKey = "synthetic-test-key";
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ results: [
+      { formatted: "9 Elm Ave", neighbourhood: "North Austin", lat: 30.41, lon: -97.71 },
+    ] }) } as Response)));
     const { saves, onClose } = renderDialog();
 
     // All five sections are present and named, rather than one flat grid.
@@ -126,6 +138,8 @@ describe("provider business details editor", () => {
     fireEvent.change(screen.getByLabelText("Business address"), {
       target: { value: "9 Elm Ave" },
     });
+    fireEvent.click(await screen.findByRole("option", { name: "9 Elm Ave" }));
+    geoapifyConfig.apiKey = originalKey;
     fireEvent.change(screen.getByLabelText("Closes at"), { target: { value: "18:30" } });
     fireEvent.click(screen.getByRole("button", { name: "Wed" }));
 

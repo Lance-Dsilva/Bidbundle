@@ -11,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { ProviderBusinessAddressFields } from "@/components/provider/ProviderBusinessAddressFields";
+import type { GeoapifyPlace } from "@/lib/geoapify";
 import { AvatarField } from "@/components/profile/AvatarField";
 import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
 import {
@@ -201,6 +203,7 @@ export function ProviderBusinessDetailsDialog({
   const reactId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const tradeInputRef = useRef<HTMLInputElement>(null);
   const discardRef = useRef<HTMLDivElement>(null);
   const keepEditingRef = useRef<HTMLButtonElement>(null);
@@ -212,6 +215,8 @@ export function ProviderBusinessDetailsDialog({
 
   const initial = useMemo(() => formFromProfile(profile, provider), [profile, provider]);
   const [form, setForm] = useState<BusinessForm>(initial);
+  const [selectedPlace, setSelectedPlace] = useState<GeoapifyPlace | null>(null);
+  const [addressError, setAddressError] = useState<string | undefined>();
   const [tradeDraft, setTradeDraft] = useState("");
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
@@ -220,8 +225,8 @@ export function ProviderBusinessDetailsDialog({
   const busy = saving || submitting;
 
   const isDirty = useMemo(
-    () => Boolean(tradeDraft.trim()) || JSON.stringify(form) !== JSON.stringify(initial),
-    [form, initial, tradeDraft],
+    () => Boolean(tradeDraft.trim()) || JSON.stringify(form) !== JSON.stringify(initial) || Boolean(selectedPlace && (selectedPlace.latitude !== profile.latitude || selectedPlace.longitude !== profile.longitude)),
+    [form, initial, tradeDraft, selectedPlace, profile.latitude, profile.longitude],
   );
 
   const set = <Key extends keyof BusinessForm>(key: Key, value: BusinessForm[Key]) => {
@@ -274,6 +279,7 @@ export function ProviderBusinessDetailsDialog({
    */
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
         if (confirmingDiscard) keepEditing();
@@ -345,6 +351,11 @@ export function ProviderBusinessDetailsDialog({
 
   async function handleSave() {
     if (saveInFlightRef.current || busy || confirmingDiscard) return;
+    if (form.address.trim() && form.address.trim() !== initial.address.trim() && !selectedPlace) {
+      setAddressError("Choose an address suggestion to confirm the new location before saving.");
+      addressInputRef.current?.focus();
+      return;
+    }
     // Save and Add must validate the same draft rather than silently dropping it.
     const pending = tradeDraft.trim();
     const error = pending ? validateTrade(pending) : null;
@@ -364,7 +375,9 @@ export function ProviderBusinessDetailsDialog({
           fullName: form.fullName.trim(),
           phone: form.phone.trim() || null,
           address: form.address.trim() || null,
-          neighborhood: form.neighborhood.trim() || null,
+          neighborhood: form.address.trim() ? form.neighborhood.trim() || null : null,
+          ...(selectedPlace ? { latitude: selectedPlace.latitude, longitude: selectedPlace.longitude } :
+            !form.address.trim() ? { latitude: null, longitude: null } : {}),
         },
         {
           companyName: form.companyName.trim() || null,
@@ -647,10 +660,22 @@ export function ProviderBusinessDetailsDialog({
           title="Business location"
           hint="Where you are based. The area you travel to is set by the service-area map on this page, not here."
         >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {textField("address", "Business address")}
-            {textField("neighborhood", "Neighborhood")}
-          </div>
+          <ProviderBusinessAddressFields
+            address={form.address} neighborhood={form.neighborhood}
+            unchanged={form.address.trim() === initial.address.trim()}
+            selected={Boolean(selectedPlace)} disabled={busy || confirmingDiscard}
+            inputRef={addressInputRef} error={addressError || fieldErrors.address || fieldErrors.neighborhood || fieldErrors.latitude || fieldErrors.longitude}
+            onEdit={(address) => {
+              if (saveInFlightRef.current || busy || confirmingDiscard) return;
+              setSelectedPlace(null); setAddressError(undefined);
+              setForm((current) => ({ ...current, address, neighborhood: address.trim() && address.trim() === initial.address.trim() ? initial.neighborhood : "" }));
+            }}
+            onSelect={(place) => {
+              if (saveInFlightRef.current || busy || confirmingDiscard) return;
+              setSelectedPlace(place); setAddressError(undefined);
+              setForm((current) => ({ ...current, address: place.formatted, neighborhood: place.neighborhood }));
+            }}
+          />
         </Section>
 
         {/* ── 4. Availability ─────────────────────────────────────────── */}

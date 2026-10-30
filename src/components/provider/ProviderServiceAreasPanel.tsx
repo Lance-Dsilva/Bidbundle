@@ -355,6 +355,7 @@ export function ProviderServiceAreasPanel({
   return (
     <section
       id="service-areas"
+      tabIndex={-1}
       aria-labelledby="service-areas-heading"
       className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
     >
