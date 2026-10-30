@@ -178,8 +178,8 @@ describe("approved homepage content", () => {
     }
   });
 
-  it("keeps the CTA destinations unchanged", () => {
-    expect(PAGE).toContain('const managerCta = "/get-started?intent=community-manager"');
+  it("routes manager interest to staff onboarding and keeps provider signup distinct", () => {
+    expect(PAGE).toContain('const managerCta = "/community-onboarding"');
     expect(PAGE).toContain('const providerCta = "/get-started?role=provider"');
   });
 });

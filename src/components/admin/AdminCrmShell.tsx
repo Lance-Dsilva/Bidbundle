@@ -49,6 +49,12 @@ type NavItem = {
  */
 const customerItems: NavItem[] = [
   {
+    label: "Community interest",
+    href: "/app/admin/community-interest",
+    icon: "users",
+    match: (pathname) => pathname.startsWith("/app/admin/community-interest"),
+  },
+  {
     label: "HOA accounts",
     href: "/app/admin/communities?type=hoa",
     icon: "house",
@@ -263,6 +269,7 @@ function SidebarContent(props: Readonly<AdminCrmShellProps & { pathname: string;
 }
 
 function pageContext(pathname: string) {
+  if (pathname === "/app/admin/community-interest") return { section: "Customers", title: "Community interest" };
   if (pathname.startsWith("/app/admin/communities")) return { section: "Customers", title: "Community accounts" };
   if (pathname.startsWith("/app/admin/providers")) return { section: "Service providers", title: "Provider network" };
   if (pathname.startsWith("/app/admin/support")) return { section: "Support", title: "Ticket queue" };
