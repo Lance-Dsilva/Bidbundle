@@ -2,6 +2,8 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
+import type { Prisma } from "@/generated/prisma/client";
+
 import type { CommonProfile, HomeownerProfile, ProviderProfile } from "@/lib/profile-types";
 import { isAppRole } from "@/lib/validation/auth";
 import {
@@ -118,6 +120,43 @@ export function commonProfileUpdateData(
     return { ...patch, latitude: null, longitude: null };
   }
   return patch;
+}
+
+/** The exact state used to decide credential invalidation and revocation audits. */
+export const providerWriteSnapshotSelect = {
+  licenseNumber: true,
+  licenseState: true,
+  insuranceProvider: true,
+  insurancePolicyNumber: true,
+  licenseVerifiedAt: true,
+  licenseVerifiedByUserId: true,
+  insuranceVerifiedAt: true,
+  insuranceVerifiedByUserId: true,
+  updatedAt: true,
+} as const;
+
+type ProviderWriteSnapshot = Prisma.ProviderProfileGetPayload<{
+  select: typeof providerWriteSnapshotSelect;
+}>;
+
+/** Reject a write if the state behind its verification/audit decisions changed. */
+export function providerWriteSnapshotWhere(current: ProviderWriteSnapshot) {
+  return {
+    licenseNumber: current.licenseNumber,
+    licenseState: current.licenseState,
+    insuranceProvider: current.insuranceProvider,
+    insurancePolicyNumber: current.insurancePolicyNumber,
+    licenseVerifiedAt: current.licenseVerifiedAt,
+    licenseVerifiedByUserId: current.licenseVerifiedByUserId,
+    insuranceVerifiedAt: current.insuranceVerifiedAt,
+    insuranceVerifiedByUserId: current.insuranceVerifiedByUserId,
+    updatedAt: current.updatedAt,
+  };
+}
+
+/** TIMESTAMP(3) needs an explicit advance even for writes in the same millisecond. */
+export function nextProviderUpdatedAt(current: ProviderWriteSnapshot): Date {
+  return new Date(Math.max(Date.now(), current.updatedAt.getTime() + 1));
 }
 
 type ProviderClaims = Pick<

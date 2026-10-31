@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { HomeAddressCompletion } from "@/components/homeowner/HomeAddressCompletion";
 import { Button } from "@/components/ui/Button";
 import type { BidSummary } from "@/lib/hoa-types";
 import type { NeighborhoodRequestView } from "@/lib/neighborhood-types";
 import { useNeighbourhood } from "@/hooks/useNeighbourhood";
+import { CATEGORY_LABELS, SERVICE_CATEGORIES, editOwnerRequestSchema, type EditOwnerRequestInput } from "@/lib/validation/homeowner-requests";
 
 /**
  * The non-HOA neighbourhood workspace.
@@ -64,7 +69,11 @@ function defaultBiddingDeadline(): string {
 }
 
 export function NeighbourhoodWorkspace() {
-  const { hub, loading, error, busy, missingAddresses, act } = useNeighbourhood();
+  const {
+    hub, loading, error, busy, missingAddresses, act,
+    addressRequiredRequestId, resumeJoin, cancelAddress,
+    setError, ownerError, ownerSuccess, clearOwnerFeedback,
+  } = useNeighbourhood();
 
   if (loading) {
     return (
@@ -107,8 +116,8 @@ export function NeighbourhoodWorkspace() {
         </p>
         {!hub.addressReady ? (
           <p className="mt-2 text-sm" style={{ color: "#b45309" }} role="status">
-            Add your home address to your profile — a provider cannot be sent to your home without
-            it, and requests you join will be held back until it is on file.
+            Add your home address before joining a request so a provider can find your home.
+            You can do this when you choose to join.
           </p>
         ) : null}
       </header>
@@ -151,7 +160,20 @@ export function NeighbourhoodWorkspace() {
         </div>
       ) : (
         hub.requests.map((request) => (
-          <RequestCard key={request.id} busy={busy} onAct={act} request={request} />
+          <RequestCard
+            key={request.id}
+            busy={busy || Boolean(addressRequiredRequestId)}
+            onAct={act}
+            request={request}
+            managerName={hub.managerName}
+            actionError={error}
+            ownerError={ownerError?.requestId === request.id ? ownerError : null}
+            ownerSuccess={ownerSuccess?.requestId === request.id ? ownerSuccess.action : null}
+            onPrepare={() => { setError(null); clearOwnerFeedback?.(); }}
+            needsAddress={addressRequiredRequestId === request.id}
+            onAddressComplete={resumeJoin}
+            onAddressCancel={cancelAddress}
+          />
         ))
       )}
     </div>
@@ -162,18 +184,80 @@ function RequestCard({
   request,
   busy,
   onAct,
+  actionError,
+  managerName,
+  ownerError,
+  ownerSuccess,
+  onPrepare,
+  needsAddress,
+  onAddressComplete,
+  onAddressCancel,
 }: {
   request: NeighborhoodRequestView;
   busy: boolean;
   onAct: ReturnType<typeof useNeighbourhood>["act"];
+  actionError: string | null;
+  managerName: string | null;
+  ownerError: { message: string; fields?: Record<string, string> } | null;
+  ownerSuccess: "edit" | "cancel" | null;
+  onPrepare: () => void;
+  needsAddress: boolean;
+  onAddressComplete: () => Promise<void>;
+  onAddressCancel: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const headingId = useId();
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && !editing) (editButton.current ?? heading.current)?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    if (ownerSuccess === "cancel") heading.current?.focus();
+  }, [ownerSuccess]);
+  const canEditOwn = request.isOwner && request.permissions.canEdit &&
+    ["draft", "collecting_interest"].includes(request.status) && request.participantsLockedAt === null &&
+    request.bidCount === 0 && request.agreement === null;
+  const finishEditing = () => setEditing(false);
+  const [confirmation, setConfirmation] = useState<{
+    action: "cancel" | "owner_cancel" | "complete" | "award"; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary;
+  } | null>(null);
+  const ask = (action: "cancel" | "owner_cancel" | "complete" | "award", bid?: BidSummary) => {
+    onPrepare();
+    setConfirmation({ action, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences, bid: bid ? { ...bid } : undefined });
+  };
+  const currentBid = confirmation?.bid ? request.bids?.find((bid) => bid.id === confirmation.bid?.id) : null;
+  const validConfirmation = Boolean(confirmation &&
+    (confirmation.action === "owner_cancel" ? canEditOwn && confirmation.joinedCount === request.joinedCount : request.permissions.canManage) &&
+    confirmation.status === request.status && confirmation.title === request.title &&
+    (confirmation.action === "award"
+      ? ["open_for_bids", "bidding_closed"].includes(request.status) &&
+        confirmation.joinedCount === request.joinedCount && confirmation.totalOccurrences === request.totalOccurrences &&
+        currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+        currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
+        currentBid.providerUserId === confirmation.bid.providerUserId &&
+        currentBid.homeCount === confirmation.bid.homeCount && currentBid.totalOccurrences === confirmation.bid.totalOccurrences && !request.bids?.some((bid) => bid.status === "accepted")
+      : confirmation.action === "complete" ? ["awarded", "scheduled", "in_progress"].includes(request.status)
+        : confirmation.action === "owner_cancel" ? ["draft", "collecting_interest"].includes(request.status)
+          : ["collecting_interest", "open_for_bids", "bidding_closed"].includes(request.status)));
+
+  const joinButtonId = useId();
+  const hadAddressPrompt = useRef(false);
+  useEffect(() => {
+    if (hadAddressPrompt.current && !needsAddress) {
+      document.getElementById(joinButtonId)?.focus();
+    }
+    hadAddressPrompt.current = needsAddress;
+  }, [needsAddress, joinButtonId]);
 
   return (
-    <article className="p-5" style={card}>
+    <article aria-labelledby={headingId} className="p-5" style={card}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold" style={{ color: "var(--ink-900)" }}>
+          <h2 ref={heading} id={headingId} tabIndex={-1} className="text-base font-semibold" style={{ color: "var(--ink-900)" }}>
             {request.title}
           </h2>
           <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>
@@ -210,10 +294,47 @@ function RequestCard({
         </div>
       </dl>
 
+      {ownerSuccess ? (
+        <p role="status" className="mt-3 text-sm font-medium" style={{ color: "var(--sage-700)" }}>
+          {ownerSuccess === "edit" ? "Your request changes are saved." : "Your request is cancelled."}
+        </p>
+      ) : null}
+
+      {/* Owners can change their request only before its scope is locked. */}
+      {canEditOwn && !editing ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button ref={editButton} type="button" disabled={busy} onClick={() => { onPrepare(); setEditing(true); }}
+            className="min-h-11 rounded-lg border px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-40"
+            style={{ borderColor: "var(--border-warm)", color: "var(--ink-900)" }}>
+            Edit request
+          </button>
+          <Button className="min-h-11" disabled={busy} onClick={() => ask("owner_cancel")} variant="danger">
+            Cancel request
+          </Button>
+        </div>
+      ) : null}
+      {editing ? (
+        <OwnerRequestEditor request={request} valid={canEditOwn} busy={busy} error={ownerError}
+          onDiscard={finishEditing} onSave={async (input) => {
+            const saved = await onAct({ kind: "edit", requestId: request.id, input });
+            if (saved) finishEditing();
+            return saved;
+          }} />
+      ) : null}
+
+      {request.status === "collecting_interest" && request.enrollmentClosesAt ? (
+        <p className="mt-3 text-xs" style={{ color: "var(--ink-700)" }}>
+          After sign-ups close, bidding opens automatically if at least {request.minHomes}{" "}
+          {request.minHomes === 1 ? "home has" : "homes have"} joined. The update can take a few
+          minutes. If fewer homes join, the request expires.
+        </p>
+      ) : null}
+
       {/* ── Neighbour: join or decline ─────────────────────────────────── */}
       {request.permissions.canRespond ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
+            id={joinButtonId}
             disabled={busy}
             onClick={() =>
               void onAct({ kind: "respond", requestId: request.id, response: "joined" })
@@ -232,6 +353,10 @@ function RequestCard({
             {request.viewerResponse === "declined" ? "You declined" : "No thanks"}
           </Button>
         </div>
+      ) : null}
+
+      {needsAddress ? (
+        <HomeAddressCompletion onComplete={onAddressComplete} onCancel={onAddressCancel} />
       ) : null}
 
       {/* ── Manager: lifecycle ─────────────────────────────────────────── */}
@@ -277,7 +402,7 @@ function RequestCard({
               <Button
                 disabled={busy}
                 onClick={() =>
-                  void onAct({ kind: "transition", requestId: request.id, action: "complete" })
+                  ask("complete")
                 }
                 variant="secondary"
               >
@@ -286,11 +411,11 @@ function RequestCard({
             ) : null}
             {["collecting_interest", "open_for_bids", "bidding_closed"].includes(
               request.status,
-            ) ? (
+            ) && !canEditOwn ? (
               <Button
                 disabled={busy}
                 onClick={() =>
-                  void onAct({ kind: "transition", requestId: request.id, action: "cancel" })
+                  ask("cancel")
                 }
                 variant="ghost"
               >
@@ -321,11 +446,21 @@ function RequestCard({
         </div>
       ) : null}
 
+      {request.isOwner && !request.permissions.canManage && ["collecting_interest", "open_for_bids", "bidding_closed"].includes(request.status) ? (
+        <p className="mt-4 text-sm leading-6" style={{ color: "var(--ink-700)" }}>
+          {managerName
+            ? `${managerName}, your neighbourhood manager, chooses the provider. You can compare the quotes, but only the manager can award the work.`
+            : "No neighbourhood manager is assigned yet. Bundleen must assign a manager before a provider can be chosen. You can still compare any available quotes."}
+        </p>
+      ) : null}
+
       {/* ── Transparent bid comparison ─────────────────────────────────── */}
       {request.permissions.canViewBids && request.bids && request.bids.length > 0 ? (
         <div className="mt-4">
           <button
-            className="text-xs font-semibold underline"
+            aria-expanded={expanded}
+            aria-controls={`${headingId}-quotes`}
+            className="min-h-11 text-xs font-semibold underline"
             onClick={() => setExpanded((current) => !current)}
             style={{ color: "var(--ink-700)" }}
             type="button"
@@ -334,15 +469,16 @@ function RequestCard({
             {request.bids.length === 1 ? "quote" : "quotes"}
           </button>
           {expanded ? (
-            <ul className="mt-2 space-y-2">
-              {request.bids.map((bid) => (
+            <ul id={`${headingId}-quotes`} className="mt-2 space-y-2">
+              {[...request.bids].sort(compareBidQuotes).map((bid) => (
                 <BidRow
                   bid={bid}
+                  requestStatus={request.status}
                   busy={busy}
-                  canAward={request.permissions.canManage && request.status === "bidding_closed"}
+                  canAward={request.permissions.canManage && ["open_for_bids", "bidding_closed"].includes(request.status) && !request.bids?.some((item) => item.status === "accepted")}
                   key={bid.id}
                   onAward={() =>
-                    void onAct({ kind: "award", requestId: request.id, bidId: bid.id })
+                    ask("award", bid)
                   }
                 />
               ))}
@@ -373,17 +509,182 @@ function RequestCard({
           </ul>
         </div>
       ) : null}
+      {confirmation ? (
+        <ConfirmAction
+          open
+          title={confirmation.action === "award" ? "Award this provider?" : confirmation.action === "complete" ? "Mark this request complete?" : "Cancel this request?"}
+          confirmLabel={confirmation.action === "award" ? "Award provider" : confirmation.action === "complete" ? "Mark complete" : "Cancel request"}
+          destructive={confirmation.action === "cancel" || confirmation.action === "owner_cancel"}
+          valid={validConfirmation}
+          error={confirmation.action === "owner_cancel" ? ownerError?.message : actionError}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => {
+            if (!validConfirmation || busy) return false;
+            if (confirmation.action === "owner_cancel") return onAct({ kind: "cancel", requestId: request.id });
+            return confirmation.action === "award" && confirmation.bid
+              ? onAct({ kind: "award", requestId: request.id, bidId: confirmation.bid.id, expectedBidVersion: confirmation.bid.version })
+              : onAct({ kind: "transition", requestId: request.id, action: confirmation.action as "cancel" | "complete" });
+          }}
+          description={confirmation.action === "award" && confirmation.bid ? <>
+            <p>Award “{confirmation.title}” to {confirmation.bid.providerCompany ?? confirmation.bid.providerName} (quote version {confirmation.bid.version})?</p>
+            <BidPrice bid={confirmation.bid} />
+            <p>Current request scope: {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}; {confirmation.totalOccurrences} {confirmation.totalOccurrences === 1 ? "visit" : "visits"} per home.</p>
+            <p>{confirmation.status === "open_for_bids" ? "Awarding now ends bidding immediately. No more quotes can be submitted." : "Bidding is already closed."} This choice cannot be undone here.</p>
+            <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
+          </> : confirmation.action === "complete" ? <p>Mark “{confirmation.title}” and its agreement complete? All service cycles must already be closed. You may receive a prompt to review the provider.</p>
+            : confirmation.action === "owner_cancel" ? <p>Cancel “{confirmation.title}” for {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}? This ends sign-ups and cannot be undone. Affected residents and the neighbourhood manager may be notified according to their preferences.</p>
+            : <p>Cancel “{confirmation.title}”? This ends the request and bidding, and expires submitted quotes. Affected residents and quoting providers may be notified according to their preferences.</p>}
+        />
+      ) : null}
     </article>
+  );
+}
+
+const editorInput = "min-h-11 w-full rounded-lg border px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50";
+
+type OwnerDraft = { title: string; category: string; description: string; minimum: string; maximum: string };
+
+function requestDraft(request: NeighborhoodRequestView): OwnerDraft {
+  return {
+    title: request.title,
+    category: request.category,
+    description: request.description,
+    minimum: request.budgetMinCents === null ? "" : (request.budgetMinCents / 100).toFixed(2),
+    maximum: request.budgetMaxCents === null ? "" : (request.budgetMaxCents / 100).toFixed(2),
+  };
+}
+
+/** Parse decimal dollars without rounding a fractional cent or accepting an exponent. */
+function budgetInCents(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return Number.NaN;
+  const [dollars, fraction = ""] = trimmed.split(".");
+  return Number(dollars) * 100 + Number(fraction.padEnd(2, "0"));
+}
+
+function OwnerRequestEditor({ request, valid, busy, error, onDiscard, onSave }: {
+  request: NeighborhoodRequestView;
+  valid: boolean;
+  busy: boolean;
+  error: { message: string; fields?: Record<string, string> } | null;
+  onDiscard: () => void;
+  onSave: (input: EditOwnerRequestInput) => Promise<boolean>;
+}) {
+  const id = useId();
+  const firstInput = useRef<HTMLInputElement>(null);
+  const inFlight = useRef(false);
+  const initial = useRef(requestDraft(request));
+  const [draft, setDraft] = useState<OwnerDraft>(initial.current);
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [failure, setFailure] = useState<string | null>(null);
+  const current = requestDraft(request);
+  const unchanged = Object.keys(initial.current).every((key) =>
+    current[key as keyof OwnerDraft] === initial.current[key as keyof OwnerDraft]);
+  const editable = valid && unchanged;
+  const shownFields = { ...error?.fields, ...fields };
+  useEffect(() => { firstInput.current?.focus(); }, []);
+
+  const change = (name: keyof OwnerDraft, value: string) => {
+    setDraft((previous) => ({ ...previous, [name]: value }));
+    setFields({});
+    setFailure(null);
+  };
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editable || busy || inFlight.current) return;
+    const minimum = budgetInCents(draft.minimum);
+    const maximum = budgetInCents(draft.maximum);
+    const parsed = editOwnerRequestSchema.safeParse({
+      action: "edit", title: draft.title, category: draft.category, description: draft.description,
+      budgetMinCents: minimum, budgetMaxCents: maximum,
+    });
+    if (!parsed.success) {
+      const next: Record<string, string> = {};
+      for (const issue of parsed.error.issues) next[String(issue.path[0] ?? "form")] ??= issue.message;
+      if (Number.isNaN(minimum)) next.budgetMinCents = "Enter a non-negative amount with at most two decimal places.";
+      if (Number.isNaN(maximum)) next.budgetMaxCents = "Enter a non-negative amount with at most two decimal places.";
+      setFields(next);
+      setFailure("Check the highlighted fields before saving.");
+      return;
+    }
+    inFlight.current = true;
+    setFields({});
+    setFailure(null);
+    try {
+      if (!await onSave(parsed.data)) setFailure("Your changes were not saved. Your entries are still here; please try again.");
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : "Your changes were not saved. Please try again.");
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  const fieldError = (name: string) => shownFields[name]
+    ? <span id={`${id}-${name}-error`} className="text-xs" style={{ color: "#b91c1c" }}>{shownFields[name]}</span>
+    : null;
+  const fieldA11y = (name: string) => ({
+    "aria-invalid": Boolean(shownFields[name]),
+    "aria-describedby": shownFields[name] ? `${id}-${name}-error` : undefined,
+  });
+  const inputStyle = { borderColor: "var(--border-warm)", background: "var(--bg-card)", color: "var(--ink-900)" };
+
+  return (
+    <form aria-labelledby={`${id}-heading`} className="mt-4 space-y-3 rounded-xl border p-4" style={{ borderColor: "var(--border-warm)" }} onSubmit={(event) => void submit(event)} noValidate>
+      <h3 id={`${id}-heading`} className="font-semibold" style={{ color: "var(--ink-900)" }}>Edit your request</h3>
+      <p className="text-xs" style={{ color: "var(--ink-700)" }}>Changes apply to the request your neighbours have joined. You can edit only before bidding starts.</p>
+      {!editable ? <p role="alert" className="text-sm" style={{ color: "#92400e" }}>This request has changed or is no longer editable. Discard these edits and review the latest details.</p> : null}
+      <fieldset disabled={busy || !editable} className="space-y-3">
+        <label className="block space-y-1 text-sm">
+          <span>Title</span>
+          <input ref={firstInput} className={editorInput} style={inputStyle} value={draft.title} onChange={(event) => change("title", event.target.value)} {...fieldA11y("title")} />
+          {fieldError("title")}
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span>Service category</span>
+          <select className={editorInput} style={inputStyle} value={draft.category} onChange={(event) => change("category", event.target.value)} {...fieldA11y("category")}>
+            {!SERVICE_CATEGORIES.some((category) => category === draft.category) ? <option value={draft.category}>{draft.category}</option> : null}
+            {SERVICE_CATEGORIES.map((category) => <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>)}
+          </select>
+          {fieldError("category")}
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span>Description</span>
+          <textarea className={`${editorInput} min-h-28`} style={inputStyle} rows={4} value={draft.description} onChange={(event) => change("description", event.target.value)} {...fieldA11y("description")} />
+          {fieldError("description")}
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block space-y-1 text-sm">
+            <span>Minimum budget ($)</span>
+            <input className={editorInput} style={inputStyle} inputMode="decimal" value={draft.minimum} onChange={(event) => change("minimum", event.target.value)} {...fieldA11y("budgetMinCents")} />
+            {fieldError("budgetMinCents")}
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span>Maximum budget ($)</span>
+            <input className={editorInput} style={inputStyle} inputMode="decimal" value={draft.maximum} onChange={(event) => change("maximum", event.target.value)} {...fieldA11y("budgetMaxCents")} />
+            {fieldError("budgetMaxCents")}
+          </label>
+        </div>
+        <p className="text-xs" style={{ color: "var(--ink-700)" }}>Amounts are in US dollars. Leave both amounts blank if no budget is set.</p>
+      </fieldset>
+      {error?.message || failure ? <p role="alert" className="text-sm" style={{ color: "#b91c1c" }}>{error?.message ?? failure}</p> : null}
+      {busy ? <p role="status" className="text-sm">Saving your request…</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button className="min-h-11" disabled={busy || !editable} type="submit" variant="warm">{busy ? "Saving…" : "Save changes"}</Button>
+        <Button className="min-h-11" disabled={busy} onClick={onDiscard} variant="secondary">Discard edits</Button>
+      </div>
+    </form>
   );
 }
 
 function BidRow({
   bid,
+  requestStatus,
   canAward,
   busy,
   onAward,
 }: {
   bid: BidSummary;
+  requestStatus: string;
   canAward: boolean;
   busy: boolean;
   onAward: () => void;
@@ -403,14 +704,12 @@ function BidRow({
               </span>
             ) : null}
           </p>
-          <p className="text-xs" style={{ color: "var(--ink-400)" }}>
-            {money(bid.amountCents)} {bid.pricingBasis.replace("_", " ")}
-            {bid.perHomeCents != null ? ` · ${money(bid.perHomeCents)} per home` : ""}
-            {bid.estimatedDurationLabel ? ` · ${bid.estimatedDurationLabel}` : ""}
-          </p>
+          <BidPrice bid={bid} />
+          {bid.estimatedDurationLabel ? <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>{bid.estimatedDurationLabel}</p> : null}
+          {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={requestStatus} /> : null}
         </div>
         {canAward && bid.status === "submitted" ? (
-          <Button disabled={busy} onClick={onAward} variant="warm">
+          <Button className="min-h-11" disabled={busy || bid.pricingBasis !== "total"} onClick={onAward} variant="warm">
             Award this provider
           </Button>
         ) : (

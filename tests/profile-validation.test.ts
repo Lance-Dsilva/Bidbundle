@@ -105,7 +105,8 @@ describe("providerProfileUpdateSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.companyName).toBe("ProFix Plumbing");
-      expect(result.data.trades).toEqual(["Plumbing", "HVAC"]);
+      // Issue #7 requires persisted canonical slugs, not the former display labels.
+      expect(result.data.trades).toEqual(["plumbing", "hvac"]);
       // Normalised to week order so the stored array is stable.
       expect(result.data.workingDays).toEqual(["mon", "fri"]);
     }
@@ -114,7 +115,7 @@ describe("providerProfileUpdateSchema", () => {
   it("de-duplicates trades case-insensitively", () => {
     const result = providerProfileUpdateSchema.safeParse({ trades: ["Plumbing", "plumbing"] });
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.trades).toEqual(["Plumbing"]);
+    if (result.success) expect(result.data.trades).toEqual(["plumbing"]);
   });
 
   it("accepts license and insurance details as claims", () => {

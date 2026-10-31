@@ -110,6 +110,9 @@ const client = {
         insurancePolicyNumber: PROVIDER_ROW.insurancePolicyNumber,
         licenseVerifiedAt: state.verified.license,
         insuranceVerifiedAt: state.verified.insurance,
+        licenseVerifiedByUserId: state.verified.license ? "admin-1" : null,
+        insuranceVerifiedByUserId: state.verified.insurance ? "admin-1" : null,
+        updatedAt: new Date("2026-08-12T12:00:00.000Z"),
         accountStatus: PROVIDER_ROW.accountStatus,
       };
     },
@@ -516,7 +519,8 @@ describe("PATCH /api/profile/provider", () => {
     const providerUpdate = state.calls.find(
       (call) => call.model === "providerProfile" && call.operation === "update",
     )!.args as { data: Record<string, unknown> };
-    expect(providerUpdate.data).toMatchObject(business);
+    // The shared catalog now stores canonical values while accepting legacy labels.
+    expect(providerUpdate.data).toMatchObject({ ...business, trades: ["plumbing", "hvac"] });
 
     const userUpdate = state.calls.find(
       (call) => call.model === "user" && call.operation === "update",

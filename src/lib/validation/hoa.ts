@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeServiceCategory, SERVICE_CATEGORIES } from "@/lib/service-categories";
+
 import {
   SERVICE_RADIUS_MAX_MILES,
   SERVICE_RADIUS_MIN_MILES,
@@ -179,7 +181,15 @@ export type HoaResidentInvitationCreateInput = z.infer<typeof hoaResidentInvitat
 export const hoaRequestCreateSchema = z
   .object({
     title: z.string().trim().min(1, "Enter a request title.").max(MAX_HOA_TITLE_LENGTH),
-    category: z.string().trim().min(1, "Enter a category.").max(MAX_HOA_CATEGORY_LENGTH),
+    category: z
+      .string()
+      .trim()
+      .min(1, "Choose a service category.")
+      .max(MAX_HOA_CATEGORY_LENGTH)
+      .transform((value) => normalizeServiceCategory(value) ?? value)
+      .pipe(z.enum(SERVICE_CATEGORIES, {
+        message: "Choose one of the supported service categories.",
+      })),
     description: z
       .string()
       .trim()
@@ -366,10 +376,9 @@ export type ServiceAreaInput = z.infer<typeof serviceAreaSchema>;
 export const bidSubmitSchema = z
   .object({
     amountCents: z.number().int().min(0).max(MAX_BID_AMOUNT_CENTS),
-    pricingBasis: z.enum(["total", "per_home", "per_visit"]),
-    perHomeCents: z
-      .union([z.number().int().min(0).max(MAX_BID_AMOUNT_CENTS), z.null()])
-      .optional(),
+    pricingBasis: z.literal("total"),
+    // Averages are display-only, never separately supplied contract terms.
+    perHomeCents: z.null().optional(),
     proposedStartDate: optionalDateTime,
     estimatedDurationLabel: boundedText(120),
     scope: z.string().trim().min(1, "Describe the work included.").max(MAX_BID_TEXT_LENGTH),
@@ -381,7 +390,10 @@ export const bidSubmitSchema = z
 
 export type BidSubmitInput = z.infer<typeof bidSubmitSchema>;
 
-export const awardSchema = z.object({ bidId: idField }).strict();
+export const awardSchema = z.object({
+  bidId: idField,
+  expectedBidVersion: z.number().int().positive().optional(),
+}).strict();
 
 export type AwardInput = z.infer<typeof awardSchema>;
 

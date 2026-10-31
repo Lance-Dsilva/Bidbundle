@@ -15,28 +15,33 @@ import type { ProviderHoaWorkspace } from "@/lib/hoa-types";
  * disagree about what a provider has going on.
  */
 export type ProviderMarketplace = ProviderHoaWorkspace;
+export type MarketplaceRefreshResult = { ok: true } | { ok: false; error: string };
 
 export function useProviderMarketplace() {
   const [workspace, setWorkspace] = useState<ProviderMarketplace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const refresh = useCallback(async (options?: { background?: boolean }): Promise<MarketplaceRefreshResult> => {
+    const background = options?.background === true;
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const payload = await apiFetch<{ workspace: ProviderMarketplace }>(
         "/provider/marketplace",
       );
       setWorkspace(payload.workspace);
+      return { ok: true };
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "We could not load your marketplace. Try again.",
-      );
+      const message = caught instanceof Error
+        ? caught.message
+        : "We could not load your marketplace. Try again.";
+      if (!background) setError(message);
+      return { ok: false, error: message };
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 

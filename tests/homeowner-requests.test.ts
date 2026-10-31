@@ -146,12 +146,35 @@ beforeEach(() => {
   state.built = [];
   state.batches = [];
   state.memberships = [neighborhoodMember()];
-  state.profile = { address: null, latitude: null, longitude: null };
+  state.profile = { address: "1 Oak St", latitude: 30.4, longitude: -97.7 };
   state.duplicate = null;
   state.neighbours = [];
 });
 
 describe("eligibility", () => {
+  it.each([
+    { address: null, latitude: null, longitude: null },
+    { address: " ", latitude: 30, longitude: -97 },
+    { address: "1 Oak St", latitude: null, longitude: -97 },
+    { address: "1 Oak St", latitude: 91, longitude: -97 },
+    { address: "1 Oak St", latitude: 30, longitude: Number.NaN },
+  ])("prevents creator auto-enrollment without a routeable profile despite active membership: %j", async (profile) => {
+    state.profile = profile;
+    const { getRequestEligibility, createHomeownerRequest } = await import("@/lib/server/homeowner-requests");
+    await expect(getRequestEligibility(homeowner)).resolves.toMatchObject({ canCreate: false, reason: "no_profile_location" });
+    await expect(createHomeownerRequest(homeowner, validInput)).rejects.toMatchObject({ status: 409, reason: "no_profile_location" });
+    expect(state.built).toEqual([]);
+    expect(state.batches).toEqual([]);
+  });
+
+  it.each(["hoa", "pending", "provider"])("preserves %s eligibility precedence over missing address", async (condition) => {
+    state.profile = { address: null, latitude: null, longitude: null };
+    if (condition === "hoa") state.memberships = [hoaMember(), neighborhoodMember()];
+    if (condition === "pending") state.memberships = [neighborhoodMember("pending")];
+    const { getRequestEligibility } = await import("@/lib/server/homeowner-requests");
+    await expect(getRequestEligibility(condition === "provider" ? { id: "provider-1", role: "provider" } : homeowner)).resolves.toMatchObject({ canCreate: false, reason: condition === "hoa" ? "hoa_resident" : condition === "pending" ? "membership_pending" : "wrong_role" });
+  });
+
   it("allows a homeowner with an active neighbourhood membership", async () => {
     const { getRequestEligibility } = await import("@/lib/server/homeowner-requests");
     const eligibility = await getRequestEligibility(homeowner);
@@ -192,6 +215,7 @@ describe("eligibility", () => {
   });
 
   it("asks for an address when the profile has no location", async () => {
+    state.profile = { address: null, latitude: null, longitude: null };
     state.memberships = [];
     const { getRequestEligibility } = await import("@/lib/server/homeowner-requests");
     const eligibility = await getRequestEligibility(homeowner);

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeServiceCategory, SERVICE_CATEGORIES } from "@/lib/service-categories";
+
 import { MAX_NAME_LENGTH, MAX_PHONE_LENGTH, PUBLIC_ROLES } from "@/lib/validation/auth";
 import { onboardingCoverageSchema } from "@/lib/validation/provider-coverage";
 
@@ -178,18 +180,19 @@ export type HomeownerProfileUpdate = z.infer<typeof homeownerProfileUpdateSchema
 /* ── Provider profile ────────────────────────────────────────────────────── */
 
 const tradesField = z
-  .array(z.string().trim().min(1, "Trades cannot be blank.").max(MAX_TRADE_LENGTH, "Trade name is too long."))
+  .array(
+    z.string()
+      .trim()
+      .min(1, "Trades cannot be blank.")
+      .max(MAX_TRADE_LENGTH, "Trade name is too long.")
+      .transform((value) => normalizeServiceCategory(value) ?? value)
+      .pipe(z.enum(SERVICE_CATEGORIES, {
+        message: "Choose a supported service. Remove unrecognized legacy services explicitly before saving.",
+      })),
+  )
   .max(MAX_TRADES, `Choose at most ${MAX_TRADES} trades.`)
-  // Case-insensitive de-duplication, first spelling wins.
-  .transform((values) => {
-    const seen = new Set<string>();
-    return values.filter((value) => {
-      const key = value.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  });
+  // Known historical labels and current slugs describe the same service.
+  .transform((values) => [...new Set(values)]);
 
 const workingDaysField = z
   .array(z.enum(WEEKDAYS, { message: "Choose valid days of the week." }))

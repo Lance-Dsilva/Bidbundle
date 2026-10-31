@@ -3,6 +3,8 @@
 import { StepProgress } from "@/components/onboarding/StepProgress";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { CATEGORY_LABELS, SERVICE_CATEGORIES, normalizeServiceCategory } from "@/lib/service-categories";
+import { MAX_TRADES } from "@/lib/validation/profile";
 
 /**
  * What the applicant tells us about their business.
@@ -31,18 +33,6 @@ type ProviderBusinessStepProps = {
   stepCount?: number;
   confirmLabel?: string;
 };
-
-const serviceOptions = [
-  "Plumbing",
-  "Electrical",
-  "HVAC",
-  "Lawn care",
-  "Cleaning",
-  "Handyman",
-  "Roofing",
-  "Painting",
-  "Pest control",
-];
 
 function buildAreaSuggestions(address: string) {
   const suggestions = new Set<string>();
@@ -76,10 +66,12 @@ export function ProviderBusinessStep({
   confirmLabel = "Finish provider setup",
 }: ProviderBusinessStepProps) {
   const areaSuggestions = buildAreaSuggestions(address);
+  const unsupportedServices = data.services.filter((service) => !normalizeServiceCategory(service));
   const isComplete =
     data.companyName.trim().length > 0 &&
     data.serviceArea.trim().length > 0 &&
-    data.services.length > 0;
+    data.services.length > 0 &&
+    unsupportedServices.length === 0;
 
   return (
     <section className="py-6">
@@ -114,35 +106,51 @@ export function ProviderBusinessStep({
 
         <div className="space-y-2">
           <label className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--ink-500)]">
-            Services offered
+            Services offered (choose up to {MAX_TRADES})
           </label>
-          <div className="flex flex-wrap gap-2">
-            {serviceOptions.map((service) => {
-              const selected = data.services.includes(service);
+          <div aria-label="Services offered" className="flex flex-wrap gap-2" role="group">
+            {SERVICE_CATEGORIES.map((service) => {
+              const selected = data.services.some((value) => normalizeServiceCategory(value) === service);
               return (
                 <button
                   key={service}
                   type="button"
-                  onClick={() =>
+                  aria-pressed={selected}
+                  disabled={!selected && data.services.length >= MAX_TRADES}
+                  onClick={() => {
+                    const services = Array.from(new Set(data.services.map((value) => normalizeServiceCategory(value) ?? value)));
                     onChange(
                       "services",
-                      selected
-                        ? data.services.filter((value) => value !== service)
-                        : [...data.services, service]
-                    )
-                  }
-                  className="rounded-full px-3 py-2 text-[12px] font-semibold transition"
+                      selected ? services.filter((value) => value !== service) : [...services, service],
+                    );
+                  }}
+                  className="rounded-full px-3 py-2 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
                     background: selected ? "var(--terracotta-600)" : "var(--cream-100)",
                     color: selected ? "white" : "var(--ink-800)",
                     border: selected ? "1px solid var(--terracotta-600)" : "1px solid var(--border-warm)",
                   }}
                 >
-                  {service}
+                  {CATEGORY_LABELS[service]}
                 </button>
               );
             })}
           </div>
+          {unsupportedServices.length > 0 ? (
+            <div className="text-sm text-[var(--danger-600)]" role="alert">
+              <p>Choose a supported service to replace these saved choices, then remove each old choice.</p>
+              {unsupportedServices.map((service) => (
+                <button
+                  className="mr-2 mt-2 rounded-full border px-3 py-2 text-xs"
+                  key={service}
+                  onClick={() => onChange("services", data.services.filter((value) => value !== service))}
+                  type="button"
+                >
+                  Remove {service}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <Input

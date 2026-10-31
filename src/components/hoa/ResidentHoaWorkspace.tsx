@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BidPrice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import type { BidSummary, ResidentHoaHub, VisitSummary } from "@/lib/hoa-types";
+import { serviceCategoryLabel } from "@/lib/service-categories";
 
 async function post(path: string, body: unknown) {
   const response = await fetch(path, {
@@ -14,13 +17,6 @@ async function post(path: string, body: unknown) {
   });
   const result = (await response.json().catch(() => null)) as { error?: string } | null;
   if (!response.ok) throw new Error(result?.error ?? "Something went wrong. Please try again.");
-}
-
-function money(cents: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
 }
 
 function dateLabel(iso: string | null): string {
@@ -129,7 +125,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--teal-800)]">
-                          {request.category}
+                          {serviceCategoryLabel(request.category)}
                         </p>
                         <h4 className="mt-1 text-sm font-semibold text-[var(--ink-900)]">{request.title}</h4>
                       </div>
@@ -253,24 +249,21 @@ function BidList({ bids, winner }: { bids: BidSummary[]; winner: BidSummary | un
         Provider bids — full transparency
       </p>
       <ul className="mt-2 space-y-2">
-        {bids.map((bid) => (
+        {[...bids].sort(compareBidQuotes).map((bid) => (
           <li
             className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--paper)] px-3 py-2 text-xs"
             key={bid.id}
           >
-            <span className="min-w-0">
+            <div className="min-w-0">
               <strong className="text-[var(--ink-900)]">{bid.providerCompany ?? bid.providerName}</strong>
               {bid.providerVerified ? (
                 <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">
                   Verified
                 </span>
               ) : null}
-              <span className="ml-2 text-[var(--muted)]">
-                {money(bid.amountCents, bid.currency)}{" "}
-                {bid.pricingBasis === "per_home" ? "per home" : bid.pricingBasis === "per_visit" ? "per visit" : "total"}
-                {bid.proposedStartDate ? ` · starts ${dateLabel(bid.proposedStartDate)}` : ""}
-              </span>
-            </span>
+              <BidPrice bid={bid} />
+              {bid.proposedStartDate ? <p className="mt-1 text-[var(--muted)]">Starts {dateLabel(bid.proposedStartDate)}</p> : null}
+            </div>
             {bid.status === "accepted" ? (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase text-green-700">
                 Winner

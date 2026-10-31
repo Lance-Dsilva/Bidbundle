@@ -1,7 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
+
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 
 import type {
   BidSummary,
@@ -11,8 +15,16 @@ import type {
   OccurrenceSummary,
 } from "@/lib/hoa-types";
 
+import { hoaRequestCreateSchema } from "@/lib/validation/hoa";
+import { CATEGORY_LABELS, SERVICE_CATEGORIES, serviceCategoryLabel } from "@/lib/service-categories";
+
 type ActionState = { busy: boolean; error: string | null; success: string | null };
 const IDLE: ActionState = { busy: false, error: null, success: null };
+const FREQUENCIES = [
+  { value: "weekly", label: "Weekly", days: 7 },
+  { value: "fortnightly", label: "Every 2 weeks", days: 14 },
+  { value: "monthly", label: "Monthly (every 30 days)", days: 30 },
+] as const;
 
 async function sendJson(method: string, path: string, body?: unknown): Promise<void> {
   const response = await fetch(path, {
@@ -74,9 +86,28 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
   const [requestState, setRequestState] = useState(IDLE);
   const [awardState, setAwardState] = useState(IDLE);
   const [surveyState, setSurveyState] = useState(IDLE);
+  const [confirmation, setConfirmation] = useState<{
+    action: "cancel" | "complete" | "award"; requestId: string; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary;
+  } | null>(null);
+  const currentRequest = confirmation ? community.requests.find((item) => item.id === confirmation.requestId) : null;
+  const currentBid = confirmation?.bid ? community.bidsByRequest[confirmation.requestId]?.find((bid) => bid.id === confirmation.bid?.id) : null;
+  const validConfirmation = Boolean(confirmation && currentRequest && currentRequest.status === confirmation.status && currentRequest.title === confirmation.title &&
+    (confirmation.action === "award"
+      ? ["open_for_bids", "bidding_closed"].includes(currentRequest.status) &&
+        currentRequest.joinedCount === confirmation.joinedCount && currentRequest.totalOccurrences === confirmation.totalOccurrences && currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+        currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
+        currentBid.providerUserId === confirmation.bid.providerUserId &&
+        currentBid.homeCount === confirmation.bid.homeCount && currentBid.totalOccurrences === confirmation.bid.totalOccurrences && !community.bidsByRequest[confirmation.requestId]?.some((bid) => bid.status === "accepted")
+      : confirmation.action === "complete" ? ["awarded", "scheduled", "in_progress"].includes(currentRequest.status)
+        : ["draft", "collecting_interest", "open_for_bids", "bidding_closed"].includes(currentRequest.status)));
+
   const [requestKind, setRequestKind] = useState<"compulsory_recurring" | "optional_group">(
     "compulsory_recurring",
   );
+
+  const [requestFrequency, setRequestFrequency] = useState<string>(FREQUENCIES[0].value);
+  const [requestVisits, setRequestVisits] = useState("");
+  const requestPending = useRef(false);
 
   const residentInvitations = community.invitations.filter((item) => item.role === "homeowner");
   const occupied = community.units.filter((unit) => unit.occupancyStatus === "occupied").length;
@@ -87,7 +118,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
     ["collecting_interest", "open_for_bids"].includes(item.status),
   ).length;
   const bidsAwaiting = community.requests.filter(
-    (item) => item.status === "bidding_closed" && (community.bidsByRequest[item.id]?.length ?? 0) > 0,
+    (item) => ["open_for_bids", "bidding_closed"].includes(item.status) && (community.bidsByRequest[item.id]?.some((bid) => bid.status === "submitted") ?? false),
   ).length;
 
   const run = async (
@@ -100,12 +131,14 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
       await action();
       setter({ busy: false, error: null, success });
       router.refresh();
+      return true;
     } catch (error) {
       setter({
         busy: false,
         error: error instanceof Error ? error.message : "Something went wrong.",
         success: null,
       });
+      return false;
     }
   };
 
@@ -138,24 +171,37 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
   const submitRequest = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
+    if (requestPending.current || requestState.busy || !form.reportValidity()) return;
     const data = new FormData(form);
     const kind = String(data.get("kind"));
+    const frequency = FREQUENCIES.find((preset) => preset.value === data.get("frequency"));
+    if (
+      (kind !== "compulsory_recurring" && kind !== "optional_group") ||
+      (kind === "compulsory_recurring" && !frequency)
+    ) {
+      setRequestState({ busy: false, error: "Choose a request type and service frequency, then try again.", success: null });
+      return;
+    }
     const asDate = (name: string) => {
       const raw = String(data.get(name) ?? "").trim();
-      return raw ? new Date(raw).toISOString() : null;
+      if (!raw) return null;
+      const date = new Date(raw);
+      if (!Number.isFinite(date.getTime())) throw new Error("Enter valid service and deadline dates, then try again.");
+      return date.toISOString();
     };
     const asInt = (name: string) => {
       const raw = String(data.get(name) ?? "").trim();
       return raw ? Number(raw) : null;
     };
+    requestPending.current = true;
     void run(setRequestState, "Service request created.", async () => {
-      await sendJson("POST", `/api/hoa/communities/${community.id}/requests`, {
+      const payload = hoaRequestCreateSchema.safeParse({
         title: data.get("title"),
         category: data.get("category"),
         description: data.get("description"),
         kind,
-        recurrenceLabel: kind === "compulsory_recurring" ? data.get("recurrenceLabel") : null,
-        recurrenceIntervalDays: kind === "compulsory_recurring" ? asInt("recurrenceIntervalDays") : null,
+        recurrenceLabel: kind === "compulsory_recurring" ? frequency!.label : null,
+        recurrenceIntervalDays: kind === "compulsory_recurring" ? frequency!.days : null,
         totalOccurrences: asInt("totalOccurrences") ?? 1,
         startDate: asDate("startDate"),
         enrollmentClosesAt: kind === "optional_group" ? asDate("enrollmentClosesAt") : null,
@@ -163,19 +209,49 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         minHomes: kind === "optional_group" ? asInt("minHomes") : null,
         publish: data.get("publish") === "on",
       });
+      if (!payload.success) throw new Error(payload.error.issues[0]?.message ?? "Check the request details and try again.");
+      await sendJson("POST", `/api/hoa/communities/${community.id}/requests`, payload.data);
       form.reset();
+      setRequestKind("compulsory_recurring");
+      setRequestFrequency(FREQUENCIES[0].value);
+      setRequestVisits("");
+    }).finally(() => {
+      requestPending.current = false;
     });
   };
 
-  const transition = (requestId: string, action: string, success: string) =>
-    run(setRequestState, success, () =>
-      sendJson("PATCH", `/api/hoa/requests/${requestId}`, { action }),
-    );
+  const transition = (requestId: string, action: string, success: string) => {
+    if (action === "cancel" || action === "complete") {
+      const request = community.requests.find((item) => item.id === requestId);
+      if (request) {
+        setRequestState(IDLE);
+        setConfirmation({ action, requestId, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences });
+      }
+      return;
+    }
+    return run(setRequestState, success, () => {
+      const request = community.requests.find((item) => item.id === requestId);
+      const needsDefaultDeadline =
+        action === "open_bidding" &&
+        request?.kind === "optional_group" &&
+        request.status === "collecting_interest" &&
+        !request.biddingClosesAt;
+      return sendJson("PATCH", `/api/hoa/requests/${requestId}`, {
+        action,
+        ...(needsDefaultDeadline
+          ? { biddingClosesAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }
+          : {}),
+      });
+    });
+  };
 
-  const award = (requestId: string, bidId: string) =>
-    run(setAwardState, "Bid accepted — agreement and visits created.", () =>
-      sendJson("POST", `/api/hoa/requests/${requestId}/award`, { bidId }),
-    );
+  const award = (requestId: string, bidId: string) => {
+    const request = community.requests.find((item) => item.id === requestId);
+    const bid = community.bidsByRequest[requestId]?.find((item) => item.id === bidId);
+    if (!request || !bid) return;
+    setAwardState(IDLE);
+    setConfirmation({ action: "award", requestId, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences, bid: { ...bid } });
+  };
 
   const submitSurvey = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -341,60 +417,91 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f8f83]">Procurement</p>
         <h2 className="mt-1 text-xl font-bold text-[#102a43]">Create a service request</h2>
         <p className="mt-2 text-sm text-[#64748b]">
-          Compulsory recurring services include every active home automatically. Optional services
-          collect resident interest first, then lock participants before bidding.
+          Choose whether every active home receives the service automatically or residents choose
+          to join. When residents choose, collect their interest and confirm participants before bidding.
         </p>
-        <form className="mt-5 grid gap-3 md:grid-cols-2" onSubmit={submitRequest}>
-          <Field name="title" label="Request title" placeholder="Biweekly gardening" />
-          <Field name="category" label="Service category" placeholder="Gardening" />
-          <label>
-            <span className="mb-1 block text-xs font-semibold text-[#334e68]">Request type</span>
-            <select
-              className={inputClass}
-              name="kind"
-              value={requestKind}
-              onChange={(event) =>
-                setRequestKind(event.currentTarget.value as typeof requestKind)
-              }
-            >
-              <option value="compulsory_recurring">Compulsory recurring</option>
-              <option value="optional_group">Optional resident group</option>
-            </select>
-          </label>
-          <Field name="startDate" label="First service date" type="date" required={false} />
-          {requestKind === "compulsory_recurring" ? (
-            <>
-              <Field name="recurrenceLabel" label="Recurrence description" placeholder="Every two weeks" />
-              <Field name="recurrenceIntervalDays" label="Days between visits" type="number" placeholder="14" />
-              <Field name="totalOccurrences" label="Number of cycles" type="number" placeholder="12" />
-              <Field name="biddingClosesAt" label="Bidding deadline" type="datetime-local" />
-            </>
-          ) : (
-            <>
-              <Field name="enrollmentClosesAt" label="Enrollment deadline" type="datetime-local" />
-              <Field name="biddingClosesAt" label="Bidding deadline (can set later)" type="datetime-local" required={false} />
-              <Field name="minHomes" label="Minimum homes" type="number" placeholder="3" required={false} />
-              <Field name="totalOccurrences" label="Number of visits" type="number" placeholder="1" required={false} />
-            </>
-          )}
-          <label className="md:col-span-2">
-            <span className="mb-1 block text-xs font-semibold text-[#334e68]">Scope shown to residents and providers</span>
-            <textarea
-              className={`${inputClass} min-h-24 py-3`}
-              name="description"
-              required
-              placeholder="Explain the scope, expectations, and what homes receive."
-            />
-          </label>
-          <label className="flex items-center gap-2 text-sm text-[#334e68]">
-            <input defaultChecked name="publish" type="checkbox" /> Publish immediately
-          </label>
-          <div className="md:col-span-2">
-            <button className={primaryButton} disabled={requestState.busy} type="submit">
-              {requestState.busy ? "Saving…" : "Create request"}
-            </button>
-            <ActionMessage state={requestState} />
-          </div>
+        <form className="mt-5" onSubmit={submitRequest}>
+          <fieldset className="grid min-w-0 gap-3 md:grid-cols-2" disabled={requestState.busy}>
+            <Field name="title" label="Request title" placeholder="Biweekly gardening" />
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[#334e68]">Service category</span>
+              <select className={inputClass} name="category" defaultValue="" required>
+                <option value="" disabled>Choose a service category</option>
+                {SERVICE_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[#334e68]">Request type</span>
+              <select
+                className={inputClass}
+                name="kind"
+                value={requestKind}
+                onChange={(event) =>
+                  setRequestKind(event.currentTarget.value as typeof requestKind)
+                }
+              >
+                <option value="compulsory_recurring">Every home gets this service</option>
+                <option value="optional_group">Residents choose to join</option>
+              </select>
+            </label>
+            <Field name="startDate" label="First service date" type="date" required={false} />
+            {requestKind === "compulsory_recurring" ? (
+              <>
+                <label>
+                  <span className="mb-1 block text-xs font-semibold text-[#334e68]">Service frequency</span>
+                  <select
+                    className={inputClass}
+                    name="frequency"
+                    value={requestFrequency}
+                    onChange={(event) => setRequestFrequency(event.currentTarget.value)}
+                    aria-describedby="request-frequency-help"
+                    required
+                  >
+                    {FREQUENCIES.map((preset) => (
+                      <option key={preset.value} value={preset.value}>{preset.label}</option>
+                    ))}
+                  </select>
+                  <span id="request-frequency-help" className="mt-1 block text-xs text-[#64748b]">
+                    Monthly uses a fixed 30-day interval, so visits may fall on different dates each month.
+                  </span>
+                </label>
+                <Field name="totalOccurrences" label="How many visits" type="number" placeholder="12" min={1} max={104} step={1} value={requestVisits} onChange={setRequestVisits} />
+                <Field name="biddingClosesAt" label="Bidding deadline" type="datetime-local" />
+              </>
+            ) : (
+              <>
+                <Field name="enrollmentClosesAt" label="Enrollment deadline" type="datetime-local" />
+                <div>
+                  <Field name="biddingClosesAt" label="Bidding deadline (optional)" type="datetime-local" required={false} />
+                  <p className="mt-1 text-xs text-[#64748b]">
+                    Leave blank for a 7-day bidding period starting when you open bidding.
+                  </p>
+                </div>
+                <Field name="minHomes" label="Minimum homes" type="number" placeholder="3" required={false} />
+                <Field name="totalOccurrences" label="How many visits" type="number" placeholder="1" required={false} min={1} max={104} step={1} value={requestVisits} onChange={setRequestVisits} />
+              </>
+            )}
+            <label className="md:col-span-2">
+              <span className="mb-1 block text-xs font-semibold text-[#334e68]">Scope shown to residents and providers</span>
+              <textarea
+                className={`${inputClass} min-h-24 py-3`}
+                name="description"
+                required
+                placeholder="Explain the scope, expectations, and what homes receive."
+              />
+            </label>
+            <label className="flex min-h-11 items-center gap-2 text-sm text-[#334e68]">
+              <input defaultChecked name="publish" type="checkbox" /> Publish immediately
+            </label>
+            <div className="md:col-span-2">
+              <button className={primaryButton} disabled={requestState.busy} type="submit">
+                {requestState.busy ? "Saving…" : "Create request"}
+              </button>
+              <ActionMessage state={requestState} />
+            </div>
+          </fieldset>
         </form>
 
         <div className="mt-6 space-y-4">
@@ -542,6 +649,31 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
           )}
         </div>
       </section>
+      {confirmation ? (
+        <ConfirmAction
+          open
+          title={confirmation.action === "award" ? "Award this provider?" : confirmation.action === "complete" ? "Mark this request complete?" : "Cancel this request?"}
+          confirmLabel={confirmation.action === "award" ? "Award provider" : confirmation.action === "complete" ? "Mark complete" : "Cancel request"}
+          destructive={confirmation.action === "cancel"}
+          valid={validConfirmation}
+          error={confirmation.action === "award" ? awardState.error : requestState.error}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => {
+            if (!validConfirmation || requestState.busy || awardState.busy) return false;
+            return confirmation.action === "award" && confirmation.bid
+              ? run(setAwardState, "Bid accepted — agreement and visits created.", () => sendJson("POST", `/api/hoa/requests/${confirmation.requestId}/award`, { bidId: confirmation.bid!.id, expectedBidVersion: confirmation.bid!.version }))
+              : run(setRequestState, confirmation.action === "complete" ? "Request completed." : "Request cancelled.", () => sendJson("PATCH", `/api/hoa/requests/${confirmation.requestId}`, { action: confirmation.action }));
+          }}
+          description={confirmation.action === "award" && confirmation.bid ? <>
+            <p>Award “{confirmation.title}” to {confirmation.bid.providerCompany ?? confirmation.bid.providerName} (quote version {confirmation.bid.version})?</p>
+            <BidPrice bid={confirmation.bid} />
+            <p>Current request scope: {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}; {confirmation.totalOccurrences} {confirmation.totalOccurrences === 1 ? "visit" : "visits"} per home.</p>
+            <p>{confirmation.status === "open_for_bids" ? "Awarding now ends bidding immediately. No more quotes can be submitted." : "Bidding is already closed."} This choice cannot be undone here.</p>
+            <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
+          </> : confirmation.action === "complete" ? <p>Mark “{confirmation.title}” and its agreement complete? All service cycles must already be closed. You may receive a prompt to review the provider.</p>
+            : <p>Cancel “{confirmation.title}”? This ends the request and bidding, and expires submitted quotes. Affected residents and quoting providers may be notified according to their preferences.</p>}
+        />
+      ) : null}
     </div>
   );
 }
@@ -556,7 +688,7 @@ function RequestCard({
   request: HoaRequestSummary;
   bids: BidSummary[];
   busy: boolean;
-  onTransition: (requestId: string, action: string, success: string) => Promise<void> | void;
+  onTransition: (requestId: string, action: string, success: string) => Promise<boolean> | void;
   onAward: (requestId: string, bidId: string) => Promise<void> | void;
 }) {
   const submitted = bids.filter((bid) => bid.status === "submitted");
@@ -566,7 +698,7 @@ function RequestCard({
     <article className="rounded-xl border border-[#e1e8e6] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-[#0f8f83]">{request.category}</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-[#0f8f83]">{serviceCategoryLabel(request.category)}</p>
           <h3 className="mt-1 font-semibold text-[#102a43]">{request.title}</h3>
         </div>
         <Badge tone={["completed", "awarded", "scheduled", "in_progress"].includes(request.status) ? "green" : request.status === "cancelled" ? "gray" : "teal"}>
@@ -580,6 +712,13 @@ function RequestCard({
           : `Optional · ${request.joinedCount} joined / ${request.declinedCount} declined${request.minHomes ? ` · needs ${request.minHomes}` : ""}`}
         {request.biddingClosesAt ? ` · bids close ${dateLabel(request.biddingClosesAt)}` : ""}
       </p>
+      {request.kind === "optional_group" &&
+      request.status === "collecting_interest" &&
+      !request.biddingClosesAt ? (
+        <p className="mt-2 text-xs text-[#64748b]">
+          Opening bidding sets the deadline to 7 days from that time.
+        </p>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
         {request.status === "draft" ? (
@@ -615,7 +754,7 @@ function RequestCard({
             Bids ({bids.length})
           </h4>
           <ul className="mt-2 space-y-2">
-            {bids.map((bid) => (
+            {[...bids].sort(compareBidQuotes).map((bid) => (
               <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3 text-sm" key={bid.id}>
                 <div className="min-w-0">
                   <p className="font-medium text-[#102a43]">
@@ -626,13 +765,13 @@ function RequestCard({
                       </span>
                     ) : null}
                   </p>
-                  <p className="mt-0.5 text-xs text-[#64748b]">
-                    {money(bid.amountCents, bid.currency)}{" "}
-                    {bid.pricingBasis === "per_home" ? "per home" : bid.pricingBasis === "per_visit" ? "per visit" : "total"}
-                    {bid.cadenceLabel ? ` · ${bid.cadenceLabel}` : ""}
-                    {bid.proposedStartDate ? ` · starts ${dateLabel(bid.proposedStartDate)}` : ""}
-                    {` · v${bid.version}`}
+                  <BidPrice bid={bid} />
+                  <p className="mt-1 text-xs text-[#64748b]">
+                    {bid.cadenceLabel ? `${bid.cadenceLabel} · ` : ""}
+                    {bid.proposedStartDate ? `starts ${dateLabel(bid.proposedStartDate)} · ` : ""}
+                    v{bid.version}
                   </p>
+                  {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={request.status} /> : null}
                   <p className="mt-1 line-clamp-2 text-xs text-[#64748b]">{bid.scope}</p>
                 </div>
                 <div>
@@ -640,10 +779,10 @@ function RequestCard({
                     <Badge tone="green">Accepted</Badge>
                   ) : bid.status === "rejected" ? (
                     <Badge tone="gray">Rejected</Badge>
-                  ) : request.status === "bidding_closed" && !accepted ? (
+                  ) : ["open_for_bids", "bidding_closed"].includes(request.status) && !accepted && bid.status === "submitted" ? (
                     <button
-                      className="rounded-lg bg-[#0f8f83] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                      disabled={busy}
+                      className="min-h-11 rounded-lg bg-[#0f8f83] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      disabled={busy || bid.pricingBasis !== "total"}
                       onClick={() => void onAward(request.id, bid.id)}
                       type="button"
                     >
@@ -657,7 +796,7 @@ function RequestCard({
             ))}
           </ul>
           {request.status === "open_for_bids" && submitted.length > 0 ? (
-            <p className="mt-2 text-xs text-[#64748b]">Close bidding to accept a bid.</p>
+            <p className="mt-2 text-xs text-[#64748b]">You can accept a bid now. Awarding ends bidding immediately.</p>
           ) : null}
         </div>
       ) : null}
@@ -783,6 +922,11 @@ function Field({
   type = "text",
   defaultValue,
   required = true,
+  min,
+  max,
+  step,
+  value,
+  onChange,
 }: {
   name: string;
   label: string;
@@ -790,6 +934,11 @@ function Field({
   type?: string;
   defaultValue?: string;
   required?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  value?: string;
+  onChange?: (value: string) => void;
 }) {
   return (
     <label>
@@ -797,7 +946,12 @@ function Field({
       <input
         className={inputClass}
         defaultValue={defaultValue}
+        value={value}
+        onChange={onChange ? (event) => onChange(event.currentTarget.value) : undefined}
         name={name}
+        min={min}
+        max={max}
+        step={step}
         placeholder={placeholder}
         required={required}
         type={type}

@@ -157,6 +157,9 @@ export type BidSummary = {
   currency: string;
   pricingBasis: "total" | "per_home" | "per_visit";
   perHomeCents: number | null;
+  /** Joined homes and service rounds from the authorized request context. */
+  homeCount?: number;
+  totalOccurrences?: number;
   proposedStartDate: string | null;
   estimatedDurationLabel: string | null;
   scope: string;

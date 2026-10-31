@@ -11,8 +11,17 @@ import {
   type ReactNode,
 } from "react";
 
+import { ProviderBusinessAddressFields } from "@/components/provider/ProviderBusinessAddressFields";
+import type { GeoapifyPlace } from "@/lib/geoapify";
 import { AvatarField } from "@/components/profile/AvatarField";
 import type { CommonProfile, ProviderProfile } from "@/lib/profile-types";
+import {
+  CATEGORY_LABELS,
+  SERVICE_CATEGORIES,
+  normalizeServiceCategory,
+  normalizeServiceTrades,
+  serviceCategoryLabel,
+} from "@/lib/service-categories";
 import {
   MAX_BIO_LENGTH,
   MAX_TRADES,
@@ -122,7 +131,7 @@ export function formFromProfile(
     neighborhood: profile.neighborhood ?? "",
     companyName: provider.companyName ?? "",
     bio: provider.bio ?? "",
-    trades: [...provider.trades],
+    trades: Array.from(new Set(provider.trades.map((trade) => normalizeServiceCategory(trade) ?? trade))),
     workingDays: [...provider.workingDays],
     workingHoursStart: provider.workingHoursStart ?? "",
     workingHoursEnd: provider.workingHoursEnd ?? "",
@@ -201,39 +210,73 @@ export function ProviderBusinessDetailsDialog({
   const reactId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const tradeInputRef = useRef<HTMLSelectElement>(null);
+  const discardRef = useRef<HTMLDivElement>(null);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const discardOpenerRef = useRef<Element | null>(null);
+  const mountedRef = useRef(false);
+  const saveInFlightRef = useRef(false);
   /** Where focus came from, so closing puts it back. */
   const openerRef = useRef<Element | null>(null);
 
   const initial = useMemo(() => formFromProfile(profile, provider), [profile, provider]);
   const [form, setForm] = useState<BusinessForm>(initial);
+  const [selectedPlace, setSelectedPlace] = useState<GeoapifyPlace | null>(null);
+  const [addressError, setAddressError] = useState<string | undefined>();
   const [tradeDraft, setTradeDraft] = useState("");
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [localSaveError, setLocalSaveError] = useState<string | null>(null);
+  const busy = saving || submitting;
 
   const isDirty = useMemo(
-    () => JSON.stringify(form) !== JSON.stringify(initial),
-    [form, initial],
+    () => Boolean(tradeDraft.trim()) || JSON.stringify(form) !== JSON.stringify(initial) || Boolean(selectedPlace && (selectedPlace.latitude !== profile.latitude || selectedPlace.longitude !== profile.longitude)),
+    [form, initial, tradeDraft, selectedPlace, profile.latitude, profile.longitude],
   );
 
-  const set = <Key extends keyof BusinessForm>(key: Key, value: BusinessForm[Key]) =>
+  const set = <Key extends keyof BusinessForm>(key: Key, value: BusinessForm[Key]) => {
+    if (saveInFlightRef.current || busy) return;
     setForm((current) => ({ ...current, [key]: value }));
+  };
 
   /** Closing with unsaved edits asks first; a clean form just closes. */
   const requestClose = useCallback(() => {
+    if (saveInFlightRef.current || busy || confirmingDiscard) return;
     if (isDirty) {
+      discardOpenerRef.current = document.activeElement;
       setConfirmingDiscard(true);
       return;
     }
     onClose();
-  }, [isDirty, onClose]);
+  }, [busy, confirmingDiscard, isDirty, onClose]);
 
   useEffect(() => {
+    mountedRef.current = true;
     openerRef.current = document.activeElement;
     firstFieldRef.current?.focus();
     return () => {
+      mountedRef.current = false;
       if (openerRef.current instanceof HTMLElement) openerRef.current.focus();
     };
   }, []);
+
+  const keepEditing = useCallback(() => {
+    setConfirmingDiscard(false);
+  }, []);
+
+  useEffect(() => {
+    if (confirmingDiscard) {
+      keepEditingRef.current?.focus();
+    } else if (busy) {
+      dialogRef.current?.focus();
+    } else if (discardOpenerRef.current instanceof HTMLElement) {
+      // Restore after the disabled fieldset has been enabled by this render.
+      discardOpenerRef.current.focus();
+      discardOpenerRef.current = null;
+    }
+  }, [busy, confirmingDiscard]);
 
   /**
    * Escape closes, and Tab cycles inside the dialog.
@@ -243,24 +286,33 @@ export function ProviderBusinessDetailsDialog({
    */
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        if (confirmingDiscard) setConfirmingDiscard(false);
+        if (confirmingDiscard) keepEditing();
         else requestClose();
         return;
       }
-      if (event.key !== "Tab" || !dialogRef.current) return;
+      const activeDialog = confirmingDiscard ? discardRef.current : dialogRef.current;
+      if (event.key !== "Tab" || !activeDialog) return;
 
       const focusable = [
-        ...dialogRef.current.querySelectorAll<HTMLElement>(
+        ...activeDialog.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ].filter((element) => element.offsetParent !== null);
-      if (focusable.length === 0) return;
+      ].filter((element) => element.offsetParent !== null && !element.matches(":disabled"));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        activeDialog.focus();
+        return;
+      }
 
       const first = focusable[0]!;
       const last = focusable[focusable.length - 1]!;
-      if (event.shiftKey && document.activeElement === first) {
+      if (document.activeElement === activeDialog || !activeDialog.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -271,31 +323,36 @@ export function ProviderBusinessDetailsDialog({
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [confirmingDiscard, requestClose]);
+  }, [confirmingDiscard, keepEditing, requestClose]);
 
   /* ── Trades ────────────────────────────────────────────────────────────── */
 
-  function addTrade(raw: string) {
-    const trade = raw.trim();
-    if (!trade) {
-      setTradeError("Enter a service before adding it.");
-      return;
+  function validateTrade(raw: string): string | null {
+    const draft = raw.trim();
+    if (!draft) return "Choose a supported service before adding it.";
+    if (draft.length > MAX_TRADE_LENGTH) {
+      return `Keep each service under ${MAX_TRADE_LENGTH} characters.`;
     }
-    if (trade.length > MAX_TRADE_LENGTH) {
-      setTradeError(`Keep each service under ${MAX_TRADE_LENGTH} characters.`);
-      return;
-    }
-    // Case-insensitive, matching the server's own de-duplication so the list
-    // the provider sees is the list that gets stored.
-    if (form.trades.some((existing) => existing.toLowerCase() === trade.toLowerCase())) {
-      setTradeError(`${trade} is already on your list.`);
-      return;
+    const trade = normalizeServiceCategory(draft);
+    if (!trade) return "Choose a supported service before adding it.";
+    if (form.trades.some((existing) => normalizeServiceCategory(existing) === trade)) {
+      return `${serviceCategoryLabel(trade)} is already on your list.`;
     }
     if (form.trades.length >= MAX_TRADES) {
-      setTradeError(`You can list at most ${MAX_TRADES} services.`);
+      return `You can list at most ${MAX_TRADES} services.`;
+    }
+    return null;
+  }
+
+  function addTrade(raw: string) {
+    if (saveInFlightRef.current || busy) return;
+    const error = validateTrade(raw);
+    const trade = normalizeServiceCategory(raw);
+    setTradeError(error);
+    if (error || !trade) {
+      tradeInputRef.current?.focus();
       return;
     }
-    setTradeError(null);
     setTradeDraft("");
     set("trades", [...form.trades, trade]);
   }
@@ -303,36 +360,63 @@ export function ProviderBusinessDetailsDialog({
   /* ── Save ──────────────────────────────────────────────────────────────── */
 
   async function handleSave() {
-    // A service still sitting in the input is one the provider meant to add.
-    const pending = tradeDraft.trim();
-    const trades =
-      pending &&
-      !form.trades.some((existing) => existing.toLowerCase() === pending.toLowerCase()) &&
-      form.trades.length < MAX_TRADES
-        ? [...form.trades, pending]
-        : form.trades;
+    if (saveInFlightRef.current || busy || confirmingDiscard) return;
+    if (form.address.trim() && form.address.trim() !== initial.address.trim() && !selectedPlace) {
+      setAddressError("Choose an address suggestion to confirm the new location before saving.");
+      addressInputRef.current?.focus();
+      return;
+    }
+    // Save and Add must validate the same draft rather than silently dropping it.
+    const pending = normalizeServiceCategory(tradeDraft);
+    const error = tradeDraft.trim() ? validateTrade(tradeDraft) : null;
+    setTradeError(error);
+    if (error) {
+      tradeInputRef.current?.focus();
+      return;
+    }
+    const trades = pending ? [...form.trades, pending] : form.trades;
+    if (trades.some((trade) => !normalizeServiceCategory(trade))) {
+      setTradeError("Replace unsupported saved services with a category below, then remove the old services before saving.");
+      tradeInputRef.current?.focus();
+      return;
+    }
 
-    const saved = await onSave(
-      {
-        fullName: form.fullName.trim(),
-        phone: form.phone.trim() || null,
-        address: form.address.trim() || null,
-        neighborhood: form.neighborhood.trim() || null,
-      },
-      {
-        companyName: form.companyName.trim() || null,
-        bio: form.bio.trim() || null,
-        trades,
-        workingDays: form.workingDays,
-        workingHoursStart: form.workingHoursStart || null,
-        workingHoursEnd: form.workingHoursEnd || null,
-        licenseNumber: form.licenseNumber.trim() || null,
-        licenseState: form.licenseState.trim() || null,
-        insuranceProvider: form.insuranceProvider.trim() || null,
-        insurancePolicyNumber: form.insurancePolicyNumber.trim() || null,
-      },
-    );
-    if (saved) onClose();
+    saveInFlightRef.current = true;
+    setSubmitting(true);
+    setLocalSaveError(null);
+    try {
+      const saved = await onSave(
+        {
+          fullName: form.fullName.trim(),
+          phone: form.phone.trim() || null,
+          address: form.address.trim() || null,
+          neighborhood: form.address.trim() ? form.neighborhood.trim() || null : null,
+          ...(selectedPlace ? { latitude: selectedPlace.latitude, longitude: selectedPlace.longitude } :
+            !form.address.trim() ? { latitude: null, longitude: null } : {}),
+        },
+        {
+          companyName: form.companyName.trim() || null,
+          bio: form.bio.trim() || null,
+          trades: normalizeServiceTrades(trades),
+          workingDays: form.workingDays,
+          workingHoursStart: form.workingHoursStart || null,
+          workingHoursEnd: form.workingHoursEnd || null,
+          licenseNumber: form.licenseNumber.trim() || null,
+          licenseState: form.licenseState.trim() || null,
+          insuranceProvider: form.insuranceProvider.trim() || null,
+          insurancePolicyNumber: form.insurancePolicyNumber.trim() || null,
+        },
+      );
+      // An externally unmounted editor must never close a newer editor instance.
+      if (saved && mountedRef.current) onClose();
+    } catch {
+      if (mountedRef.current) {
+        setLocalSaveError("We couldn't save your business details. Please try again.");
+      }
+    } finally {
+      saveInFlightRef.current = false;
+      if (mountedRef.current) setSubmitting(false);
+    }
   }
 
   const licenceClaimChanged =
@@ -391,6 +475,9 @@ export function ProviderBusinessDetailsDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
+        aria-busy={busy}
+        aria-hidden={confirmingDiscard || undefined}
+        tabIndex={-1}
         className="p-4 sm:p-6"
         style={{
           width: "min(820px, 100%)",
@@ -402,6 +489,10 @@ export function ProviderBusinessDetailsDialog({
           boxShadow: "var(--shadow-warm-lg)",
         }}
       >
+        <fieldset
+          disabled={busy || confirmingDiscard}
+          style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
+        >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
             <h2
@@ -453,7 +544,7 @@ export function ProviderBusinessDetailsDialog({
               progress={uploadProgress}
               onSelect={onChangeAvatar}
               onRemove={onClearAvatar}
-              disabled={saving}
+              disabled={busy || confirmingDiscard}
             />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {textField("companyName", "Company name", { ref: firstFieldRef })}
@@ -514,16 +605,17 @@ export function ProviderBusinessDetailsDialog({
                     color: "var(--terracotta-600)",
                   }}
                 >
-                  {trade}
+                  {serviceCategoryLabel(trade)}{normalizeServiceCategory(trade) ? "" : " (unsupported)"}
                   <button
                     type="button"
-                    aria-label={`Remove ${trade}`}
-                    onClick={() =>
+                    aria-label={`Remove ${serviceCategoryLabel(trade)}`}
+                    onClick={() => {
+                      setTradeError(null);
                       set(
                         "trades",
                         form.trades.filter((value) => value !== trade),
-                      )
-                    }
+                      );
+                    }}
                     style={{
                       width: 24,
                       height: 24,
@@ -542,28 +634,29 @@ export function ProviderBusinessDetailsDialog({
               ))
             )}
           </div>
+          {form.trades.some((trade) => !normalizeServiceCategory(trade)) ? (
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--danger-600)", lineHeight: 1.5 }}>
+              Some saved services are no longer supported. Choose a replacement below, then remove
+              the old service before saving. Your saved choices have not been removed automatically.
+            </p>
+          ) : null}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 220px" }}>
               <span style={labelStyle}>Add a service</span>
-              <input
-                type="text"
+              <select
                 style={inputStyle}
+                ref={tradeInputRef}
                 value={tradeDraft}
-                maxLength={MAX_TRADE_LENGTH}
-                placeholder="Lawn care"
                 onChange={(event) => {
                   setTradeDraft(event.target.value);
                   setTradeError(null);
                 }}
-                onKeyDown={(event) => {
-                  // Enter or comma commits, so a list can be typed without
-                  // reaching for the mouse.
-                  if (event.key === "Enter" || event.key === ",") {
-                    event.preventDefault();
-                    addTrade(tradeDraft);
-                  }
-                }}
-              />
+              >
+                <option value="">Choose a service</option>
+                {SERVICE_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+                ))}
+              </select>
             </label>
             <button
               type="button"
@@ -583,10 +676,22 @@ export function ProviderBusinessDetailsDialog({
           title="Business location"
           hint="Where you are based. The area you travel to is set by the service-area map on this page, not here."
         >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {textField("address", "Business address")}
-            {textField("neighborhood", "Neighborhood")}
-          </div>
+          <ProviderBusinessAddressFields
+            address={form.address} neighborhood={form.neighborhood}
+            unchanged={form.address.trim() === initial.address.trim()}
+            selected={Boolean(selectedPlace)} disabled={busy || confirmingDiscard}
+            inputRef={addressInputRef} error={addressError || fieldErrors.address || fieldErrors.neighborhood || fieldErrors.latitude || fieldErrors.longitude}
+            onEdit={(address) => {
+              if (saveInFlightRef.current || busy || confirmingDiscard) return;
+              setSelectedPlace(null); setAddressError(undefined);
+              setForm((current) => ({ ...current, address, neighborhood: address.trim() && address.trim() === initial.address.trim() ? initial.neighborhood : "" }));
+            }}
+            onSelect={(place) => {
+              if (saveInFlightRef.current || busy || confirmingDiscard) return;
+              setSelectedPlace(place); setAddressError(undefined);
+              setForm((current) => ({ ...current, address: place.formatted, neighborhood: place.neighborhood }));
+            }}
+          />
         </Section>
 
         {/* ── 4. Availability ─────────────────────────────────────────── */}
@@ -706,7 +811,7 @@ export function ProviderBusinessDetailsDialog({
           </div>
         </Section>
 
-        {saveError ? (
+        {localSaveError || saveError ? (
           <div
             role="alert"
             style={{
@@ -719,33 +824,7 @@ export function ProviderBusinessDetailsDialog({
               color: "var(--danger-600)",
             }}
           >
-            {saveError}
-          </div>
-        ) : null}
-
-        {confirmingDiscard ? (
-          <div
-            role="alertdialog"
-            aria-label="Discard unsaved changes?"
-            style={{
-              marginTop: 18,
-              padding: "14px 16px",
-              borderRadius: 14,
-              background: "var(--cream-50)",
-              border: "1px solid var(--border-warm)",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 13, color: "var(--ink-900)", fontWeight: 600 }}>
-              Discard your unsaved changes?
-            </p>
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-              <button type="button" onClick={onClose} style={{ ...ghostButtonStyle, color: "var(--danger-600)", borderColor: "rgba(182,68,48,0.3)" }}>
-                Discard
-              </button>
-              <button type="button" onClick={() => setConfirmingDiscard(false)} style={ghostButtonStyle}>
-                Keep editing
-              </button>
-            </div>
+            {localSaveError || saveError}
           </div>
         ) : null}
 
@@ -753,19 +832,44 @@ export function ProviderBusinessDetailsDialog({
           className="flex flex-col gap-2.5 sm:flex-row sm:justify-end"
           style={{ marginTop: 22 }}
         >
-          <button type="button" onClick={requestClose} style={ghostButtonStyle} disabled={saving}>
+          <button type="button" onClick={requestClose} style={ghostButtonStyle} disabled={busy || confirmingDiscard}>
             Cancel
           </button>
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={saving}
-            style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1, cursor: saving ? "default" : "pointer" }}
+            disabled={busy || confirmingDiscard}
+            style={{ ...primaryButtonStyle, opacity: busy ? 0.7 : 1, cursor: busy ? "default" : "pointer" }}
           >
-            {saving ? "Saving…" : "Save business details"}
+            {busy ? "Saving…" : "Save business details"}
           </button>
         </div>
+        </fieldset>
       </div>
+      {confirmingDiscard ? (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1, display: "grid", placeItems: "center", padding: 12, background: "rgba(20,16,12,0.32)" }}>
+          <div
+            ref={discardRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={`${reactId}-discard-title`}
+            tabIndex={-1}
+            style={{ width: "min(420px, 100%)", maxHeight: "92vh", overflowY: "auto", padding: "20px", borderRadius: 14, background: "var(--cream-50)", border: "1px solid var(--border-warm)", boxShadow: "var(--shadow-warm-lg)" }}
+          >
+            <p id={`${reactId}-discard-title`} style={{ margin: 0, fontSize: 13, color: "var(--ink-900)", fontWeight: 600 }}>
+              Discard your unsaved changes?
+            </p>
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <button ref={keepEditingRef} type="button" onClick={keepEditing} style={ghostButtonStyle}>
+                Keep editing
+              </button>
+              <button type="button" onClick={() => { if (!saveInFlightRef.current && !busy) onClose(); }} style={{ ...ghostButtonStyle, color: "var(--danger-600)", borderColor: "rgba(182,68,48,0.3)" }}>
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

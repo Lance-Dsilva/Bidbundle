@@ -18,6 +18,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock("@/lib/geoapify", () => ({ autocompleteAddress: async () => [], geocodeAddress: async () => ({ formatted: "1 Oak St, Austin", latitude: 30.4, longitude: -97.7, neighborhood: "Oakwood" }) }));
+
 const originalFetch = global.fetch;
 
 const eligible = {
@@ -48,7 +50,7 @@ function fillValidRequest() {
   fireEvent.change(screen.getByLabelText("Title"), {
     target: { value: "Pressure washing" },
   });
-  fireEvent.change(screen.getByLabelText("Category"), { target: { value: "cleaning" } });
+  fireEvent.click(screen.getByRole("radio", { name: "Cleaning" }));
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Driveway and back patio." },
   });
@@ -66,6 +68,24 @@ afterEach(() => {
 });
 
 describe("new request page", () => {
+  it("offers the same canonical services as provider onboarding", async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonOnce({ requests: [], eligibility: eligible })) as unknown as typeof fetch;
+    render(<HomeownerRequestPage />);
+    await screen.findByText("For Oakwood Heights");
+    const category = screen.getByRole("group", { name: /^Category/ });
+    for (const [label, slug] of [
+      ["Lawn care", "lawn"], ["Pool care", "pool_care"], ["Gutters", "gutter"],
+      ["Landscaping", "landscaping"], ["Seasonal maintenance", "seasonal_maintenance"],
+      ["Painting", "painting"], ["Pest control", "pest_control"],
+    ]) {
+      const choice = screen.getByRole("radio", { name: label });
+      expect(category).toContainElement(choice);
+      expect(choice).toHaveAttribute("value", slug);
+      fireEvent.click(choice);
+      expect(choice).toBeChecked();
+    }
+  });
+
   it("asks the canonical endpoint for eligibility, and nothing else, on load", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonOnce({ requests: [], eligibility: eligible }),
@@ -101,6 +121,8 @@ describe("new request page", () => {
     render(<HomeownerRequestPage />);
 
     expect(await screen.findByText(/arranged by your HOA manager/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "You cannot open this request yourself" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Add your home address to continue" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open your community" })).toHaveAttribute(
       "href",
       "/app/homeowner/community",
@@ -256,4 +278,24 @@ describe("new request page", () => {
       expect(screen.getByRole("status")).toHaveTextContent("Request posted"),
     );
   });
+});
+
+it("completes a missing address before reloading creator eligibility without auto-creating a request", async () => {
+  const locationBlocked = { canCreate: false, reason: "no_profile_location", message: "Add a routeable address", actionLabel: "Add your address", actionPath: "/app/homeowner/profile" };
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(jsonOnce({ requests: [], eligibility: locationBlocked }))
+    .mockResolvedValueOnce(jsonOnce({}))
+    .mockResolvedValueOnce(jsonOnce({ requests: [], eligibility: eligible }));
+  global.fetch = fetchMock as unknown as typeof fetch;
+  render(<HomeownerRequestPage />);
+  const address = await screen.findByLabelText("Home address");
+  expect(screen.getByRole("heading", { level: 2, name: "Add your home address to continue" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "You cannot open this request yourself" })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
+  fireEvent.change(address, { target: { value: "1 Oak St" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save address & continue" }));
+  await screen.findByText("For Oakwood Heights");
+  expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(["/api/homeowner/requests", "/api/profile", "/api/homeowner/requests"]);
+  expect((fetchMock.mock.calls[1] as unknown[])[1]).toMatchObject({ method: "PATCH" });
+  expect(fetchMock.mock.calls.some((call) => ((call as unknown[])[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
 });
