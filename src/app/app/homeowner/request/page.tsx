@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { HomeAddressCompletion } from "@/components/homeowner/HomeAddressCompletion";
 import {
   MAX_REQUEST_DESCRIPTION_LENGTH,
   MAX_REQUEST_TITLE_LENGTH,
@@ -317,16 +318,24 @@ export default function HomeownerRequestPage() {
       ) : eligibility && !eligibility.canCreate ? (
         <section className="space-y-3 p-5" style={cardStyle}>
           <h2 className="text-base font-semibold text-[var(--ink-900)]">
-            You cannot open this request yourself
+            {eligibility.reason === "no_profile_location"
+              ? "Add your home address to continue"
+              : "You cannot open this request yourself"}
           </h2>
           <p className="text-sm leading-relaxed text-[var(--ink-600)]">{eligibility.message}</p>
-          <Link
+          {eligibility.reason === "no_profile_location" ? (
+            <HomeAddressCompletion
+              onComplete={load}
+              onCancel={() => router.push("/app/homeowner/dashboard")}
+              submitLabel="Save address & continue"
+            />
+          ) : <Link
             href={eligibility.actionPath}
             className="inline-flex h-11 items-center rounded-full px-5 text-sm font-semibold"
             style={{ background: "var(--terracotta-600)", color: "white" }}
           >
             {eligibility.actionLabel}
-          </Link>
+          </Link>}
         </section>
       ) : eligibility?.canCreate ? (
         <>

@@ -26,13 +26,13 @@ const CSS = readFileSync(resolve(ROOT, "src/app/landing.css"), "utf8").replace(
   "",
 );
 
-const MANAGER_CTA = "/get-started?intent=community-manager";
+const MANAGER_CTA = "/community-onboarding";
 const PROVIDER_CTA = "/get-started?role=provider";
 
 afterEach(cleanup);
 
 describe("calls to action", () => {
-  it("routes the manager CTA and the provider link to their existing destinations", () => {
+  it("routes manager interest to staff onboarding while retaining provider signup", () => {
     render(<HomePage />);
 
     const managerLinks = screen

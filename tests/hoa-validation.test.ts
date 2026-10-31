@@ -218,7 +218,7 @@ describe("service area validation", () => {
 describe("bid validation", () => {
   const bid = {
     amountCents: 45_000,
-    pricingBasis: "per_visit" as const,
+    pricingBasis: "total" as const,
     scope: "Mow, edge, and blow all front yards.",
   };
 

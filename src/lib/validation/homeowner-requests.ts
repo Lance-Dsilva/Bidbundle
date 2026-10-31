@@ -90,3 +90,43 @@ export const createHomeownerRequestSchema = z
   });
 
 export type CreateHomeownerRequestInput = z.infer<typeof createHomeownerRequestSchema>;
+
+
+/** Owner changes reuse creation's text/category/cents rules, but old requests
+ * may have no budget. The database requires both bounds or neither. */
+export const editOwnerRequestSchema = z
+  .object({
+    action: z.literal("edit"),
+    title: boundedText(MAX_REQUEST_TITLE_LENGTH, "Give your request a short title."),
+    category: z.enum(SERVICE_CATEGORIES, {
+      message: "Choose one of the supported service categories.",
+    }),
+    description: boundedText(MAX_REQUEST_DESCRIPTION_LENGTH, "Describe the work you need done."),
+    budgetMinCents: budgetCents.nullable(),
+    budgetMaxCents: budgetCents.nullable(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.budgetMinCents === null) !== (value.budgetMaxCents === null)) {
+      context.addIssue({
+        code: "custom",
+        path: [value.budgetMinCents === null ? "budgetMinCents" : "budgetMaxCents"],
+        message: "Enter both budget amounts, or leave both blank.",
+      });
+    } else if (value.budgetMinCents !== null && value.budgetMaxCents !== null &&
+      value.budgetMaxCents < value.budgetMinCents) {
+      context.addIssue({
+        code: "custom",
+        path: ["budgetMaxCents"],
+        message: "The maximum budget cannot be below the minimum.",
+      });
+    }
+  });
+
+export const ownerRequestMutationSchema = z.discriminatedUnion("action", [
+  editOwnerRequestSchema,
+  z.object({ action: z.literal("cancel") }).strict(),
+]);
+
+export type EditOwnerRequestInput = z.infer<typeof editOwnerRequestSchema>;
+export type OwnerRequestMutationInput = z.infer<typeof ownerRequestMutationSchema>;

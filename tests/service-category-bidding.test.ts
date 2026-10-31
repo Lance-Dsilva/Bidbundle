@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   open: true,
   deadline: new Date(Date.now() + 86_400_000),
   writes: [] as Row[],
+  lockRequest: vi.fn(),
 }));
 
 vi.mock("@/lib/server/notifications", () => ({
@@ -53,6 +54,9 @@ vi.mock("@/lib/server/db", () => ({
           licenseVerifiedAt: new Date(), insuranceVerifiedAt: new Date() } },
       }),
     },
+    // The parent lock's result is unused. This unit mock models the call only;
+    // it cannot establish PostgreSQL transaction or concurrency behavior.
+    $queryRaw: state.lockRequest,
     $transaction: async (ops: unknown[]) => ops,
   },
 }));
@@ -73,6 +77,7 @@ beforeEach(() => {
   state.open = true;
   state.deadline = new Date(Date.now() + 86_400_000);
   state.writes = [];
+  state.lockRequest.mockReset().mockResolvedValue([{ id: "request-1" }]);
 });
 
 describe("canonical service matching at bid submission", () => {
@@ -91,6 +96,11 @@ describe("canonical service matching at bid submission", () => {
       requestId: "request-1", providerUserId: "provider-1", amountCents: 20_000,
     });
     expect(state.writes).toHaveLength(1);
+    expect(state.lockRequest).toHaveBeenCalledOnce();
+    expect(state.lockRequest.mock.calls[0]).toEqual([expect.objectContaining({
+      strings: ['SELECT "id" FROM "HoaServiceRequest" WHERE "id" = ', ' FOR UPDATE'],
+      values: ["request-1"],
+    })]);
   });
 
   it.each([

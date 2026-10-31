@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
 
+import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { compareBidQuotes } from "@/lib/bid-pricing";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 import { apiFetch } from "@/lib/api";
@@ -35,9 +37,7 @@ const STATUS_TONES: Record<string, CSSProperties> = {
 
 const FILTERS = ["all", "submitted", "accepted", "rejected"] as const;
 
-function money(cents: number): string {
-  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
+
 
 /** A live quote is what entitles a provider to message the customer. */
 const CONTACTABLE = new Set(["submitted", "accepted"]);
@@ -87,7 +87,7 @@ export default function ProviderBidsPage() {
   }, [workspace]);
 
   const bids = useMemo(
-    () => (workspace?.bids ?? []).filter((bid) => filter === "all" || bid.status === filter),
+    () => (workspace?.bids ?? []).filter((bid) => filter === "all" || bid.status === filter).sort(compareBidQuotes),
     [workspace, filter],
   );
 
@@ -164,7 +164,7 @@ export default function ProviderBidsPage() {
                     {titles.get(bid.requestId) ?? "Service request"}
                   </p>
                   <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>
-                    {money(bid.amountCents)} · {bid.pricingBasis.replace("_", " ")} · version{" "}
+                    Version{" "}
                     {bid.version} · submitted{" "}
                     {new Date(bid.submittedAt).toLocaleDateString()}
                   </p>
@@ -176,6 +176,8 @@ export default function ProviderBidsPage() {
                   {bid.status}
                 </span>
               </div>
+              <div className="mt-2"><BidPrice bid={bid} /></div>
+              {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice /> : null}
               <p className="mt-2 text-xs" style={{ color: "var(--ink-700)" }}>
                 {bid.scope}
               </p>

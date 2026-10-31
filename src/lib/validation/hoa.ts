@@ -376,10 +376,9 @@ export type ServiceAreaInput = z.infer<typeof serviceAreaSchema>;
 export const bidSubmitSchema = z
   .object({
     amountCents: z.number().int().min(0).max(MAX_BID_AMOUNT_CENTS),
-    pricingBasis: z.enum(["total", "per_home", "per_visit"]),
-    perHomeCents: z
-      .union([z.number().int().min(0).max(MAX_BID_AMOUNT_CENTS), z.null()])
-      .optional(),
+    pricingBasis: z.literal("total"),
+    // Averages are display-only, never separately supplied contract terms.
+    perHomeCents: z.null().optional(),
     proposedStartDate: optionalDateTime,
     estimatedDurationLabel: boundedText(120),
     scope: z.string().trim().min(1, "Describe the work included.").max(MAX_BID_TEXT_LENGTH),
@@ -391,7 +390,10 @@ export const bidSubmitSchema = z
 
 export type BidSubmitInput = z.infer<typeof bidSubmitSchema>;
 
-export const awardSchema = z.object({ bidId: idField }).strict();
+export const awardSchema = z.object({
+  bidId: idField,
+  expectedBidVersion: z.number().int().positive().optional(),
+}).strict();
 
 export type AwardInput = z.infer<typeof awardSchema>;
 

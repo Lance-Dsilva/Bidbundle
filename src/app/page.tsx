@@ -23,7 +23,7 @@ import "./landing.css";
  * no evidence, the page says what is true qualitatively instead.
  */
 
-const managerCta = "/get-started?intent=community-manager";
+const managerCta = "/community-onboarding";
 const providerCta = "/get-started?role=provider";
 
 /** Three links, each pointing at a section that exists. */

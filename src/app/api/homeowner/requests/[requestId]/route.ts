@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { hoaErrorResponse, requireHoaUser } from "@/lib/server/hoa-api";
-import { getNeighborhoodRequest } from "@/lib/server/neighborhood-market";
+import {
+  hoaErrorResponse,
+  readHoaBody,
+  requireHoaMutation,
+  requireHoaUser,
+  validationErrorResponse,
+} from "@/lib/server/hoa-api";
+import {
+  getNeighborhoodRequest,
+  mutateOwnedNeighborhoodRequest,
+} from "@/lib/server/neighborhood-market";
+import { ownerRequestMutationSchema } from "@/lib/validation/homeowner-requests";
+import { fieldErrors } from "@/lib/validation/profile";
 
 /**
  * One neighbourhood request, scoped to the caller.
@@ -27,5 +38,24 @@ export async function GET(_request: Request, context: RouteContext): Promise<Nex
     });
   } catch (error) {
     return hoaErrorResponse("neighbourhood request", error);
+  }
+}
+
+
+/** Owners change only their own pre-bidding scope, never manager authority. */
+export async function PATCH(request: Request, context: RouteContext): Promise<NextResponse> {
+  const gate = await requireHoaMutation();
+  if (!gate.ok) return gate.response;
+  const body = await readHoaBody(request);
+  if (!body.ok) return body.response;
+  const parsed = ownerRequestMutationSchema.safeParse(body.value);
+  if (!parsed.success) return validationErrorResponse(fieldErrors(parsed.error));
+  const { requestId } = await context.params;
+
+  try {
+    await mutateOwnedNeighborhoodRequest(gate.user.id, requestId, parsed.data);
+    return NextResponse.json({ request: await getNeighborhoodRequest(gate.user.id, requestId) });
+  } catch (error) {
+    return hoaErrorResponse("owner request change", error);
   }
 }

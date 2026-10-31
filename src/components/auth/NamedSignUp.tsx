@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { BundleenAuthLoader } from "@/components/auth/BundleenAuthLoader";
 import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
+import { HomeownerCoverageStep } from "@/components/onboarding/HomeownerCoverageStep";
 import { ProviderBusinessStep } from "@/components/onboarding/ProviderBusinessStep";
 import { ProviderCoverageStep } from "@/components/onboarding/ProviderCoverageStep";
 import { RoleStep } from "@/components/onboarding/RoleStep";
@@ -46,7 +47,14 @@ type SignUpStage =
   | "location"
   | "provider"
   | "coverage"
-  | "account";
+  | "account"
+  | "homeowner_coverage";
+
+type CountedSignUpStage = Exclude<SignUpStage, "session" | "homeowner_coverage">;
+const SIGN_UP_STAGES: Record<PublicRole, readonly CountedSignUpStage[]> = {
+  homeowner: ["name", "role", "location", "account"],
+  provider: ["name", "role", "location", "provider", "coverage", "account"],
+};
 
 const EMPTY_BUSINESS: ProviderBusinessDraft = {
   companyName: "",
@@ -71,7 +79,10 @@ function AccountStepLoading() {
 const LOADER_CARD_CLASS =
   "auth-step-enter w-full rounded-2xl border border-[#e4e7ec] bg-white px-7 py-10 text-center shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9";
 
-export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boolean }) {
+export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner" }: {
+  alreadyVerified?: boolean;
+  initialRole?: PublicRole;
+}) {
   const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -80,7 +91,9 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [errors, setErrors] = useState<NameErrors>({});
-  const [role, setRole] = useState<PublicRole>("homeowner");
+  // A public URL choice seeds this mount only. Saved drafts and later manual
+  // choices take precedence; rerenders must not restore the original query.
+  const [role, setRole] = useState<PublicRole>(initialRole);
   const [address, setAddress] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -92,9 +105,12 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [switchAccountError, setSwitchAccountError] = useState<string | null>(null);
 
-  // Providers gained a coverage step between business details and the Clerk
-  // account step, so their flow is one screen longer than a homeowner's.
-  const stepCount = role === "provider" ? 6 : 4;
+  const stages = SIGN_UP_STAGES[role];
+  const stepCount = stages.length;
+  // Missing name data renders the name screen; session confirmation is outside
+  // the numbered journey and returns before any progress indicator is shown.
+  const progressStage = !name || stage === "session" ? "name" : stage === "homeowner_coverage" ? "location" : stage;
+  const stepNumber = stages.indexOf(progressStage) + 1;
 
   useEffect(() => {
     router.prefetch("/get-started/profile");
@@ -112,7 +128,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
       setCoords({ lat: draft.latitude, lng: draft.longitude });
       setProviderBusiness(draft.providerBusiness);
       setProviderCoverage(draft.providerCoverage ?? null);
-      setStage(alreadyVerified ? "session" : "account");
+      setStage(alreadyVerified ? "session" : draft.role === "homeowner" ? "homeowner_coverage" : "account");
     } else if (alreadyVerified) {
       setStage("session");
     }
@@ -187,7 +203,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
     } else continueToAccount(location);
   };
 
-  const continueToAccount = (location?: VerifiedLocation) => {
+  const continueToAccount = (location?: VerifiedLocation, homeownerCoverageConfirmed = false) => {
     if (!name) return;
     const finalCoords = location
       ? { lat: location.latitude, lng: location.longitude }
@@ -195,6 +211,17 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
     const finalAddress = location?.address ?? address;
     const finalNeighborhood = location?.neighborhood ?? neighborhood;
     if (!finalCoords || !finalAddress.trim()) return;
+    if (role === "homeowner" && !homeownerCoverageConfirmed) {
+      // Retain the selected address if this advisory check is interrupted,
+      // without authorizing authenticated completion before the decision.
+      saveOnboardingDraft({
+        name, role, address: finalAddress, neighborhood: finalNeighborhood,
+        latitude: finalCoords.lat, longitude: finalCoords.lng, providerBusiness,
+        providerCoverage: null, completionAuthorized: false,
+      });
+      setStage("homeowner_coverage");
+      return;
+    }
     // A provider cannot reach Clerk's account step without a coverage circle;
     // the step's own Continue button is already disabled without one, and this
     // is the second gate for a resumed draft that predates the step.
@@ -255,8 +282,14 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
             onClick={() => {
               setSessionAccepted(true);
               if (draft) {
-                saveOnboardingDraft({ ...draft, completionAuthorized: true });
-                router.replace("/get-started/profile");
+                if (draft.role === "homeowner") {
+                  // Session consent alone cannot skip the pre-account coverage notice.
+                  saveOnboardingDraft({ ...draft, completionAuthorized: false });
+                  setStage("homeowner_coverage");
+                } else {
+                  saveOnboardingDraft({ ...draft, completionAuthorized: true });
+                  router.replace("/get-started/profile");
+                }
               } else {
                 setStage("name");
               }
@@ -303,7 +336,8 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   if (stage === "name" || !name) {
     return (
       <section className="auth-step-enter relative w-full max-w-md rounded-2xl border border-[#e4e7ec] bg-white px-7 py-8 shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9">
-        <StepProgress current={1} total={4} />
+        <StepProgress current={stepNumber} total={stepCount} />
+        <p className="mt-3 text-xs text-[#6b7280]">Step {stepNumber} of {stepCount}</p>
         <div className="mt-5 text-center">
           <h1 className="text-2xl font-bold tracking-[-0.03em] text-[#1f2937]">Create your account</h1>
           <p className="mt-2 text-sm text-[#6b7280]">Start with the name your neighbors will see.</p>
@@ -364,8 +398,8 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
           onBack={() => setStage("name")}
           onContinue={() => setStage("location")}
           onRoleChange={setRole}
-          stepNumber={1}
-          stepCount={2}
+          stepNumber={stepNumber}
+          stepCount={stepCount}
         />
       </div>
     );
@@ -384,10 +418,33 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
             setCoords(lat === null || lng === null ? null : { lat, lng })
           }
           onNeighborhoodDetected={setNeighborhood}
-          stepNumber={2}
-          stepCount={2}
-          confirmLabel={role === "provider" ? "Continue to business details" : "Continue to email verification"}
+          stepNumber={stepNumber}
+          stepCount={stepCount}
+          confirmLabel={role === "provider" ? "Continue to business details" : "Check neighborhood availability"}
         />
+      </div>
+    );
+  }
+
+  if (stage === "homeowner_coverage") {
+    // No account UI is mounted until the latest address check has completed and
+    // the homeowner has deliberately continued through its advisory result.
+    return (
+      <div className="auth-step-enter w-full max-w-xl rounded-[22px] border border-[#e4e7ec] bg-white px-7 shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9">
+        {coords && address.trim() ? (
+          <HomeownerCoverageStep
+            address={address} latitude={coords.lat} longitude={coords.lng}
+            onBack={() => setStage("location")}
+            onContinue={() => continueToAccount(undefined, true)}
+            stepNumber={stepNumber} stepCount={stepCount}
+            continueLabel={alreadyVerified ? "Continue with this account" : "Continue to email verification"}
+          />
+        ) : (
+          <section className="py-7">
+            <p role="alert" className="text-sm text-red-700">Confirm your address before checking neighborhood availability.</p>
+            <Button className="mt-4 min-h-11" onClick={() => setStage("location")} variant="warm">Edit address</Button>
+          </section>
+        )}
       </div>
     );
   }
@@ -401,7 +458,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
           onBack={() => setStage("location")}
           onChange={handleBusinessChange}
           onContinue={() => setStage("coverage")}
-          stepNumber={4}
+          stepNumber={stepNumber}
           stepCount={stepCount}
           confirmLabel="Continue to your service area"
         />
@@ -417,7 +474,7 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
           onChange={setProviderCoverage}
           onBack={() => setStage("provider")}
           onContinue={() => continueToAccount()}
-          stepNumber={5}
+          stepNumber={stepNumber}
           stepCount={stepCount}
           confirmLabel="Continue to email verification"
         />
@@ -428,6 +485,10 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   if (alreadyVerified) {
     return (
       <div className="auth-step-enter w-full max-w-md">
+        <div className="mb-3 rounded-xl border border-[#d8e7e3] bg-white px-4 py-3">
+          <StepProgress current={stepNumber} total={stepCount} />
+          <p className="mt-3 text-xs text-[#6b7280]">Step {stepNumber} of {stepCount}</p>
+        </div>
         <AccountStepLoading />
       </div>
     );
@@ -436,6 +497,10 @@ export function NamedSignUp({ alreadyVerified = false }: { alreadyVerified?: boo
   return (
     <div className="auth-step-enter relative w-full max-w-md">
       <div className="mb-3 rounded-xl border border-[#d8e7e3] bg-white/90 px-4 py-3 text-sm text-[#4b5563]">
+        <div className="mb-3">
+          <StepProgress current={stepNumber} total={stepCount} />
+          <p className="mt-3 text-xs text-[#6b7280]">Step {stepNumber} of {stepCount}</p>
+        </div>
         <div className="flex items-center justify-between gap-3">
           <span className="min-w-0">
             <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#0f8f83]">

@@ -2,7 +2,7 @@
 
 import { SignOutButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
 import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
@@ -187,6 +187,15 @@ export default function ProviderProfilePage() {
   const [editing, setEditing] = useState(false);
   /** Set after a successful save so the page can confirm it out loud. */
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [coverageChoice, setCoverageChoice] = useState<"needed" | "kept" | null>(null);
+  const coveragePromptRef = useRef<HTMLDivElement>(null);
+  const coverageFocusPendingRef = useRef(false);
+  useEffect(() => {
+    if (!editing && coverageChoice && coverageFocusPendingRef.current && coveragePromptRef.current) {
+      coverageFocusPendingRef.current = false;
+      coveragePromptRef.current.focus();
+    }
+  }, [editing, coverageChoice]);
 
   // The confirmation is a moment, not a state: it clears itself rather than
   // sitting on the page until the next navigation.
@@ -200,11 +209,21 @@ export default function ProviderProfilePage() {
     common: CommonProfileUpdate,
     business: ProviderProfileUpdate,
   ): Promise<boolean> {
+    // Capture the persisted location before saveAll replaces the hook snapshot.
+    const locationChanged = (common.address ?? "").trim() !== (profile?.address ?? "").trim() ||
+      ("latitude" in common && common.latitude !== profile?.latitude) ||
+      ("longitude" in common && common.longitude !== profile?.longitude);
     const saved = await saveAll(common, business);
     // `saveAll` replaces the hook's profile/provider with what the server
     // returned, so the summary below is already the persisted values — the
     // same ones a reload would fetch.
-    if (saved) setSavedAt(Date.now());
+    if (saved) {
+      setSavedAt(Date.now());
+      if (locationChanged) {
+        coverageFocusPendingRef.current = true;
+        setCoverageChoice("needed");
+      }
+    }
     return saved;
   }
 
@@ -321,6 +340,28 @@ export default function ProviderProfilePage() {
         </div>
       ) : null}
 
+      {coverageChoice && !editing ? (
+        <div ref={coveragePromptRef} tabIndex={-1} role="status" className="mx-4 mb-4 rounded-xl border border-[var(--border-warm)] bg-[var(--bg-card)] p-4 md:mx-9">
+          {coverageChoice === "kept" ? <p className="m-0 text-sm text-[var(--ink-700)]">Your existing service areas are kept unchanged. You can edit them below at any time.</p> : <>
+            <p className="m-0 text-sm font-semibold text-[var(--ink-900)]">Your business location changed. Review where you work.</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">Your existing service areas have not moved. Choose whether to review them or keep your current coverage.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button type="button" style={{ ...primaryButtonStyle, minHeight: 44 }} onClick={() => {
+                coverageFocusPendingRef.current = false;
+                setCoverageChoice(null);
+                const section = document.getElementById("service-areas");
+                section?.focus({ preventScroll: true });
+                section?.scrollIntoView({ behavior: "auto", block: "start" });
+              }}>Review service areas</button>
+              <button type="button" style={{ ...ghostButtonStyle, minHeight: 44 }} onClick={() => {
+                coverageFocusPendingRef.current = true;
+                setCoverageChoice("kept");
+              }}>Keep existing service areas</button>
+            </div>
+          </>}
+        </div>
+      ) : null}
+
       {saveError && !editing ? (
         <div
           role="alert"
@@ -417,7 +458,7 @@ export default function ProviderProfilePage() {
             <div style={cardPadStyle}>
               <div style={eyebrowStyle}>Business details</div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-[18px]" style={{ marginTop: 14 }}>
-                <ProfileField label="Service area" value={`${areaLabel} · ${profile.communityRadiusMi} mi radius`} />
+                <ProfileField label="Business locality" value={profile.neighborhood} />
                 <ProfileField label="Working hours" value={scheduleLabel} />
                 <ProfileField label="Business address" value={profile.address} />
                 <ProfileField
@@ -557,7 +598,8 @@ export default function ProviderProfilePage() {
                     verified: true,
                     detail: `${profile.communityRadiusMi} miles · fixed for everyone`,
                   },
-                  { label: "Neighborhood", verified: Boolean(profile.neighborhood), detail: areaLabel },
+                  // A geocoded locality is location data, never a business verification.
+                  { label: "Neighborhood", verified: false, detail: areaLabel },
                 ].map((row) => (
                   <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span

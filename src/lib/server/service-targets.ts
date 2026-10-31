@@ -1,5 +1,6 @@
 import "server-only";
 
+import { hasRouteableHomeAddress } from "@/lib/home-address";
 import { db } from "@/lib/server/db";
 
 /**
@@ -149,7 +150,7 @@ export async function homeownerTargets(
   for (const userId of userIds) {
     const user = byId.get(userId);
     const address = user?.address?.trim() ?? "";
-    if (!user || !address || user.latitude == null || user.longitude == null) {
+    if (!hasRouteableHomeAddress(user)) {
       missing.push({ userId, displayName: user?.fullName ?? "A neighbour" });
       continue;
     }

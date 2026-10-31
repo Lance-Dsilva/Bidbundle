@@ -55,6 +55,7 @@ export type NeighborhoodRequestView = {
   participantsLockedAt: string | null;
   awardedAt: string | null;
   startDate: string | null;
+  totalOccurrences: number;
   joinedCount: number;
   declinedCount: number;
   bidCount: number;

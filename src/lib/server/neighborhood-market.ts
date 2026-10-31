@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { hasRouteableHomeAddress } from "@/lib/home-address";
 import type { AgreementSummary, BidSummary, OccurrenceSummary } from "@/lib/hoa-types";
 import type {
   NeighborhoodHub,
@@ -12,8 +13,9 @@ import type {
 } from "@/lib/neighborhood-types";
 import { buildAuditEntry } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
+import { HomeAddressRequiredError } from "@/lib/server/home-address";
 import { HoaWorkflowError } from "@/lib/server/hoa";
-import { listRequestBids } from "@/lib/server/hoa-market";
+import { listRequestBids, reconcileNeighborhoodEnrollment } from "@/lib/server/hoa-market";
 import {
   findNeighborhoodManager,
   requireActiveNeighborhoodMember,
@@ -24,7 +26,11 @@ import {
   serializeVisitForViewer,
   visitViewInclude,
 } from "@/lib/server/visit-views";
-import { CATEGORY_LABELS, type ServiceCategory } from "@/lib/validation/homeowner-requests";
+import {
+  CATEGORY_LABELS,
+  type OwnerRequestMutationInput,
+  type ServiceCategory,
+} from "@/lib/validation/homeowner-requests";
 
 /**
  * The neighbourhood side of the marketplace: enrolment, transparency, and the
@@ -58,6 +64,38 @@ export async function respondToNeighborhoodRequest(
   requestId: string,
   response: ParticipationChoice,
 ): Promise<{ response: ParticipationChoice; joinedCount: number }> {
+  return recordNeighborhoodResponse(userId, requestId, response, false);
+}
+
+/** Translate only the two enrollment boundary constraints, never arbitrary DB failures. */
+function isEnrollmentBoundaryConflict(error: unknown): boolean {
+  const record = (value: unknown): Record<string, unknown> =>
+    typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  const candidate = record(error);
+  const meta = record(candidate.meta);
+  const cause = record(record(meta.driverAdapterError).cause);
+  const sources = [candidate, meta, cause];
+  if (candidate.code !== "P2004" && !sources.some(
+    (source) => source.code === "23514" || source.originalCode === "23514",
+  )) return false;
+
+  const constraints = [
+    "HoaRequestParticipation_enrollment_open_required",
+    "HoaRequestParticipation_locked",
+  ];
+  return sources.some((source) => {
+    if (constraints.includes(String(source.constraint ?? ""))) return true;
+    if (constraints.includes(String(source.detail ?? ""))) return true;
+    return constraints.includes(String(source.database_error ?? ""));
+  });
+}
+
+async function recordNeighborhoodResponse(
+  userId: string,
+  requestId: string,
+  response: ParticipationChoice,
+  retriedDuplicate: boolean,
+): Promise<{ response: ParticipationChoice; joinedCount: number }> {
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     select: {
@@ -67,6 +105,7 @@ export async function respondToNeighborhoodRequest(
       status: true,
       maxHomes: true,
       createdByUserId: true,
+      updatedAt: true,
       enrollmentClosesAt: true,
       participantsLockedAt: true,
       community: { select: { type: true } },
@@ -98,6 +137,14 @@ export async function respondToNeighborhoodRequest(
     );
   }
 
+  if (response === "joined") {
+    const profile = await db.user.findUnique({
+      where: { id: userId },
+      select: { address: true, latitude: true, longitude: true },
+    });
+    if (!hasRouteableHomeAddress(profile)) throw new HomeAddressRequiredError();
+  }
+
   const alreadyJoined = request.participations.some(
     (participation) => participation.userId === userId,
   );
@@ -119,26 +166,43 @@ export async function respondToNeighborhoodRequest(
     return { response, joinedCount: request.participations.length };
   }
 
-  if (existing) {
-    await db.hoaRequestParticipation.update({
-      where: { id: existing.id },
-      data: { response },
-    });
-  } else {
-    try {
-      await db.hoaRequestParticipation.create({
-        data: { id: randomUUID(), requestId, userId, unitId: null, response },
-      });
-    } catch (error) {
-      // Two concurrent first-time answers: the unique index on
-      // (requestId, userId) keeps one row, and the loser applies its answer as
-      // an update rather than failing the customer's click.
-      if ((error as { code?: string }).code !== "P2002") throw error;
-      await db.hoaRequestParticipation.updateMany({
-        where: { requestId, userId },
-        data: { response },
-      });
+  const claimedAt = new Date();
+  try {
+    // Serialize enrollment edits with opening/expiry on the same parent row.
+    // A monotonic timestamp also detects another response within one millisecond.
+    await db.$transaction([
+      db.hoaServiceRequest.update({
+        where: {
+          id: requestId,
+          updatedAt: request.updatedAt,
+          status: "collecting_interest",
+          participantsLockedAt: null,
+          community: { type: "neighborhood", status: "active" },
+          enrollmentClosesAt: request.enrollmentClosesAt === null
+            ? null
+            : { equals: request.enrollmentClosesAt, gt: claimedAt },
+        },
+        data: { updatedAt: new Date(Math.max(claimedAt.getTime(), request.updatedAt.getTime() + 1)) },
+      }),
+      existing
+        ? db.hoaRequestParticipation.update({
+            where: { id: existing.id },
+            data: { response },
+          })
+        : db.hoaRequestParticipation.create({
+            data: { id: randomUUID(), requestId, userId, unitId: null, response },
+          }),
+    ]);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "P2002" && !retriedDuplicate) {
+      // Re-read and revalidate the parent before applying a concurrent first answer.
+      return recordNeighborhoodResponse(userId, requestId, response, true);
     }
+    if (code === "P2025" || isEnrollmentBoundaryConflict(error)) {
+      throw new HoaWorkflowError("This request changed or sign-ups closed. Refresh before trying again.", 409);
+    }
+    throw error;
   }
 
   const joinedCount = await db.hoaRequestParticipation.count({
@@ -173,6 +237,139 @@ export async function respondToNeighborhoodRequest(
   return { response, joinedCount };
 }
 
+/* ── Request owner changes ───────────────────────────────────────────────── */
+
+/**
+ * A creator can correct or withdraw their own unlocked request, never manage
+ * someone else's lifecycle. The conditional write is the first operation in
+ * the same transaction as its audit and notification intents. Losing a race
+ * with bidding, another edit, or revoked membership therefore writes nothing.
+ */
+export async function mutateOwnedNeighborhoodRequest(
+  userId: string,
+  requestId: string,
+  input: OwnerRequestMutationInput,
+): Promise<void> {
+  const request = await db.hoaServiceRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      id: true,
+      communityId: true,
+      createdByUserId: true,
+      createdBy: { select: { role: true } },
+      title: true,
+      category: true,
+      description: true,
+      budgetMinCents: true,
+      budgetMaxCents: true,
+      kind: true,
+      status: true,
+      updatedAt: true,
+      participantsLockedAt: true,
+      agreement: { select: { id: true } },
+      bids: { select: { id: true }, take: 1 },
+      community: { select: { type: true } },
+    },
+  });
+  if (!request || request.community.type !== "neighborhood") {
+    throw new HoaWorkflowError("That service request does not exist.", 404);
+  }
+  const membership = await requireActiveNeighborhoodMember(userId, request.communityId);
+  if (request.createdByUserId !== userId || request.createdBy.role !== "homeowner") {
+    throw new HoaWorkflowError("Only the homeowner who opened this request can change it.", 403);
+  }
+  if (request.kind !== "optional_group" || !PRE_BIDDING_STATUSES.has(request.status) ||
+    request.participantsLockedAt !== null || request.agreement || request.bids.length > 0) {
+    throw new HoaWorkflowError("This request can no longer be edited or cancelled. Refresh to see its current status.", 409);
+  }
+
+  const changedFields = input.action === "edit"
+    ? (["title", "category", "description", "budgetMinCents", "budgetMaxCents"] as const)
+      .filter((field) => request[field] !== input[field])
+    : ["status"];
+  if (changedFields.length === 0) return;
+
+  // Advance even when two changes land within one millisecond. The value is
+  // also part of a per-edit event key, not a request-wide notification key.
+  const updatedAt = new Date(Math.max(Date.now(), request.updatedAt.getTime() + 1));
+  const title = input.action === "edit" ? input.title : request.title;
+  const nextStatus = input.action === "cancel" ? "cancelled" : request.status;
+  const recipients = request.status === "collecting_interest"
+    ? await db.communityMembership.findMany({
+      where: { communityId: request.communityId, status: "active", NOT: { userId } },
+      select: { user: { select: { id: true, email: true } } },
+    })
+    : [];
+  const notificationOps = await buildPreferenceAwareNotificationOps(recipients.map(({ user }) => ({
+    userId: user.id,
+    email: user.email,
+    kind: "request" as const,
+    title: `${membership.communityName}: service request ${input.action === "cancel" ? "cancelled" : "updated"}`,
+    body: input.action === "cancel"
+      ? `“${title}” was cancelled by the homeowner who opened it. No service is scheduled for this request.`
+      : `The homeowner updated “${title}”. Review the scope and budget before deciding whether to take part.`,
+    linkPath: "/app/homeowner/neighbourhood",
+    dedupeKey: `owner-request:${request.id}:${input.action}:${updatedAt.toISOString()}:${user.id}`,
+  })));
+
+  try {
+    await db.$transaction([
+      db.hoaServiceRequest.update({
+        where: {
+          id: request.id,
+          createdByUserId: userId,
+          createdBy: { role: "homeowner" },
+          communityId: request.communityId,
+          community: {
+            type: "neighborhood",
+            status: "active",
+            memberships: { some: { userId, status: "active" } },
+          },
+          kind: "optional_group",
+          status: request.status,
+          updatedAt: request.updatedAt,
+          participantsLockedAt: null,
+          agreement: { is: null },
+          bids: { none: {} },
+        },
+        data: input.action === "cancel"
+          ? { status: "cancelled", updatedAt }
+          : {
+            title: input.title,
+            category: input.category,
+            description: input.description,
+            budgetMinCents: input.budgetMinCents,
+            budgetMaxCents: input.budgetMaxCents,
+            updatedAt,
+          },
+      }),
+      db.adminAuditLog.create({
+        data: buildAuditEntry({
+          actorUserId: userId,
+          action: "hoa_request_status_changed",
+          targetType: "hoa_request",
+          targetId: request.id,
+          communityId: request.communityId,
+          metadata: {
+            context: "neighborhood",
+            via: "request_owner",
+            reason: input.action === "edit" ? "owner_edit" : "owner_cancel",
+            previousStatus: request.status,
+            nextStatus,
+            changedFields,
+          },
+        }),
+      }),
+      ...notificationOps,
+    ]);
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025") {
+      throw new HoaWorkflowError("This request changed before your update was saved. Refresh and try again.", 409);
+    }
+    throw error;
+  }
+}
+
 /* ── Reads ───────────────────────────────────────────────────────────────── */
 
 const requestSelect = {
@@ -184,6 +381,7 @@ const requestSelect = {
   status: true,
   budgetMinCents: true,
   budgetMaxCents: true,
+  totalOccurrences: true,
   minHomes: true,
   maxHomes: true,
   enrollmentClosesAt: true,
@@ -193,8 +391,11 @@ const requestSelect = {
   startDate: true,
   createdByUserId: true,
   createdAt: true,
+  kind: true,
+  agreement: { select: { id: true } },
+  bids: { select: { id: true }, take: 1 },
   community: { select: { id: true, name: true } },
-  createdBy: { select: { fullName: true } },
+  createdBy: { select: { fullName: true, role: true } },
   participations: {
     select: {
       response: true,
@@ -235,17 +436,9 @@ function permissionsFor(input: {
     // Transparent comparison for everyone taking part, but never for a
     // neighbour who declined or never answered.
     canViewBids: isManager || isOwner || viewerResponse === "joined",
-    canEdit: isOwner && PRE_BIDDING_STATUSES.has(row.status),
+    canEdit: isOwner && row.createdBy.role === "homeowner" && row.kind === "optional_group" && PRE_BIDDING_STATUSES.has(row.status) &&
+      row.participantsLockedAt === null && row.agreement === null && row.bids.length === 0,
   };
-}
-
-/** Whether Bundleen holds a routeable address for one account. */
-function addressReady(user: {
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-} | null): boolean {
-  return Boolean(user?.address?.trim()) && user?.latitude != null && user?.longitude != null;
 }
 
 async function serializeRequest(input: {
@@ -276,7 +469,7 @@ async function serializeRequest(input: {
         .map((item) => ({
           userId: item.user!.id,
           displayName: item.user!.fullName,
-          addressReady: addressReady(item.user),
+          addressReady: hasRouteableHomeAddress(item.user),
           response: item.response,
           isViewer: item.user!.id === viewerUserId,
         }))
@@ -355,6 +548,7 @@ async function serializeRequest(input: {
     participantsLockedAt: row.participantsLockedAt?.toISOString() ?? null,
     awardedAt: row.awardedAt?.toISOString() ?? null,
     startDate: row.startDate?.toISOString() ?? null,
+    totalOccurrences: row.totalOccurrences,
     joinedCount: joined.length,
     declinedCount: declined.length,
     bidCount: row._count.bids,
@@ -430,7 +624,10 @@ export async function getNeighborhoodHub(userId: string): Promise<NeighborhoodHu
     findNeighborhoodManager(communityId),
     db.communityMembership.count({ where: { communityId, status: "active" } }),
     db.hoaServiceRequest.findMany({
-      where: { communityId, status: { not: "draft" } },
+      where: {
+        communityId,
+        OR: [{ status: { not: "draft" } }, { createdByUserId: userId }],
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: requestSelect,
@@ -453,7 +650,7 @@ export async function getNeighborhoodHub(userId: string): Promise<NeighborhoodHu
     isManager,
     managerName: manager?.fullName ?? null,
     activeNeighbourCount: neighbourCount,
-    addressReady: addressReady(viewer),
+    addressReady: hasRouteableHomeAddress(viewer),
     requests,
   };
 }
@@ -464,7 +661,11 @@ export async function getNeighborhoodRequest(
   requestId: string,
 ): Promise<NeighborhoodRequestView> {
   const row = await db.hoaServiceRequest.findFirst({
-    where: { id: requestId, community: { type: "neighborhood" } },
+    where: {
+      id: requestId,
+      community: { type: "neighborhood" },
+      OR: [{ status: { not: "draft" } }, { createdByUserId: userId }],
+    },
     select: requestSelect,
   });
   if (!row) throw new HoaWorkflowError("That service request does not exist.", 404);
@@ -483,17 +684,12 @@ export async function getNeighborhoodRequest(
 /* ── Deadline reconciliation ─────────────────────────────────────────────── */
 
 /**
- * Advances requests whose windows have expired.
- *
- * Deadlines are deterministic: a request whose bidding deadline has passed is
- * closed regardless of whether anyone visited the page. This runs from the
- * outbox job, and calls the *same* domain rules the manager's buttons do — so
- * a sweep and a click cannot reach different states.
- *
- * Every step is expressed as a conditional `updateMany`, so a sweep racing a
- * manager's click updates zero rows rather than duplicating the transition.
+ * Advance elapsed bidding/enrollment windows from either scheduled worker.
+ * Neighborhood opening uses the same guarded transition as manual opening;
+ * each candidate has its own atomic audit and notification transaction.
  */
 export async function reconcileExpiredWindows(now = new Date()): Promise<{
+  biddingOpened: number;
   biddingClosed: number;
   enrollmentExpired: number;
 }> {
@@ -515,6 +711,7 @@ export async function reconcileExpiredWindows(now = new Date()): Promise<{
       enrollmentClosesAt: { not: null, lte: now },
       participantsLockedAt: null,
       participations: { none: { response: "joined" } },
+      NOT: { kind: "optional_group", community: { type: "neighborhood" } },
     },
     data: { status: "failed" },
   });
@@ -535,5 +732,37 @@ export async function reconcileExpiredWindows(now = new Date()): Promise<{
     });
   }
 
-  return { biddingClosed: closed.count, enrollmentExpired: expired.count };
+  const neighborhood = await reconcileNeighborhoodEnrollments(now);
+  return {
+    biddingOpened: neighborhood.biddingOpened,
+    biddingClosed: closed.count,
+    enrollmentExpired: expired.count + neighborhood.enrollmentExpired,
+  };
+}
+
+/** Bounded active-neighborhood enrollment work for the five-minute worker. */
+export async function reconcileNeighborhoodEnrollments(now = new Date()): Promise<{
+  biddingOpened: number;
+  enrollmentExpired: number;
+}> {
+  const candidates = await db.hoaServiceRequest.findMany({
+    where: {
+      kind: "optional_group",
+      status: "collecting_interest",
+      enrollmentClosesAt: { not: null, lte: now },
+      participantsLockedAt: null,
+      community: { type: "neighborhood", status: "active" },
+    },
+    orderBy: [{ enrollmentClosesAt: "asc" }, { id: "asc" }],
+    take: 100,
+    select: { id: true },
+  });
+  let biddingOpened = 0;
+  let enrollmentExpired = 0;
+  for (const candidate of candidates) {
+    const result = await reconcileNeighborhoodEnrollment(candidate.id, now);
+    if (result === "opened") biddingOpened += 1;
+    if (result === "failed") enrollmentExpired += 1;
+  }
+  return { biddingOpened, enrollmentExpired };
 }

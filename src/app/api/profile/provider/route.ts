@@ -8,9 +8,12 @@ import {
   commonProfileSelect,
   commonProfileUpdateData,
   internalErrorResponse,
+  nextProviderUpdatedAt,
   providerClaimChanges,
   providerProfileUpdateData,
   providerProfileSelect,
+  providerWriteSnapshotSelect,
+  providerWriteSnapshotWhere,
   readJsonBody,
   serializeCommonProfile,
   serializeProviderProfile,
@@ -29,6 +32,13 @@ export const dynamic = "force-dynamic";
 /** Only providers have — or can touch — a provider profile. */
 const ALLOWED_ROLES = ["provider"] as const;
 
+function providerConflictResponse(): NextResponse {
+  return NextResponse.json(
+    { error: "Your provider account changed while you were editing. Reload and try again." },
+    { status: 409 },
+  );
+}
+
 function providerWriteError(error: unknown): NextResponse | null {
   if (error instanceof CommunityRuleError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
@@ -38,10 +48,7 @@ function providerWriteError(error: unknown): NextResponse | null {
     error !== null &&
     (error as { code?: unknown }).code === "P2025"
   ) {
-    return NextResponse.json(
-      { error: "Your provider account changed while you were editing. Reload and try again." },
-      { status: 409 },
-    );
+    return providerConflictResponse();
   }
   return null;
 }
@@ -98,23 +105,19 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
     const current = await db.providerProfile.findUnique({
       where: { userId: authorized.user.id },
-      select: {
-        licenseNumber: true,
-        licenseState: true,
-        insuranceProvider: true,
-        insurancePolicyNumber: true,
-        licenseVerifiedAt: true,
-        insuranceVerifiedAt: true,
-      },
+      select: providerWriteSnapshotSelect,
     });
+    if (!current) return providerConflictResponse();
     const update = providerProfileUpdateData(current, parsed.data);
     const changes = providerClaimChanges(current, parsed.data);
     const writeProfile = db.providerProfile.update({
       where: {
         userId: authorized.user.id,
         accountStatus: { not: "suspended" },
+        user: { role: "provider" },
+        ...providerWriteSnapshotWhere(current),
       },
-      data: update,
+      data: { ...update, updatedAt: nextProviderUpdatedAt(current) },
       select: providerProfileSelect,
     });
     const auditWrites = [
@@ -180,14 +183,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
       }),
       db.providerProfile.findUnique({
         where: { userId: authorized.user.id },
-        select: {
-          licenseNumber: true,
-          licenseState: true,
-          insuranceProvider: true,
-          insurancePolicyNumber: true,
-          licenseVerifiedAt: true,
-          insuranceVerifiedAt: true,
-        },
+        select: providerWriteSnapshotSelect,
       }),
     ]);
     if (!owner || owner.role !== "provider") {
@@ -197,6 +193,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
       );
     }
 
+    if (!currentProvider) return providerConflictResponse();
     const providerUpdate = providerProfileUpdateData(currentProvider, parsed.data.provider);
     const changes = providerClaimChanges(currentProvider, parsed.data.provider);
     const auditWrites = [
@@ -231,7 +228,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
     ];
     const [common, provider] = await db.$transaction([
       db.user.update({
-        where: { id: authorized.user.id },
+        where: { id: authorized.user.id, role: "provider" },
         data: commonProfileUpdateData(owner.address, parsed.data.common),
         select: commonProfileSelect,
       }),
@@ -239,8 +236,10 @@ export async function PUT(request: Request): Promise<NextResponse> {
         where: {
           userId: authorized.user.id,
           accountStatus: { not: "suspended" },
+          user: { role: "provider" },
+          ...providerWriteSnapshotWhere(currentProvider),
         },
-        data: providerUpdate,
+        data: { ...providerUpdate, updatedAt: nextProviderUpdatedAt(currentProvider) },
         select: providerProfileSelect,
       }),
       ...auditWrites,

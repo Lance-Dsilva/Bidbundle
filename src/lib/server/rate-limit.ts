@@ -15,6 +15,10 @@ import { isUnknownIp } from "@/lib/server/request-ip";
  * them once real traffic shows how often ordinary users retry these actions.
  */
 export const RATE_LIMITS = {
+  /** Anonymous community onboarding interest, bounded per salted network key. */
+  communityInterest: { attempts: 10, window: "15 m" },
+  /** Anonymous address-stage coverage reads, scoped to a salted network key. */
+  onboardingCoverage: { attempts: 20, window: "5 m" },
   /** Per-account profile completion. Allows ordinary retries during onboarding. */
   register: { attempts: 20, window: "15 m" },
   /** Per-user profile photo uploads. */

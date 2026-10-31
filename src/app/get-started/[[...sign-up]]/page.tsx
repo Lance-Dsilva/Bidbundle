@@ -5,9 +5,16 @@ import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { NamedSignUp } from "@/components/auth/NamedSignUp";
 import { db } from "@/lib/server/db";
 import { isHoaManager } from "@/lib/server/hoa";
-import { DASHBOARD_BY_ROLE, isAppRole } from "@/lib/validation/auth";
+import { DASHBOARD_BY_ROLE, isAppRole, PUBLIC_ROLES } from "@/lib/validation/auth";
 
-export default async function SignUpPage() {
+export default async function SignUpPage({ searchParams }: {
+  searchParams?: Promise<{ role?: string | string[]; intent?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  // This is staff-led interest, not public role selection. Redirect before
+  // Clerk/session/profile reads for both visitors and existing accounts.
+  if (params?.intent === "community-manager") redirect("/community-onboarding");
+
   const { userId } = await auth();
   let alreadyVerified = false;
 
@@ -29,6 +36,9 @@ export default async function SignUpPage() {
     alreadyVerified = true;
   }
 
+  const requestedRole = params?.role;
+  const initialRole = PUBLIC_ROLES.find((role) => role === requestedRole) ?? "homeowner";
+
   return (
     <div className="signup-layout bg-white">
       <AuthShowcase
@@ -44,7 +54,7 @@ export default async function SignUpPage() {
       <main
         className="relative flex flex-1 items-center justify-center overflow-y-auto bg-white px-5 py-8 lg:px-12"
       >
-        <NamedSignUp alreadyVerified={alreadyVerified} />
+        <NamedSignUp alreadyVerified={alreadyVerified} initialRole={initialRole} />
       </main>
     </div>
   );

@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { Receiver } from "@upstash/qstash";
 import { NextResponse } from "next/server";
 
+import { reconcileNeighborhoodEnrollments } from "@/lib/server/neighborhood-market";
 import { deliverPendingOutbox } from "@/lib/server/notifications";
 
 export const runtime = "nodejs";
@@ -15,8 +16,8 @@ export const maxDuration = 60;
  * Separate from `/api/jobs/outbox` for one reason: cadence. The amenity
  * booking reminder promises delivery about 30 minutes before a reservation
  * starts, and a once-daily recovery job cannot keep that promise. This
- * endpoint does only the drain — no deadline reconciliation, no 24-hour
- * service-visit sweep — so it is cheap enough to run every few minutes.
+ * endpoint also reconciles elapsed enrollment windows in a bounded batch, so
+ * neighborhood bidding starts promptly. The daily job retains the service-visit sweep.
  *
  * Delivery is claim-based and idempotent (`deliverPendingOutbox` claims each
  * event with a conditional `updateMany`), so overlapping invocations are safe
@@ -75,8 +76,9 @@ async function hasValidQStashSignature(request: Request): Promise<boolean> {
 
 async function drain(): Promise<NextResponse> {
   try {
+    const reconciled = await reconcileNeighborhoodEnrollments();
     const result = await deliverPendingOutbox(100);
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, reconciled });
   } catch (error) {
     console.error("[reminders] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

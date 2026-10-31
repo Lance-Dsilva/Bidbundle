@@ -41,7 +41,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
   const { requestId } = await context.params;
 
   try {
-    const agreementId = await awardBid(gate.user.id, requestId, { bidId: parsed.data.bidId });
+    const agreementId = await awardBid(gate.user.id, requestId, parsed.data);
     return NextResponse.json({
       agreementId,
       request: await getNeighborhoodRequest(gate.user.id, requestId),

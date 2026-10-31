@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { authorizeRequest, type SessionUser } from "@/lib/server/auth";
 import { guardFailureResponse, guardHoaMutation } from "@/lib/server/auth-guard";
+import { HomeAddressRequiredError } from "@/lib/server/home-address";
 import { HoaWorkflowError } from "@/lib/server/hoa";
 import { MissingParticipantAddressError } from "@/lib/server/hoa-market";
 import { readJsonBody, validationErrorResponse } from "@/lib/server/profile";
@@ -50,6 +51,12 @@ export function readHoaBody(request: Request) {
 export { validationErrorResponse };
 
 export function hoaErrorResponse(scope: string, error: unknown): NextResponse {
+  if (error instanceof HomeAddressRequiredError) {
+    return NextResponse.json(
+      { error: error.message, code: "HOME_ADDRESS_REQUIRED", addressRequired: true },
+      { status: error.status },
+    );
+  }
   // An award blocked by unrouteable homes is actionable, not a failure: the
   // manager is told which neighbours to chase. Nothing was written, so there
   // is no partial award to explain away.
