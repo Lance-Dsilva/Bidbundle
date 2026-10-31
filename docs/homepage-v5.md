@@ -12,6 +12,8 @@ The page stays server rendered. `LandingInteractions` only manages the menu's ex
 - HOA managers continue to the existing interest form at `/community-onboarding`; this link grants no community authority.
 - Sign in continues to `/sign-in`.
 
+All internal links, including section and skip links, use Next.js `Link` so section visits retain App Router history. A native fragment link can create a history entry with no router state; returning to that entry from signup then changes the URL without restoring the homepage. Release checks must cover homepage → section → signup → browser Back, as well as menu and skip-link behavior.
+
 The standalone proposal's dialogs and design-preview labels are omitted. Existing help and email links remain in the compact footer. Onboarding, coverage, authorization, bidding, and provider selection logic are unchanged.
 
 ## Asset provenance

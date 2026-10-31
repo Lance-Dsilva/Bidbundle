@@ -92,7 +92,7 @@ function Arrow({ diagonal = false }: { diagonal?: boolean }) {
 export default function HomePage() {
   return (
     <div className="landing-shell">
-      <a className="skip-link" href="#main">Skip to content</a>
+      <Link className="skip-link" href="#main">Skip to content</Link>
 
       <svg className="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
         <defs>
@@ -122,11 +122,11 @@ export default function HomePage() {
             <span>Bundleen</span>
           </Link>
           <nav className="desktop-nav" aria-label="Main navigation">
-            {navigation.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
+            {navigation.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
           </nav>
           <div className="header-actions">
             <Link className="sign-in" href="/sign-in">Sign in</Link>
-            <a className="button header-cta" href="#start">Get started <Arrow /></a>
+            <Link className="button header-cta" href="#start">Get started <Arrow /></Link>
             <button
               className="menu-button"
               type="button"
@@ -147,7 +147,7 @@ export default function HomePage() {
           data-mobile-menu=""
           hidden
         >
-          {navigation.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
+          {navigation.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
           <Link href="/sign-in">Sign in</Link>
         </nav>
       </header>
@@ -162,8 +162,8 @@ export default function HomePage() {
               creating an opportunity for better pricing.
             </p>
             <div className="hero-actions">
-              <a className="button primary" href="#start">Get started <Arrow /></a>
-              <a className="quiet-link" href="#how-it-works">See how it works <Arrow diagonal /></a>
+              <Link className="button primary" href="#start">Get started <Arrow /></Link>
+              <Link className="quiet-link" href="#how-it-works">See how it works <Arrow diagonal /></Link>
             </div>
             <p className="hero-footnote">Availability varies by neighborhood.</p>
           </div>
@@ -177,9 +177,9 @@ export default function HomePage() {
               sizes="(max-width: 899px) 100vw, (max-width: 1279px) 900px, (max-width: 1440px) 65.5vw, 944px"
             />
           </figure>
-          <a className="hero-scroll" href="#services">
+          <Link className="hero-scroll" href="#services">
             <span>Explore service examples</span><span aria-hidden="true">↓</span>
-          </a>
+          </Link>
         </section>
 
         <section className="services shell" id="services" aria-labelledby="services-title">
@@ -221,7 +221,7 @@ export default function HomePage() {
               More work in one place can mean less travel for providers and simpler planning for the
               group. That creates an opportunity for better pricing. Discounts are not guaranteed.
             </p>
-            <a className="quiet-link" href="#how-it-works">See how it works <Arrow /></a>
+            <Link className="quiet-link" href="#how-it-works">See how it works <Arrow /></Link>
           </div>
         </section>
 
@@ -314,9 +314,9 @@ export default function HomePage() {
           </Link>
           <p>Home services, with your neighbors.</p>
           <nav aria-label="Footer">
-            <a href="#how-it-works">How it works</a>
-            <a href="#hoa">For HOAs</a>
-            <a href="#providers">For providers</a>
+            <Link href="#how-it-works">How it works</Link>
+            <Link href="#hoa">For HOAs</Link>
+            <Link href="#providers">For providers</Link>
           </nav>
         </div>
         <div className="footer-support">
