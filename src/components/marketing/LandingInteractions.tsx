@@ -2,22 +2,12 @@
 
 import { useEffect } from "react";
 
-/**
- * The homepage's only client-side behaviour: the mobile menu.
- *
- * The animated counters, the `[data-scroll-to]` buttons, and the scroll-spy for
- * `.ld-mobile-bottom-nav` are gone — the first two belonged to the proof band
- * and dashboard mockup this page no longer has, and the third targeted a nav
- * that never existed on this page at all.
- *
- * Nothing here reveals content. The reveal classes resolve to their visible
- * state in CSS, so the page is complete before this component runs and complete
- * if it never runs.
- */
+/** The homepage's only client behavior: its phone and tablet navigation. */
 export function LandingInteractions() {
   useEffect(() => {
-    const menuButton = document.querySelector<HTMLButtonElement>("[data-menu-button]");
-    const menu = document.querySelector<HTMLElement>("[data-mobile-menu]");
+    const shell = document.querySelector<HTMLElement>(".landing-shell");
+    const menuButton = shell?.querySelector<HTMLButtonElement>("[data-menu-button]");
+    const menu = shell?.querySelector<HTMLElement>("[data-mobile-menu]");
     if (!menuButton || !menu) return;
 
     const setOpen = (open: boolean) => {
@@ -27,27 +17,31 @@ export function LandingInteractions() {
     };
 
     const onToggle = () => setOpen(menuButton.getAttribute("aria-expanded") !== "true");
-
-    /** Escape closes the menu and returns focus to the control that opened it. */
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || menu.hidden) return;
       setOpen(false);
       menuButton.focus();
     };
-
-    // Following a link should not leave the menu covering the destination.
     const onMenuClick = (event: MouseEvent) => {
-      if ((event.target as HTMLElement).closest("a")) setOpen(false);
+      if (event.target instanceof Element && event.target.closest("a")) setOpen(false);
+    };
+
+    // A menu opened on a tablet must not reappear after crossing desktop width.
+    const desktop = window.matchMedia("(min-width: 981px)");
+    const onDesktopChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setOpen(false);
     };
 
     menuButton.addEventListener("click", onToggle);
     menu.addEventListener("click", onMenuClick);
     document.addEventListener("keydown", onKeyDown);
+    desktop.addEventListener("change", onDesktopChange);
 
     return () => {
       menuButton.removeEventListener("click", onToggle);
       menu.removeEventListener("click", onMenuClick);
       document.removeEventListener("keydown", onKeyDown);
+      desktop.removeEventListener("change", onDesktopChange);
     };
   }, []);
 

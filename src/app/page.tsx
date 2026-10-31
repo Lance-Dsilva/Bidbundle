@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -6,328 +7,332 @@ import { LandingInteractions } from "@/components/marketing/LandingInteractions"
 
 import "./landing.css";
 
-/**
- * The public homepage.
- *
- * One story, told once: neighbors with the same need become a single request,
- * local providers offer on the grouped work, and the community's manager picks
- * one. Everything that did not serve that story — the dashboard mockup, the
- * proof band, ten service cards, three audience sales panels with their own
- * mockups and CTAs — is gone rather than shrunk. Two original editorial
- * illustrations now carry the emotional story while small, purposeful icons
- * make the three-step sequence easier to scan.
- *
- * Every number this page used to state (savings percentages, timelines, star
- * ratings, per-visit prices, contract sizes) was illustrative, and one of them
- * carried a code comment saying so. None of it is repeated here: where there is
- * no evidence, the page says what is true qualitatively instead.
- */
+export const metadata: Metadata = {
+  title: "Bundleen — Home services, with your neighbors.",
+  description:
+    "Bundleen brings nearby homes into one service request so local providers can bid on grouped work. See how neighborhood services come together.",
+};
 
-const managerCta = "/community-onboarding";
+const homeownerCta = "/get-started?role=homeowner";
 const providerCta = "/get-started?role=provider";
+const managerCta = "/community-onboarding";
 
-/** Three links, each pointing at a section that exists. */
 const navigation = [
   { href: "#how-it-works", label: "How it works" },
-  { href: "#who-its-for", label: "Who it's for" },
   { href: "#services", label: "Services" },
+  { href: "#hoa", label: "For HOAs" },
+  { href: "#providers", label: "For providers" },
+];
+
+const services = [
+  { icon: "leaf", title: "Lawn & garden", body: "Care for lawns and outdoor spaces." },
+  {
+    icon: "clean",
+    title: "Home cleaning",
+    body: "Cleaning for the spaces you use every day.",
+  },
+  {
+    icon: "calendar",
+    title: "Seasonal maintenance",
+    body: "Home upkeep as the seasons change.",
+  },
 ];
 
 const steps = [
   {
-    title: "Residents say what they need",
-    body: "Everyone shares which recurring service they want and how often they want it.",
-    icon: "/modern/icons/clipboard.svg",
+    title: "Start with your address.",
+    body: "Add your address during onboarding to see whether your home is in an active Bundleen neighborhood.",
   },
   {
-    title: "Providers offer on the whole group",
-    body: "Bundleen combines the homes into one request that local providers can offer on.",
-    icon: "/modern/icons/neighbors.svg",
+    title: "Open or join a request.",
+    body: "Eligible non-HOA homeowners can open or join a request. Nearby homes join before enrollment closes.",
   },
   {
-    title: "You choose, and everyone follows along",
-    body: "Compare the offers, pick one, and the community can see the schedule and each visit.",
-    icon: "/modern/icons/check.svg",
+    title: "Local providers bid.",
+    body: "When the request opens for bidding, local providers submit bids for the grouped work.",
+  },
+  {
+    title: "A provider is selected.",
+    body: "Your community’s authorized manager selects the provider. Participating homes then follow the service schedule and visits.",
   },
 ];
 
-const benefits = [
+const questions = [
   {
-    title: "Better pricing from grouped work",
-    body: "One request covering many nearby homes is worth more to a provider than one house at a time.",
+    question: "Do I need to be part of an HOA?",
+    answer:
+      "No. Eligible homeowners who are not part of an HOA can open or join requests. HOA residents join optional work through requests opened by their HOA manager.",
   },
   {
-    title: "Offers you can actually compare",
-    body: "Every offer arrives in the same shape, so choosing one is a decision rather than an investigation.",
+    question: "Is Bundleen available at my address?",
+    answer:
+      "Add your address during onboarding to check neighborhood eligibility. Creating an account does not guarantee coverage or provider bids.",
   },
   {
-    title: "Less coordination for the community",
-    body: "The request, the offers, the schedule, and what happened on each visit all live in one place.",
-  },
-];
-
-const audiences = [
-  {
-    who: "Managers",
-    body: "Organize the community's recurring services and choose the provider.",
+    question: "Who chooses the service provider?",
+    answer:
+      "Your community’s authorized manager selects the provider after bidding. Participating homes then follow the service schedule.",
   },
   {
-    who: "Residents",
-    body: "See the price, the schedule, and the progress of each visit.",
-  },
-  {
-    who: "Providers",
-    body: "Find grouped jobs close together, with less travel between homes.",
+    question: "Will I get a lower price?",
+    answer:
+      "Grouped work creates an opportunity for better pricing. Actual bids depend on the work, participating homes and service availability. A lower price or discount is not guaranteed.",
   },
 ];
 
-const serviceExamples = [
-  "Lawn care",
-  "Cleaning",
-  "Pool care",
-  "Landscaping",
-  "Gutters",
-  "Seasonal maintenance",
-];
+function Arrow({ diagonal = false }: { diagonal?: boolean }) {
+  return (
+    <svg aria-hidden="true" focusable="false">
+      <use href={diagonal ? "#landing-arrow-up" : "#landing-arrow"} />
+    </svg>
+  );
+}
 
+/** Server-rendered marketing content; the menu is the only client behavior. */
 export default function HomePage() {
   return (
     <div className="landing-shell">
-      <header className="ld-header">
-        <div className="ld-shell ld-header-inner">
-          <Link className="ld-brand" href="/" aria-label="Bundleen home">
-            <BundleenCompanyIcon size={36} />
+      <a className="skip-link" href="#main">Skip to content</a>
+
+      <svg className="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <defs>
+          <symbol id="landing-leaf" viewBox="0 0 32 32">
+            <path d="M26 5C13 4 5 10 7 19c2 9 18 7 19-14ZM6 27l14-15M13 20v-7M13 20h7" />
+          </symbol>
+          <symbol id="landing-clean" viewBox="0 0 32 32">
+            <path d="m8 28 6-15h8l3 15ZM14 13V7h8v6M14 7h10M18 7V4h6M5 9v6M2 12h6M27 15v6M24 18h6" />
+          </symbol>
+          <symbol id="landing-calendar" viewBox="0 0 32 32">
+            <rect x="5" y="7" width="22" height="21" rx="3" />
+            <path d="M10 4v6M22 4v6M5 14h22m-17 6 4 4 8-7" />
+          </symbol>
+          <symbol id="landing-arrow" viewBox="0 0 24 24">
+            <path d="M4 12h15m-6-6 6 6-6 6" />
+          </symbol>
+          <symbol id="landing-arrow-up" viewBox="0 0 24 24">
+            <path d="M6 18 18 6M6 6h12v12" />
+          </symbol>
+        </defs>
+      </svg>
+
+      <header className="site-header">
+        <div className="shell header-inner">
+          <Link className="brand" href="/" aria-label="Bundleen home">
+            <BundleenCompanyIcon size={35} />
             <span>Bundleen</span>
           </Link>
-
-          <nav className="ld-desktop-nav" aria-label="Primary">
-            {navigation.map((item) => (
-              <a href={item.href} key={item.href}>
-                {item.label}
-              </a>
-            ))}
+          <nav className="desktop-nav" aria-label="Main navigation">
+            {navigation.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
           </nav>
-
-          <div className="ld-header-actions">
-            <Link className="ld-auth-link ld-auth-link-sign-in" href="/sign-in">
-              Log in
-            </Link>
-            <Link className="ld-auth-link ld-auth-link-sign-up" href={managerCta}>
-              Get started
-            </Link>
+          <div className="header-actions">
+            <Link className="sign-in" href="/sign-in">Sign in</Link>
+            <a className="button header-cta" href="#start">Get started <Arrow /></a>
             <button
-              className="ld-menu-button"
+              className="menu-button"
               type="button"
-              aria-label="Open menu"
-              aria-expanded="false"
               aria-controls="mobile-menu"
+              aria-expanded="false"
+              aria-label="Open menu"
               data-menu-button=""
             >
-              <span />
               <span />
               <span />
             </button>
           </div>
         </div>
-
         <nav
-          className="ld-mobile-menu"
+          className="mobile-menu shell"
           id="mobile-menu"
-          aria-label="Mobile"
+          aria-label="Mobile navigation"
           data-mobile-menu=""
           hidden
         >
-          {navigation.map((item) => (
-            <a href={item.href} key={item.href}>
-              {item.label}
-            </a>
-          ))}
-          <Link href="/sign-in">Log in</Link>
-          <Link className="ld-mobile-menu-cta" href={managerCta}>
-            Get started
-          </Link>
+          {navigation.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
+          <Link href="/sign-in">Sign in</Link>
         </nav>
       </header>
 
-      <main id="home">
-        {/* ── Hero ───────────────────────────────────────────────────────── */}
-        <section className="ld-hero ld-section-pad" aria-labelledby="hero-title">
-          <div className="ld-shell ld-hero-grid">
-            <div className="ld-hero-copy">
-              <h1 id="hero-title">
-                Group your community&apos;s home services into <span>one request</span>.
-              </h1>
-
-              <p className="ld-hero-lede">
-                When neighbors need the same service, Bundleen combines them into one request.
-                Local providers offer on the grouped work, and you choose the one that suits your
-                community.
-              </p>
-
-              <div className="ld-hero-actions">
-                <Link className="ld-btn ld-btn-primary" href={managerCta}>
-                  Set up your community
-                  <span aria-hidden="true">→</span>
-                </Link>
-              </div>
-
-              <p className="ld-hero-aside">
-                Residents join through their own community — ask your manager about Bundleen.{" "}
-                <Link className="ld-text-link" href={providerCta}>
-                  Run a service business? Join as a provider
-                </Link>
-              </p>
+      <main id="main" tabIndex={-1}>
+        <section className="hero shell" aria-labelledby="hero-title">
+          <div className="hero-copy">
+            <p className="eyebrow"><span className="little-line" aria-hidden="true" /> A neighborhood approach</p>
+            <h1 id="hero-title">Home services, <em>with your neighbors.</em></h1>
+            <p className="hero-description">
+              Bring nearby homes into one service request. Local providers bid on the grouped work,
+              creating an opportunity for better pricing.
+            </p>
+            <div className="hero-actions">
+              <a className="button primary" href="#start">Get started <Arrow /></a>
+              <a className="quiet-link" href="#how-it-works">See how it works <Arrow diagonal /></a>
             </div>
+            <p className="hero-footnote">Availability varies by neighborhood.</p>
+          </div>
+          <figure className="hero-scene">
+            <Image
+              src="/marketing/homepage-v5/neighborhood-hero.png"
+              width={1536}
+              height={1024}
+              alt="Illustrative scene of a homeowner and a service professional outside a home."
+              priority
+              sizes="(max-width: 899px) 100vw, (max-width: 1279px) 900px, (max-width: 1440px) 65.5vw, 944px"
+            />
+          </figure>
+          <a className="hero-scroll" href="#services">
+            <span>Explore service examples</span><span aria-hidden="true">↓</span>
+          </a>
+        </section>
 
-            <figure className="ld-hero-art ld-reveal-scale">
-              <Image
-                src="/modern/artwork/community-service-network.webp"
-                alt="A local service team following one shared route between several homes in a community"
-                width={1536}
-                height={1024}
-                priority
-                sizes="(max-width: 1180px) 90vw, 48vw"
-              />
-            </figure>
+        <section className="services shell" id="services" aria-labelledby="services-title">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Service examples</p>
+              <h2 id="services-title">Start with what<br />{" "}your home needs.</h2>
+            </div>
+            <p>A few ways neighbors can bring similar needs together.</p>
+          </div>
+          <ul className="service-list" role="list">
+            {services.map((service) => (
+              <li className="service" key={service.title}>
+                <svg className="service-icon" aria-hidden="true" focusable="false">
+                  <use href={`#landing-${service.icon}`} />
+                </svg>
+                <div><h3>{service.title}</h3><p>{service.body}</p></div>
+              </li>
+            ))}
+          </ul>
+          <p className="availability">Examples only. Services vary by neighborhood and local providers.</p>
+        </section>
+
+        <section className="shared-story shell" aria-labelledby="shared-title">
+          <figure className="garden-scene">
+            <Image
+              src="/marketing/homepage-v5/garden-care.png"
+              width={1536}
+              height={1024}
+              alt="Illustrative scene of a service professional tending a home garden."
+              sizes="(max-width: 760px) 100vw, (max-width: 1279px) 50vw, (max-width: 1440px) 49vw, 705px"
+            />
+          </figure>
+          <div className="story-copy">
+            <p className="eyebrow">The neighborhood advantage</p>
+            <h2 id="shared-title">More homes.<br />{" "}<em>One shared request.</em></h2>
+            <p>When nearby homes need the same service, they can join one request.</p>
+            <p>
+              More work in one place can mean less travel for providers and simpler planning for the
+              group. That creates an opportunity for better pricing. Discounts are not guaranteed.
+            </p>
+            <a className="quiet-link" href="#how-it-works">See how it works <Arrow /></a>
           </div>
         </section>
 
-        {/* ── Three steps ────────────────────────────────────────────────── */}
-        <section className="ld-how ld-section-pad" id="how-it-works" aria-labelledby="how-title">
-          <div className="ld-shell">
-            <h2 id="how-title">How it works</h2>
-
-            <ol className="ld-steps">
+        <section className="process-section" id="how-it-works" aria-labelledby="process-title">
+          <div className="shell">
+            <div className="process-heading">
+              <p className="eyebrow">How it works</p>
+              <h2 id="process-title">From your home<br />{" "}to a shared plan.</h2>
+            </div>
+            <ol className="process-list" role="list">
               {steps.map((step, index) => (
                 <li key={step.title}>
-                  <div className="ld-step-mark" aria-hidden="true">
-                    <span className="ld-step-number">{index + 1}</span>
-                    <img src={step.icon} alt="" />
-                  </div>
+                  <span className="step-number">0{index + 1} <span aria-hidden="true">—</span></span>
                   <h3>{step.title}</h3>
                   <p>{step.body}</p>
                 </li>
               ))}
             </ol>
-          </div>
-        </section>
-
-        {/* ── Benefits ───────────────────────────────────────────────────── */}
-        <section className="ld-benefits ld-section-pad" aria-labelledby="benefits-title">
-          <div className="ld-shell">
-            <h2 id="benefits-title">Why communities use it</h2>
-
-            <div className="ld-benefit-columns">
-              {benefits.map((benefit) => (
-                <div key={benefit.title}>
-                  <h3>{benefit.title}</h3>
-                  <p>{benefit.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Who it's for ───────────────────────────────────────────────── */}
-        <section className="ld-who ld-section-pad" id="who-its-for" aria-labelledby="who-title">
-          <div className="ld-shell ld-who-grid">
-            <div className="ld-who-copy">
-              <h2 id="who-title">Who it&apos;s for</h2>
-
-              <dl className="ld-who-list">
-                {audiences.map((audience) => (
-                  <div key={audience.who}>
-                    <dt>{audience.who}</dt>
-                    <dd>{audience.body}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-
-            <figure className="ld-who-art ld-reveal-scale">
-              <Image
-                src="/modern/artwork/community-collaboration.webp"
-                alt="A community manager, resident, and local service professional reviewing a service plan together"
-                width={1536}
-                height={1024}
-                sizes="(max-width: 850px) 90vw, 46vw"
-              />
-            </figure>
-          </div>
-        </section>
-
-        {/* ── Service examples ───────────────────────────────────────────── */}
-        <section className="ld-services ld-section-pad" id="services" aria-labelledby="services-title">
-          <div className="ld-shell">
-            <h2 id="services-title">Services communities book again and again</h2>
-            <p className="ld-lead">
-              Grouping works best for work that repeats. These are common examples, not a fixed
-              list.
+            <p className="process-note">
+              <strong>Part of an HOA?</strong> Your HOA manager opens the requests. Residents join
+              optional work through their community.
             </p>
-
-            <ul className="ld-service-list">
-              {serviceExamples.map((service) => (
-                <li key={service}>{service}</li>
-              ))}
-            </ul>
           </div>
         </section>
 
-        {/* ── Final CTA ──────────────────────────────────────────────────── */}
-        <section className="ld-final ld-section-pad" aria-labelledby="final-title">
-          <div className="ld-shell ld-final-inner">
-            <h2 id="final-title">Bring your community&apos;s services together.</h2>
-            <div className="ld-final-actions">
-              <Link className="ld-btn ld-btn-primary" href={managerCta}>
-                Set up your community
-                <span aria-hidden="true">→</span>
-              </Link>
-              <Link className="ld-text-link" href={providerCta}>
-                Join as a provider
-              </Link>
-            </div>
+        <section className="audiences shell" aria-labelledby="audiences-title">
+          <div className="audience-intro">
+            <p className="eyebrow">For HOA managers and providers</p>
+            <h2 id="audiences-title">Bring local<br />{" "}<em>work together.</em></h2>
+          </div>
+          <div className="audience-list">
+            <article id="hoa">
+              <p className="eyebrow">For HOA managers</p>
+              <h3>Plan services<br />{" "}for your community.</h3>
+              <p>
+                Open community requests and gather resident interest in optional work. Select a
+                provider after bidding, then follow scheduling and visits.
+              </p>
+              <Link className="quiet-link" href={managerCta}>Get started for my HOA <Arrow diagonal /></Link>
+            </article>
+            <article id="providers">
+              <p className="eyebrow">For local service providers</p>
+              <h3>More nearby homes.<br />{" "}One service request.</h3>
+              <p>
+                Bid on grouped service requests from nearby homes. Review the shared need and put
+                your business forward for the work.
+              </p>
+              <Link className="quiet-link" href={providerCta}>Get started as a provider <Arrow diagonal /></Link>
+            </article>
+          </div>
+        </section>
+
+        <section className="faq-section shell" aria-labelledby="faq-title">
+          <div>
+            <p className="eyebrow">Before you begin</p>
+            <h2 id="faq-title">Questions,<br />{" "}answered.</h2>
+          </div>
+          <div className="faq-list">
+            {questions.map(({ question, answer }) => (
+              <details key={question}>
+                <summary>{question}<span aria-hidden="true">+</span></summary>
+                <p>{answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        <section className="start-section shell" id="start" aria-labelledby="start-title">
+          <div className="start-copy">
+            <p className="eyebrow">For your next home service</p>
+            <h2 id="start-title">Start with your<br />{" "}<em>neighborhood.</em></h2>
+            <p>Bring your next home service into a shared request.</p>
+          </div>
+          <div className="start-actions">
+            <Link className="button primary" href={homeownerCta}>I’m a homeowner <Arrow /></Link>
+            <p className="coverage-helper">
+              Your address is checked during onboarding. Availability varies by neighborhood.
+            </p>
+            <Link className="quiet-link" href={providerCta}>I’m a service provider <Arrow diagonal /></Link>
+            <Link className="quiet-link hoa-entry" href={managerCta}>I manage an HOA <Arrow diagonal /></Link>
           </div>
         </section>
       </main>
 
-      <footer className="ld-footer">
-        <div className="ld-shell ld-footer-grid">
-          <div className="ld-footer-brand-column">
-            <Link className="ld-footer-brand" href="/" aria-label="Bundleen home">
-              <BundleenCompanyIcon size={36} />
-              <span>Bundleen</span>
-            </Link>
-            <p>Recurring home services, grouped by community.</p>
-          </div>
-
-          <nav className="ld-footer-column" aria-label="Product">
-            <h2>Product</h2>
+      <footer className="site-footer shell">
+        <div className="footer-top">
+          <Link className="brand" href="/" aria-label="Bundleen home">
+            <BundleenCompanyIcon size={32} />
+            <span>Bundleen</span>
+          </Link>
+          <p>Home services, with your neighbors.</p>
+          <nav aria-label="Footer">
             <a href="#how-it-works">How it works</a>
-            <a href="#who-its-for">Who it&apos;s for</a>
-            <a href="#services">Services</a>
+            <a href="#hoa">For HOAs</a>
+            <a href="#providers">For providers</a>
           </nav>
-
-          {/* Only destinations that exist. `/help`, `/privacy`, `/terms`,
-              `/safety`, `/faq`, and `/accessibility` had no route behind them
-              and answered 404 — see the completion notes. */}
-          <nav className="ld-footer-column" aria-label="Help">
-            <h2>Help</h2>
+        </div>
+        <div className="footer-support">
+          <nav aria-label="Help">
             <Link href="/help/how-bidding-works">How bidding works</Link>
             <Link href="/help/hoa-onboarding">Getting set up</Link>
             <Link href="/help/provider-verification">Provider verification</Link>
           </nav>
-
-          <div className="ld-footer-column">
-            <h2>Contact</h2>
+          <nav aria-label="Contact">
             <a href="mailto:hello@bundleen.com">hello@bundleen.com</a>
             <a href="mailto:support@bundleen.com">support@bundleen.com</a>
-            <span>Austin, Texas</span>
-          </div>
+          </nav>
         </div>
-
-        <div className="ld-shell ld-footer-bottom">
+        <div className="footer-note">
           <span>© 2026 Bundleen Corp.</span>
-          <Link href="/sign-in">Log in</Link>
+          <span>AI-generated scenes are illustrative and do not show actual customers.</span>
         </div>
       </footer>
 

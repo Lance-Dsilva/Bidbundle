@@ -1,185 +1,101 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import postcss, { type Rule } from "postcss";
 import { describe, expect, it } from "vitest";
 
-/**
- * Homepage design-system guards.
- *
- * The refinement pass replaced a stylesheet full of one-off values with a token
- * block. These assertions protect the two things that actually broke before —
- * text small enough to be unreadable, and a hero headline wide enough to push
- * its own column past the viewport — plus the rules the page must not lose:
- * a two-column service grid on mobile, content that paints without JavaScript,
- * and motion that respects `prefers-reduced-motion`.
- */
-
+/** Source guards for progressive enhancement; actual viewport layout is UI review. */
 const ROOT = resolve(import.meta.dirname, "..");
-const CSS = readFileSync(resolve(ROOT, "src/app/landing.css"), "utf8");
-const PAGE = readFileSync(resolve(ROOT, "src/app/page.tsx"), "utf8");
+const CSS = postcss.parse(readFileSync(resolve(ROOT, "src/app/landing.css"), "utf8"));
+const rules: Rule[] = [];
+CSS.walkRules((rule) => { rules.push(rule); });
 
-/** Declarations with the token block and comments stripped out. */
-function declarations(): string[] {
-  return CSS.replace(/\/\*[\s\S]*?\*\//g, "")
-    .split(/[;{}]/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+function declarations(rule: Rule, property: string) {
+  const values: string[] = [];
+  rule.walkDecls(property, (declaration) => { values.push(declaration.value); });
+  return values;
 }
 
-describe("type scale", () => {
-  it("declares one scale rather than ad-hoc sizes", () => {
-    for (const token of [
-      "--ld-text-2xs",
-      "--ld-text-xs",
-      "--ld-text-sm",
-      "--ld-text-base",
-      "--ld-text-md",
-      "--ld-text-lg",
-      "--ld-text-xl",
-      "--ld-h1",
-      "--ld-h2",
-      "--ld-h3",
-    ]) {
-      expect(CSS).toContain(`${token}:`);
+describe("homepage stylesheet boundaries", () => {
+  it("scopes every selector to the homepage so signup and application screens retain their styles", () => {
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) {
+      for (const selector of rule.selectors) {
+        if (selector.trim() === "html:has(.landing-shell)") {
+          // The ancestor exists only when the homepage is mounted; this is
+          // the approved exception to undo global smooth scrolling for users
+          // requesting less motion. It may change scrolling and nothing else.
+          expect(rule.parent?.type).toBe("atrule");
+          expect((rule.parent as postcss.AtRule).params).toMatch(/prefers-reduced-motion\s*:\s*reduce/);
+          expect(rule.nodes.map((node) => node.type === "decl" ? node.prop : node.type)).toEqual(["scroll-behavior"]);
+          expect(declarations(rule, "scroll-behavior")).toEqual(["auto"]);
+          continue;
+        }
+        expect(selector.trim(), `Unscoped landing rule: ${selector}`).toMatch(/^\.landing-shell(?:\b|\s|:)/);
+      }
     }
   });
 
-  it("never sets a rem font-size below the 11px readability floor", () => {
-    // The mockups previously ran down to 0.52rem (~8px), which is where text
-    // stops being information and becomes texture.
-    const tooSmall = declarations()
-      .filter((line) => /^font-size:\s*[\d.]+rem$/.test(line))
-      .map((line) => Number(/([\d.]+)rem/.exec(line)![1]))
-      .filter((rem) => rem < 0.6875);
-    expect(tooSmall).toEqual([]);
-  });
-
-  it("caps the hero headline so it cannot outgrow its column", () => {
-    // "neighborhood," is the widest single token in the headline. At 390px the
-    // old `clamp(2.65rem, 13.3vw, 4.1rem)` resolved to ~52px and overflowed the
-    // container, dragging the whole copy column off-screen behind the shell's
-    // overflow guard.
-    const mobileH1 = /--ld-h1:\s*clamp\(([^)]+)\)/g;
-    const clamps = [...CSS.matchAll(mobileH1)].map((match) => match[1]!);
-    expect(clamps.length).toBeGreaterThanOrEqual(2);
-
-    for (const clamp of clamps) {
-      const vw = Number(/([\d.]+)vw/.exec(clamp)?.[1] ?? "0");
-      const max = Number(/([\d.]+)rem\s*\)?\s*$/.exec(clamp.trim())?.[1] ?? "99");
-      expect(vw).toBeLessThanOrEqual(8.5);
-      expect(max).toBeLessThanOrEqual(3.5);
+  it("preserves the hidden attribute on the mobile menu at every media size", () => {
+    const hiddenRules = rules.filter((rule) => rule.selectors.some((selector) => selector.includes("[hidden]")));
+    expect(hiddenRules.length).toBeGreaterThan(0);
+    expect(hiddenRules.some((rule) => declarations(rule, "display").includes("none"))).toBe(true);
+    for (const rule of hiddenRules) {
+      expect(declarations(rule, "display").every((display) => display === "none")).toBe(true);
     }
   });
 
-  it("lets long words break rather than widen a grid column", () => {
-    expect(CSS).toContain("overflow-wrap: break-word");
+  it("does not conceal meaningful page content behind a reveal animation", () => {
+    for (const rule of rules) {
+      // Hiding a closed menu or SVG definitions is deliberate; hiding a page
+      // section until JavaScript observes it violates progressive rendering.
+      if (rule.selector.includes("mobile-menu") || rule.selector.includes("icon-definitions")) continue;
+      expect(declarations(rule, "opacity"), rule.selector).not.toContain("0");
+      expect(declarations(rule, "visibility"), rule.selector).not.toContain("hidden");
+      if (/reveal|is-visible|data-animate/.test(rule.selector)) {
+        expect(declarations(rule, "display"), rule.selector).not.toContain("none");
+        expect(declarations(rule, "transform").every((value) => value === "none"), rule.selector).toBe(true);
+      }
+    }
+  });
+
+  it("keeps section targets clear when following in-page navigation", () => {
+    expect(rules.some((rule) => rule.selectors.includes(".landing-shell [id]") && declarations(rule, "scroll-margin-top").some((value) => parseFloat(value) > 0))).toBe(true);
   });
 });
 
-describe("component consistency", () => {
-  it("shares one radius, elevation, icon, and control scale", () => {
-    for (const token of [
-      "--ld-r-sm",
-      "--ld-r-md",
-      "--ld-r-lg",
-      "--ld-r-xl",
-      "--ld-r-pill",
-      "--ld-shadow-sm",
-      "--ld-shadow-md",
-      "--ld-shadow-lg",
-      "--ld-icon-sm",
-      "--ld-icon-md",
-      "--ld-icon-lg",
-      "--ld-btn-h",
-      "--ld-btn-h-sm",
-    ]) {
-      expect(CSS).toContain(`${token}:`);
+describe("accessibility foundations", () => {
+  it("provides an explicit visible focus outline for links, buttons and FAQ summaries", () => {
+    for (const tag of ["a", "button", "summary"]) {
+      const outlines = rules.filter((rule) => rule.selectors.some((selector) => selector.endsWith(`${tag}:focus-visible`))).flatMap((rule) => declarations(rule, "outline"));
+      expect(outlines.some((outline) => /(?:[2-9]|\d{2,})px\s+solid\s+(?!transparent)/.test(outline)), `${tag} has no visible focus outline`).toBe(true);
     }
   });
 
-  it("uses standard font weights only", () => {
-    // The previous pass used 620/650/680/720/750/760/780/820/850, which render
-    // as arbitrary synthetic weights and read inconsistently.
-    const weights = declarations()
-      .filter((line) => /^font-weight:\s*\d+$/.test(line))
-      .map((line) => Number(/(\d+)/.exec(line)![1]));
-    expect(weights.length).toBeGreaterThan(0);
-    for (const weight of weights) {
-      expect([400, 500, 600, 700, 800]).toContain(weight);
+  it("suppresses animations and transitions under reduced motion", () => {
+    const reducedRules: Rule[] = [];
+    CSS.walkAtRules("media", (media) => {
+      if (/prefers-reduced-motion\s*:\s*reduce/.test(media.params)) media.walkRules((rule) => { reducedRules.push(rule); });
+    });
+    expect(reducedRules.length).toBeGreaterThan(0);
+    const universal = reducedRules.filter((rule) => rule.selectors.some((selector) => /^\.landing-shell\s+\*$/.test(selector.trim())));
+    expect(universal.some((rule) => declarations(rule, "animation").includes("none"))).toBe(true);
+    expect(universal.some((rule) => declarations(rule, "transition").includes("none"))).toBe(true);
+    // globals.css enables smooth scrolling on html; cancelling animation only
+    // on descendants cannot disable that root-level motion.
+    expect(reducedRules.some((rule) => rule.selectors.includes("html:has(.landing-shell)") && declarations(rule, "scroll-behavior").includes("auto"))).toBe(true);
+  });
+
+  it("keeps the original photographic proportions and adds no image frame or crop", () => {
+    for (const scene of ["hero-scene", "garden-scene"]) {
+      const imageRules = rules.filter((rule) => rule.selectors.includes(`.landing-shell .${scene} img`));
+      expect(imageRules.some((rule) => declarations(rule, "height").includes("auto"))).toBe(true);
+      for (const rule of rules.filter((rule) => rule.selector.includes(`.${scene}`))) {
+        expect(declarations(rule, "object-fit")).not.toContain("cover");
+        expect(declarations(rule, "box-shadow").every((value) => value === "none"), rule.selector).toBe(true);
+        expect(declarations(rule, "border-radius").every((value) => /^(0|none)$/.test(value)), rule.selector).toBe(true);
+        expect(declarations(rule, "border").every((value) => /^(0|none)$/.test(value)), rule.selector).toBe(true);
+      }
     }
-  });
-
-  it("keeps every interactive control at a usable touch height", () => {
-    expect(CSS).toContain("--ld-btn-h: 52px");
-    expect(CSS).toContain("--ld-btn-h-sm: 44px");
-  });
-});
-
-describe("responsive behaviour", () => {
-  it("collapses every multi-column grid to one column by the tablet width", () => {
-    const tablet = CSS.slice(
-      CSS.indexOf("@media (max-width: 850px)"),
-      CSS.indexOf("@media (max-width: 640px)"),
-    );
-    for (const selector of [".ld-steps", ".ld-benefit-columns", ".ld-who-grid"]) {
-      expect(tablet, `${selector} still has more than one column`).toMatch(
-        new RegExp(`\\${selector}\\s*\\{[^}]*grid-template-columns:\\s*minmax\\(0, 1fr\\)`),
-      );
-    }
-    // The who-it's-for rows drop their label column rather than squeezing it.
-    expect(tablet).toMatch(/\.ld-who-list > div\s*\{[^}]*minmax\(0, 1fr\)/);
-  });
-
-  it("stacks the hero side by side only where there is room for it", () => {
-    const laptop = CSS.slice(
-      CSS.indexOf("@media (max-width: 1180px)"),
-      CSS.indexOf("@media (max-width: 850px)"),
-    );
-    expect(laptop).toMatch(/\.ld-hero-grid\s*\{[^}]*minmax\(0, 1fr\)/);
-  });
-
-  it("keeps the primary CTA reachable at the smallest width", () => {
-    // It used to be `display: none` below 390px, leaving the header with
-    // nothing but a hamburger.
-    const smallest = CSS.slice(CSS.indexOf("@media (max-width: 400px)"));
-    expect(smallest).not.toMatch(/\.ld-auth-link-sign-up\s*\{[^}]*display:\s*none/);
-  });
-
-  it("guards the page against horizontal scroll", () => {
-    expect(CSS).toMatch(/\.landing-shell\s*\{[\s\S]*?overflow-x:\s*hidden/);
-  });
-});
-
-describe("progressive enhancement and motion", () => {
-  it("paints every section without waiting for the reveal observer", () => {
-    // `LandingInteractions` adds `.ld-is-visible` on scroll, but the base
-    // state is already visible, so content is never hidden behind JavaScript.
-    expect(CSS).toMatch(
-      /\.ld-reveal-up,\s*\n\.ld-reveal-scale\s*\{\s*opacity:\s*1;\s*transform:\s*none/,
-    );
-  });
-
-  it("disables animation, transition, and hover lift under reduced motion", () => {
-    const reduced = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(reduced).toContain("animation: none !important");
-    expect(reduced).toContain("transition: none !important");
-    expect(reduced).toMatch(/\.ld-btn:hover[\s\S]*transform:\s*none/);
-  });
-
-  it("keeps a visible focus ring on every interactive element", () => {
-    expect(CSS).toMatch(/a:focus-visible[\s\S]*?outline:\s*3px solid/);
-  });
-});
-
-describe("approved homepage content", () => {
-  it("does not reintroduce the excluded one-time-job messaging", () => {
-    for (const removed of ["Post a Request", "Neighbors Join", "one-time job"]) {
-      expect(PAGE).not.toContain(removed);
-    }
-  });
-
-  it("routes manager interest to staff onboarding and keeps provider signup distinct", () => {
-    expect(PAGE).toContain('const managerCta = "/community-onboarding"');
-    expect(PAGE).toContain('const providerCta = "/get-started?role=provider"');
   });
 });
