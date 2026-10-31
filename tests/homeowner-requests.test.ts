@@ -380,6 +380,22 @@ describe("createHomeownerRequest", () => {
 });
 
 describe("my requests", () => {
+  it("restricts each request-list query to its supplied owner", async () => {
+    const findMany = vi.spyOn(db.hoaServiceRequest, "findMany");
+    const { listHomeownerRequests } = await import("@/lib/server/homeowner-requests");
+
+    try {
+      for (const ownerUserId of ["signed-in-owner", "another-signed-in-owner"]) {
+        await listHomeownerRequests(ownerUserId);
+        expect(findMany).toHaveBeenLastCalledWith(
+          expect.objectContaining({ where: { createdByUserId: ownerUserId } }),
+        );
+      }
+    } finally {
+      findMany.mockRestore();
+    }
+  });
+
   it("returns the created request scoped to its owner", async () => {
     const { listHomeownerRequests } = await import("@/lib/server/homeowner-requests");
     const requests = await listHomeownerRequests("user-1");
