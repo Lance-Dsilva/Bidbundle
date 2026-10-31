@@ -73,7 +73,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   pause = null; pending.length = 0; observing = false; observed.length = 0; const tag = `issue10-${randomUUID()}`;
   const users = [];
-  for (const name of ["owner", "manager", "neighbour"]) users.push(await first.user.create({ data: { clerkUserId: `${tag}-${name}`, email: `${tag}-${name}@example.invalid`, fullName: `Isolated ${name}`, role: "homeowner", homeownerProfile: { create: { notifyEmail: name !== "neighbour" } } } }));
+  for (const name of ["owner", "manager", "neighbour"]) users.push(await first.user.create({ data: { clerkUserId: `${tag}-${name}`, email: `${tag}-${name}@example.invalid`, fullName: `Isolated ${name}`, role: "homeowner", address: "1 Test St, Austin, TX 78758", latitude: 30.4, longitude: -97.7, homeownerProfile: { create: { notifyEmail: name !== "neighbour" } } } }));
   const community = await first.community.create({ data: { name: tag, type: "neighborhood", status: "active", centerLatitude: 30.4, centerLongitude: -97.7, radiusMiles: 10 } });
   const memberships = [];
   for (const user of users) memberships.push(await first.communityMembership.create({ data: { communityId: community.id, userId: user.id, status: "active" } }));

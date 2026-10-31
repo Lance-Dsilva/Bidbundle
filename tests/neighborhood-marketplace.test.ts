@@ -129,7 +129,6 @@ function collectingRequest(overrides: Record<string, unknown> = {}) {
     id: "request-1",
     communityId: "hood-1",
     status: "collecting_interest",
-    updatedAt: new Date(),
     kind: "optional_group",
     title: "Pressure washing",
     category: "cleaning",

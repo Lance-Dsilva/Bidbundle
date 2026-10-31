@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
 import type { CommonProfileUpdate, ProviderProfileUpdate } from "@/lib/validation/profile";
 import { geoapifyConfig } from "@/lib/geoapify";
@@ -85,6 +85,10 @@ async function selectLA() {
   fireEvent.change(screen.getByLabelText("Business address"), { target: { value: "123 Sunset" } });
   fireEvent.click(await screen.findByRole("option", { name: LA.formatted }));
 }
+function addressOptions() {
+  const listbox = screen.queryByRole("listbox", { name: "Address suggestions" });
+  return listbox ? within(listbox).queryAllByRole("option") : [];
+}
 
 describe("provider selected location safety", () => {
   it("debounces requests, bounds results and saves only the explicitly selected normalized location", async () => {
@@ -139,7 +143,7 @@ describe("provider selected location safety", () => {
       const { onSave } = renderEditor();
       fireEvent.change(screen.getByLabelText("Business address"), { target: { value: "123 Sunset" } });
       await waitFor(() => expect(screen.getByText(/no .*results|no .*addresses|no .*matches|couldn.t|unavailable/i)).toBeInTheDocument());
-      expect(screen.queryByRole("option")).not.toBeInTheDocument();
+      expect(addressOptions()).toHaveLength(0);
       fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
       expect(onSave).not.toHaveBeenCalled();
     });
@@ -212,7 +216,7 @@ describe("provider address recovery and pending save", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(8_100); });
     expect(signal.aborted).toBe(true);
     expect(screen.getByRole("button", { name: /retry address search/i })).toBeInTheDocument();
-    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+    expect(addressOptions()).toHaveLength(0);
   });
   it("freezes address lookups and selection during an actual pending business save", async () => {
     let finish!: (value: boolean) => void;
@@ -254,7 +258,7 @@ describe("provider address response boundaries", () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText("Business address"), { target: { value: "123 Sunset" } });
     await screen.findByRole("option", { name: "Candidate 0" });
-    expect(screen.getAllByRole("option")).toHaveLength(5);
+    expect(within(screen.getByRole("listbox", { name: "Address suggestions" })).getAllByRole("option")).toHaveLength(5);
   });
   it("does not fabricate the previous locality when a selected result has none", async () => {
     const withoutLocality = { ...LA, neighbourhood: undefined };

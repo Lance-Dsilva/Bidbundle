@@ -146,3 +146,39 @@ probe, not a legitimate business workflow.
 Fixtures remain in the disposable database until its owner destroys it. No shared
 tables are truncated. These tests do not contact Redis, Clerk, email services or
 production, and do not claim deployed integration or exhaustive race coverage.
+
+# Combined neighborhood enrollment boundary verification
+
+Use a disposable loopback PostgreSQL database named exactly
+`bundleen_issue10_test`, supplied explicitly through `TEST_DATABASE_URL`.
+Apply the complete branch migration chain, including
+`20261030180000_restore_neighborhood_enrollment_guard`, before running:
+
+```sh
+npx vitest run --config tests/postgres/enrollment-boundary.config.mts
+```
+
+The configuration loads no environment files, refuses other targets, and does
+not apply migrations. Keep credentials outside Git and command output.
+
+These six tests use actual PostgreSQL sessions, database time and blocking-PID
+observations. They cover valid enrollment, direct late inserts/updates, and
+writes delayed beyond enrollment expiry by parent or homeowner authority locks.
+The application helper must return 409 for its delayed writes; the raw database
+error must identify the enrollment constraint in both constraint and DETAIL.
+Rejected writes must preserve the parent stamp and leave no participation,
+audit, notification or outbox effects. No existing trigger or constraint is
+disabled. Fixtures belong only to this disposable database.
+
+When verifying the combined branch, run each PostgreSQL suite with its own
+documented database/configuration. In particular, filter the credential suite
+explicitly because its historical configuration includes every PostgreSQL test:
+
+```sh
+npx vitest run --config tests/postgres/config.mts tests/postgres/provider-credential-concurrency.postgres.ts
+```
+
+The bid-version rollback probe uses a uniquely named, owned agreement INSERT
+trigger to force a real request-identity uniqueness violation after the accepted
+bid claim. It removes only its trigger/function in `finally` and verifies
+complete rollback. The earlier parent agreement guard remains enabled.

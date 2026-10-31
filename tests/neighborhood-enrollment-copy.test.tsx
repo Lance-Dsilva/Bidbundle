@@ -14,7 +14,7 @@ function show(overrides: Partial<NeighborhoodRequestView> = {}) {
   const request: NeighborhoodRequestView = {
     id: "request-1", communityId: "hood-1", communityName: "Oakwood", title: "Pressure washing", category: "cleaning", categoryLabel: "Cleaning",
     description: "Wash our homes", status: "collecting_interest", budgetMinCents: null, budgetMaxCents: null,
-    minHomes: 2, maxHomes: null, enrollmentClosesAt: "2026-10-27T12:00:00Z", biddingClosesAt: null,
+    minHomes: 2, maxHomes: null, totalOccurrences: 1, enrollmentClosesAt: "2026-10-27T12:00:00Z", biddingClosesAt: null,
     participantsLockedAt: null, awardedAt: null, startDate: null, joinedCount: 1, declinedCount: 0, bidCount: 0,
     viewerResponse: "joined", isOwner: true, createdByName: "Resident", createdAt: "2026-10-24T12:00:00Z",
     permissions: { canRespond: false, canManage: false, canViewBids: false, canEdit: false }, bids: null,

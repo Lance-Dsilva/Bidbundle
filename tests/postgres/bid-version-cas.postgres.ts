@@ -136,13 +136,13 @@ describe("actual Prisma and full-schema PostgreSQL bid confirmation races", () =
     expect(Number(rows[0].count)).toBeGreaterThanOrEqual(21);
   });
   it("rejects a stale displayed version before making any award effects", async () => {
-    await closeBidding();
+    // A provider may revise only while bidding is open, including in this fixture.
     await second.serviceBid.update({ where: { id: fixture.bidId }, data: { version: { increment: 1 }, amountCents: 99999 } });
     await expect(run(first, () => awardBid(fixture.managerId, fixture.requestId, { bidId: fixture.bidId, expectedBidVersion: 1 }))).rejects.toMatchObject({ status: 409 });
     await noAwardEffects();
   });
   it("loses the actual award CAS when another connection changes the quote after its read", async () => {
-    await closeBidding();
+    // Keep the legitimate provider revision inside the open bidding window.
     const barrier = hold((name, args) => name === "first" && args.where?.id === fixture.bidId);
     const awarding = run(first, () => awardBid(fixture.managerId, fixture.requestId, { bidId: fixture.bidId, expectedBidVersion: 1 }));
     await barrier.reached.promise;
@@ -178,25 +178,42 @@ describe("actual Prisma and full-schema PostgreSQL bid confirmation races", () =
   });
   it("rolls back a successful quote claim when the real agreement unique constraint fails later", async () => {
     await closeBidding();
-    const barrier = hold((name, args) => name === "first" && args.where?.id === fixture.bidId);
-    const awarding = run(first, () => awardBid(fixture.managerId, fixture.requestId, { bidId: fixture.bidId, expectedBidVersion: 1 }));
-    await barrier.reached.promise;
-    // Deliberately physically valid but domain-inconsistent fault fixture:
-    // agreement identity checks permit this while the other bid stays submitted.
-    // Do not accept that bid: the one-accepted-bid index would fail the FIRST
-    // claim and would not prove rollback after a later agreement insert.
-    await second.serviceAgreement.create({ data: { requestId: fixture.requestId, bidId: fixture.otherBidId, communityId: fixture.communityId, providerUserId: fixture.otherProviderId, awardedByUserId: fixture.managerId, amountCents: 12345, currency: "eur", pricingBasis: "total", scope: "Intentional later-write fault fixture", lockedHomeCount: 1 } });
-    observing = true;
-    barrier.release.resolve(); await expect(awarding).rejects.toMatchObject({ status: 409 });
-    expect(observed[0]).toEqual({ kind: "accepted-claim", rows: 1 });
-    expect(observed).toContainEqual({ kind: "database-error", code: "23505", table: "ServiceAgreement", constraint: "ServiceAgreement_requestId_key" });
-    console.info("[postgres-proof]", JSON.stringify(observed));
-    expect(await first.serviceBid.findUnique({ where: { id: fixture.bidId } })).toMatchObject({ status: "submitted", version: 1 });
-    expect(await first.serviceBid.findUnique({ where: { id: fixture.otherBidId } })).toMatchObject({ status: "submitted" });
-    expect(await first.serviceAgreement.findUnique({ where: { requestId: fixture.requestId } })).toMatchObject({ bidId: fixture.otherBidId });
-    expect(await first.adminAuditLog.count({ where: { communityId: fixture.communityId } })).toBe(0);
-    expect(await first.notification.count({ where: { userId: { in: [fixture.providerId, fixture.otherProviderId] } } })).toBe(0);
-    expect(await first.outboxEvent.count({ where: { dedupeKey: { contains: fixture.requestId } } })).toBe(0);
+    const requestBefore = await first.hoaServiceRequest.findUniqueOrThrow({ where: { id: fixture.requestId } });
+    const probe = `issue18_agreement_fault_${randomUUID().replaceAll("-", "")}`;
+    const conflictId = randomUUID();
+    for (const value of [fixture.requestId, fixture.bidId, fixture.otherBidId, fixture.otherProviderId, conflictId]) {
+      if (!/^[a-zA-Z0-9-]+$/.test(value)) throw new Error("Unexpected owned fixture identifier");
+    }
+    // The stronger parent claim now refuses a pre-existing competing agreement.
+    // This owned AFTER INSERT probe instead creates a real same-request collision
+    // inside the award transaction, after the accepted claim. The losing quote is
+    // temporarily rejected by then; identity validation still makes this duplicate
+    // physically valid. It is deliberate fault injection, not a business workflow.
+    await second.$executeRawUnsafe(`CREATE FUNCTION "${probe}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      INSERT INTO "ServiceAgreement" ("id", "requestId", "bidId", "communityId", "providerUserId", "awardedByUserId", "amountCents", "currency", "pricingBasis", "scope", "lockedHomeCount", "updatedAt")
+      VALUES ('${conflictId}', NEW."requestId", '${fixture.otherBidId}', NEW."communityId", '${fixture.otherProviderId}', NEW."awardedByUserId", NEW."amountCents", NEW."currency", NEW."pricingBasis", 'Owned late uniqueness fault', NEW."lockedHomeCount", NEW."updatedAt");
+      RETURN NEW; END; $$`);
+    try {
+      await second.$executeRawUnsafe(`CREATE TRIGGER "${probe}" AFTER INSERT ON "ServiceAgreement" FOR EACH ROW WHEN (NEW."requestId" = '${fixture.requestId}' AND NEW."bidId" = '${fixture.bidId}') EXECUTE FUNCTION "${probe}"()`);
+      observing = true;
+      await expect(run(first, () => awardBid(fixture.managerId, fixture.requestId, { bidId: fixture.bidId, expectedBidVersion: 1 }))).rejects.toMatchObject({ status: 409 });
+      expect(observed[0]).toEqual({ kind: "accepted-claim", rows: 1 });
+      expect(observed).toContainEqual({ kind: "database-error", code: "23505", table: "ServiceAgreement", constraint: "ServiceAgreement_requestId_key" });
+      console.info("[postgres-proof]", JSON.stringify(observed));
+      expect(await first.hoaServiceRequest.findUniqueOrThrow({ where: { id: fixture.requestId } })).toEqual(requestBefore);
+      expect(await first.serviceBid.findUnique({ where: { id: fixture.bidId } })).toMatchObject({ status: "submitted", version: 1 });
+      expect(await first.serviceBid.findUnique({ where: { id: fixture.otherBidId } })).toMatchObject({ status: "submitted" });
+      expect(await first.serviceAgreement.count({ where: { requestId: fixture.requestId } })).toBe(0);
+      expect(await first.serviceOccurrence.count({ where: { agreement: { requestId: fixture.requestId } } })).toBe(0);
+      expect(await first.serviceVisit.count({ where: { occurrence: { agreement: { requestId: fixture.requestId } } } })).toBe(0);
+      expect(await first.adminAuditLog.count({ where: { communityId: fixture.communityId } })).toBe(0);
+      expect(await first.notification.count({ where: { userId: { in: [fixture.providerId, fixture.otherProviderId] } } })).toBe(0);
+      expect(await first.outboxEvent.count({ where: { dedupeKey: { contains: fixture.requestId } } })).toBe(0);
+    } finally {
+      observing = false;
+      await second.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${probe}" ON "ServiceAgreement"`);
+      await second.$executeRawUnsafe(`DROP FUNCTION IF EXISTS "${probe}"()`);
+    }
   });
   it.each(["revision", "withdrawal"] as const)("rechecks actual elapsed PostgreSQL deadline for a paused %s", async (action) => {
     const barrier = hold((name, args) => name === "first" && args.where?.requestId_providerUserId?.providerUserId === fixture.providerId);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HoaManagerWorkspace } from "@/components/hoa/HoaManagerWorkspace";
 import type { HoaManagerDashboard, HoaRequestSummary } from "@/lib/hoa-types";
@@ -26,6 +26,12 @@ function payload(index = 0): Record<string, unknown> {
 }
 function openButton() { return screen.getByRole("button", { name: /lock participants.*open bidding/i }); }
 function ok() { return { ok: true, json: async () => ({}) }; }
+// JSDOM does not implement native modal opening/closing. This shim supplies
+// those operations only; it does not establish browser focus or inert behavior.
+beforeAll(() => {
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute("open", ""); } });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value: function (this: HTMLDialogElement) { this.removeAttribute("open"); this.dispatchEvent(new Event("close")); } });
+});
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
@@ -125,6 +131,10 @@ describe("HOA manager bidding deadlines", () => {
   ] as const)("keeps %s / %s payload unchanged", async (status, label, action) => {
     render(<HoaManagerWorkspace dashboard={dashboard([request({ status })])} />);
     fireEvent.click(screen.getByRole("button", { name: label }));
+    if (action === "complete" || action === "cancel") {
+      expect(state.fetch).not.toHaveBeenCalled(); expect(state.refresh).not.toHaveBeenCalled();
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: action === "complete" ? "Mark complete" : "Cancel request" }));
+    }
     await waitFor(() => expect(state.fetch).toHaveBeenCalledOnce());
     expect(payload()).toEqual({ action });
   });

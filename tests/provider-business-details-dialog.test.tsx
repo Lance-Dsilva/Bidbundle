@@ -283,13 +283,13 @@ describe("provider business details editor", () => {
   it("keeps an unadded service draft when cancelling and focuses its discard confirmation", () => {
     const { onClose, onSave } = renderDialog();
     const input = screen.getByLabelText("Add a service");
-    fireEvent.change(input, { target: { value: "Drain clearing" } });
+    fireEvent.change(input, { target: { value: "lawn" } });
     input.focus();
     fireEvent.keyDown(document, { key: "Escape" });
     const confirmation = screen.getByRole("alertdialog");
     expect(within(confirmation).getByRole("button", { name: "Keep editing" })).toHaveFocus();
     fireEvent.click(within(confirmation).getByRole("button", { name: "Keep editing" }));
-    expect(input).toHaveValue("Drain clearing");
+    expect(input).toHaveValue("lawn");
     expect(input).toHaveFocus();
     expect(onClose).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
@@ -300,14 +300,14 @@ describe("provider business details editor", () => {
   });
 
   it("refuses to silently drop a thirteenth service typed immediately before Save", async () => {
-    const trades = Array.from({ length: 12 }, (_, index) => `Service ${index + 1}`);
+    const trades = SERVICE_CATEGORIES.slice(0, 12);
     const { onSave } = renderDialog({ provider: { ...PROVIDER, trades } });
     const input = screen.getByLabelText("Add a service");
-    fireEvent.change(input, { target: { value: "One more service" } });
+    fireEvent.change(input, { target: { value: "landscaping" } });
     fireEvent.click(screen.getByRole("button", { name: "Save business details" }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/at most 12 services/i);
-    expect(input).toHaveValue("One more service");
+    expect(input).toHaveValue("landscaping");
   });
 
   it("locks draft and every dismissal path during the actual pending save", async () => {

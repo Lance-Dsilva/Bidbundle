@@ -16,7 +16,10 @@ vi.mock("@/hooks/useProviderMarketplace", () => ({ useProviderMarketplace: () =>
 const edit = vi.hoisted(() => ({ common: {} as CommonProfileUpdate, business: {} as ProviderProfileUpdate }));
 vi.mock("@/components/provider/ProviderBusinessDetailsDialog", () => ({
   ProviderBusinessDetailsDialog: ({ onSave, onClose }: { onSave: (common: CommonProfileUpdate, business: ProviderProfileUpdate) => Promise<boolean>; onClose: () => void }) =>
-    <button onClick={async () => { if (await onSave(edit.common, edit.business)) onClose(); }}>Submit test draft</button>,
+    <>
+      <button onClick={async () => { if (await onSave(edit.common, edit.business)) onClose(); }}>Submit test draft</button>
+      <button onClick={onClose}>Close test editor</button>
+    </>,
 }));
 vi.mock("@/components/provider/ProviderServiceAreaEditor", async (importOriginal) => ({
   ...await importOriginal<object>(), ProviderServiceAreaEditor: () => <div>Coverage editor</div>,
@@ -111,6 +114,33 @@ describe("provider business move and independent work coverage", () => {
     expectNoCoverageWrites();
     fireEvent.click(keep);
     expect(screen.queryByRole("button", { name: /review service areas/i })).not.toBeInTheDocument();
+    expectNoCoverageWrites();
+  });
+  it("does not steal the editor opener focus after keeping coverage and closing a clean editor", async () => {
+    await submit();
+    const keep = await screen.findByRole("button", { name: /keep existing service areas/i });
+    const firstPrompt = keep.closest('[role="status"]')!;
+    expect(firstPrompt).toHaveFocus();
+    fireEvent.click(keep);
+    const keptPrompt = screen.getByText(/Your existing service areas are kept unchanged/i).closest('[role="status"]')!;
+    expect(keptPrompt).toHaveFocus();
+
+    // The real dialog restores the opener on close. This simple fixture leaves
+    // that opener focused so the page's own effect must not override it.
+    const opener = screen.getByRole("button", { name: /edit business details/i });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole("button", { name: "Close test editor" }));
+    expect(opener).toHaveFocus();
+    expect(requests.filter((r) => r.init?.method === "PUT")).toHaveLength(1);
+    expectNoCoverageWrites();
+
+    // A genuinely new location save must still focus its new choice.
+    edit.common = { ...edit.common, address: "2 New Synthetic Way", latitude: 35, longitude: -119 };
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole("button", { name: "Submit test draft" }));
+    const nextKeep = await screen.findByRole("button", { name: /keep existing service areas/i });
+    expect(nextKeep.closest('[role="status"]')).toHaveFocus();
     expectNoCoverageWrites();
   });
   it("review reaches the actual coverage section with focus, without a coverage mutation", async () => {

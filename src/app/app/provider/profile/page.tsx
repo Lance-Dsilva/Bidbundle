@@ -189,8 +189,12 @@ export default function ProviderProfilePage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [coverageChoice, setCoverageChoice] = useState<"needed" | "kept" | null>(null);
   const coveragePromptRef = useRef<HTMLDivElement>(null);
+  const coverageFocusPendingRef = useRef(false);
   useEffect(() => {
-    if (!editing && coverageChoice) coveragePromptRef.current?.focus();
+    if (!editing && coverageChoice && coverageFocusPendingRef.current && coveragePromptRef.current) {
+      coverageFocusPendingRef.current = false;
+      coveragePromptRef.current.focus();
+    }
   }, [editing, coverageChoice]);
 
   // The confirmation is a moment, not a state: it clears itself rather than
@@ -215,7 +219,10 @@ export default function ProviderProfilePage() {
     // same ones a reload would fetch.
     if (saved) {
       setSavedAt(Date.now());
-      if (locationChanged) setCoverageChoice("needed");
+      if (locationChanged) {
+        coverageFocusPendingRef.current = true;
+        setCoverageChoice("needed");
+      }
     }
     return saved;
   }
@@ -340,12 +347,16 @@ export default function ProviderProfilePage() {
             <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">Your existing service areas have not moved. Choose whether to review them or keep your current coverage.</p>
             <div className="mt-3 flex flex-wrap gap-3">
               <button type="button" style={{ ...primaryButtonStyle, minHeight: 44 }} onClick={() => {
+                coverageFocusPendingRef.current = false;
                 setCoverageChoice(null);
                 const section = document.getElementById("service-areas");
                 section?.focus({ preventScroll: true });
                 section?.scrollIntoView({ behavior: "auto", block: "start" });
               }}>Review service areas</button>
-              <button type="button" style={{ ...ghostButtonStyle, minHeight: 44 }} onClick={() => setCoverageChoice("kept")}>Keep existing service areas</button>
+              <button type="button" style={{ ...ghostButtonStyle, minHeight: 44 }} onClick={() => {
+                coverageFocusPendingRef.current = true;
+                setCoverageChoice("kept");
+              }}>Keep existing service areas</button>
             </div>
           </>}
         </div>

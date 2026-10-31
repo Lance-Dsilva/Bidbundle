@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function form() { return screen.getByLabelText("Request title").closest("form")!; }
 function change(label: string | RegExp, value: string) { fireEvent.change(screen.getByLabelText(label), { target: { value } }); }
 function payload(index = 0) { return JSON.parse(state.fetch.mock.calls[index][1].body as string) as Record<string, unknown>; }
-function fillBase() { change("Request title", "Grounds care"); change("Service category", "gardening"); change("Scope shown to residents and providers", "Mow and edge every included lawn."); }
+function fillBase() { change("Request title", "Grounds care"); const category = screen.getByRole("combobox", { name: "Service category" }); fireEvent.change(category, { target: { value: (within(category).getByRole("option", { name: "Landscaping" }) as HTMLOptionElement).value } }); change("Scope shown to residents and providers", "Mow and edge every included lawn."); }
 function fill() { fillBase(); change("Bidding deadline", "2027-02-01T12:00"); }
 function frequency(name: string) { fireEvent.change(screen.getByRole("combobox", { name: /frequency/i }), { target: { value: (screen.getByRole("option", { name }) as HTMLOptionElement).value } }); }
 function kind(value: "compulsory_recurring" | "optional_group") { change("Request type", value); }
@@ -34,7 +34,7 @@ describe("plain HOA request creation", () => {
     await submit();
     expect(state.fetch.mock.calls[0][0]).toBe("/api/hoa/communities/hoa-1/requests");
     expect(state.fetch.mock.calls[0][1]).toMatchObject({ method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" } });
-    expect(payload()).toEqual({ title: "Grounds care", category: "gardening", description: "Mow and edge every included lawn.", kind: "compulsory_recurring", recurrenceLabel: label, recurrenceIntervalDays: days, totalOccurrences: 12, startDate: new Date("2027-02-05").toISOString(), enrollmentClosesAt: null, biddingClosesAt: new Date("2027-02-01T12:00").toISOString(), minHomes: null, publish: true });
+    expect(payload()).toEqual({ title: "Grounds care", category: "landscaping", description: "Mow and edge every included lawn.", kind: "compulsory_recurring", recurrenceLabel: label, recurrenceIntervalDays: days, totalOccurrences: 12, startDate: new Date("2027-02-05").toISOString(), enrollmentClosesAt: null, biddingClosesAt: new Date("2027-02-01T12:00").toISOString(), minHomes: null, publish: true });
     expect(hoaRequestCreateSchema.safeParse(payload()).success).toBe(true);
   });
   it("updates cadence before submission rather than retaining the previous interval", async () => {
@@ -64,11 +64,19 @@ describe("plain HOA request creation", () => {
   it.each(["Request title", "Service category", "Scope shown to residents and providers", "Bidding deadline"])("refuses missing %s before writing", (label) => {
     render(<HoaManagerWorkspace dashboard={dashboard()} />); fill(); change("How many visits", "2"); change(label, ""); fireEvent.submit(form()); expect(state.fetch).not.toHaveBeenCalled();
   });
-  it.each(["Request title", "Service category", "Scope shown to residents and providers"])("rejects whitespace-only %s through the unchanged API validation", (label) => {
+  it.each(["Request title", "Scope shown to residents and providers"])("rejects whitespace-only %s through the unchanged API validation", (label) => {
     render(<HoaManagerWorkspace dashboard={dashboard()} />); fill(); change("How many visits", "2"); change(label, "   ");
     // Native required validation allows whitespace; the existing schema must
     // still reject it before the component sends a request.
     expect(form().checkValidity()).toBe(true); fireEvent.submit(form()); expect(state.fetch).not.toHaveBeenCalled();
+  });
+  it.each(["", "   ", "gardening", "unsupported service"])("refuses an empty or unsupported service selection %j through native validity without writing", (value) => {
+    render(<HoaManagerWorkspace dashboard={dashboard()} />); fill(); change("How many visits", "2");
+    const category = screen.getByRole("combobox", { name: "Service category" });
+    expect(category).toBeRequired(); fireEvent.change(category, { target: { value } });
+    // A native select cannot retain a value outside its canonical options.
+    expect((category as HTMLSelectElement).value).toBe(""); expect(form().checkValidity()).toBe(false);
+    fireEvent.submit(form()); expect(state.fetch).not.toHaveBeenCalled(); expect(state.refresh).not.toHaveBeenCalled();
   });
   it("retains the publish toggle and an explicit optional bidding deadline", async () => {
     render(<HoaManagerWorkspace dashboard={dashboard()} />); kind("optional_group"); fillBase(); change("Enrollment deadline", "2027-01-25T12:00"); change(/Bidding deadline/, "2027-02-02T15:30");
