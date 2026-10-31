@@ -36,8 +36,14 @@ describe("staff-led community interest routing", () => {
     state.auth.mockResolvedValue({ userId: "verified-provider" }); state.profile.mockResolvedValue({ id: "provider", role: "provider" });
     await expect(SignUpPage({ searchParams: Promise.resolve({ role: "homeowner", intent: "other" }) })).rejects.toThrow("REDIRECT:/app/provider/dashboard");
   });
-  it("points every manager homepage CTA to interest while retaining provider signup", () => {
-    render(<HomePage />); const links = screen.getAllByRole("link", { name: /^(Get started|Set up your community)$/, hidden: true }); expect(links).toHaveLength(4); for (const link of links) expect(link).toHaveAttribute("href", "/community-onboarding"); for (const link of screen.getAllByRole("link", { name: /Join as a provider/i })) expect(link).toHaveAttribute("href", "/get-started?role=provider");
+  it("keeps V5 role entries distinct while routing manager interest to staff onboarding", () => {
+    render(<HomePage />);
+    const startLinks = screen.getAllByRole("link", { name: "Get started" });
+    expect(startLinks).toHaveLength(2);
+    for (const link of startLinks) expect(link).toHaveAttribute("href", "#start");
+    expect(screen.getByRole("link", { name: "I’m a homeowner" })).toHaveAttribute("href", "/get-started?role=homeowner");
+    for (const name of ["Get started for my HOA", "I manage an HOA"]) expect(screen.getByRole("link", { name })).toHaveAttribute("href", "/community-onboarding");
+    for (const name of ["Get started as a provider", "I’m a service provider"]) expect(screen.getByRole("link", { name })).toHaveAttribute("href", "/get-started?role=provider");
   });
   it("makes the staff queue discoverable in the customer navigation", () => {
     render(<AdminCrmShell userName="Ops" userEmail="ops@example.invalid" accessLevel="admin" isStaffAccount={false} permissions={[]}>Queue</AdminCrmShell>);
