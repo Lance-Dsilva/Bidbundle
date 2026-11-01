@@ -15,7 +15,7 @@ Accepted scope/contracts: existing HTTPS backend, profile/context/homeowner dash
 ## Evidence
 
 - Source inventory:126 API routes,57 web pages; internal admin explicitly deferred, jobs excluded, AI/support/amenities/notifications inventoried.
-- Flutter3.47.9/Dart3.13.7 pinned; formatter and analyzer pass;33 independent unit/widget/contract/capture tests pass.
+- Flutter3.47.9/Dart3.13.7 pinned; formatter and analyzer pass;41 independent unit/widget/contract/capture tests pass after the bounded native-channel follow-up (8 new behavioral cases; see TEST_RESULTS.md).
 - Android debug APK and iOS unsigned simulator builds pass. Artifact hashes and actual tool versions: TOOLCHAIN.md.
 - iPhone17/iOS26.4 and Android API36 emulator launch-only smoke pass. Both display configuration-required screen without sign-in or backend calls; screenshots under evidence/. Test simulators returned to stopped state.
 - Four fake widget screenshots reviewed, including200% text. They use synthetic data and substitute typography; not live/device product UX evidence.
@@ -29,7 +29,7 @@ Parent Engineering Manager now owns investigation/escalation of the approved non
 
 Once supplied: configure separate environment app identifiers/callbacks; run official SDK sign-in → GET /api/profile → GET /api/me/context → GET /api/homeowner/dashboard → sign-out on both platforms; prove expiry/renewal/revocation, wrong-instance denial, role/community isolation and callbacks. Record actual device screenshots and secure storage/backup behavior. Fix failures before closing gates or starting dependent mutations. Native compile/fake tests cannot substitute.
 
-Next useful independent task: expand deterministic native-channel contract tests for initialization, cancellation, forced-refresh argument forwarding and sign-out failure/retry; use fakes solely for adapter behavior, never live-auth proof. This is mobile-only work with no shared-backend writer required. Final launcher art, brand font fidelity, nested navigation and all other feature rows remain explicit backlog. No mobile scheduler or unattended continuation has been configured; specialists are idle after assigned tasks finish. Recreate ownership from TEAM.md and resume at this checkpoint rather than restarting discovery.
+Completed bounded independent task: eight behavioral tests now exercise the real Dart NativeAuthSession over a fake binary messenger, covering cancellation/error recovery, actual replacement-token retry, failed logout recovery and late native completion after logout. Independent review required sign-in vs sign-up dispatch assertions; these were tightened. Existing tests already cover initialization failure/retry and late HTTP responses, so they were not duplicated. These are adapter/state tests, never SDK/runtime/live-auth proof. The concrete staging checklist is in ENVIRONMENTS.md. Next dependency is parent Engineering confirmation of safe staging and agreed identifiers; do not start repeated unchanged wait/report loops. Final launcher art, brand font fidelity, nested navigation and all other feature rows remain explicit backlog. No mobile scheduler or unattended continuation has been configured; specialists are idle after assigned tasks finish. Recreate ownership from TEAM.md and resume at this checkpoint rather than restarting discovery.
 
 ## Coordination handoff
 
@@ -37,4 +37,4 @@ First point of contact: **Engineering team**, chat `01a174fd-bf0c-7973-a93a-1319
 
 Staging request transferred: isolated HTTPS API plus database/limiter/storage, matching Clerk development publishable configuration, approved Native API/registered app IDs and callbacks, enabled auth methods, safe homeowner/incomplete-profile/verified-and-unverified-provider/manager-A/resident/community-B identities and test-only revocation/demotion capability. Provisional callbacks are `com.bundleen.bundleen://callback` (iOS) and `clerk://com.bundleen.bundleen.callback` (Android); final environment IDs must be agreed before registration. Secrets remain in approved secure configuration.
 
-This routing/CI reconciliation is a documentation-only local checkpoint; PR's verified application head remains d9fc53a until the next coordinated push. No app, test, native build or server behavior changed in this checkpoint.
+Coordination commit 1bed1f0 is included with the reviewed tests/checklist follow-up on the next scoped push. Application/native/server source is unchanged. CI evidence above is explicitly for the previous PR head; the exact resulting-head run and outcome are recorded in the PR handoff after push. Do not infer a new-head CI pass from the earlier run.

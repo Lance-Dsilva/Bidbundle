@@ -50,3 +50,22 @@ Local Dart/widget prerequisite checks pass. Phase2 live authenticated slice gate
 After the report above, performed a limited real simulator launch on a previously **Shutdown** iPhone17 (`CEF9288A-AAED-41D2-9070-32CC401AA6BC`), runtime iOS26.4 (26.4.1 build23E254a). No already-running user simulator was altered. Installed the compiled `Runner.app`, then `xcrun simctl launch … com.bundleen.bundleen` returned process47230 successfully. Captured and visually inspected `docs/mobile/evidence/ios-no-config-runtime.png` (1206×2622): Bundleen displays “This build needs a configured environment before sign-in is available.” The app was then terminated and this simulator shut down successfully.
 
 Commands used: `xcrun simctl boot <udid>`, `bootstatus <udid> -b`, `install <udid> apps/mobile/build/ios/iphonesimulator/Runner.app`, `launch <udid> com.bundleen.bundleen`, and `io <udid> screenshot <absolute-evidence-path>`. The initial relative screenshot destination failed; retry with the absolute path succeeded. This is actual **unconfigured-runtime** evidence, distinct from widget fixtures. No environment defines, credentials, backend requests, sign-in or dashboard integration were supplied or exercised. It does not close the live authenticated-slice gate.
+
+## Native-channel behavioral regression iteration
+
+Added `apps/mobile/test/native_auth_contract_test.dart` independently of application implementation: **8 additional tests**, bringing the combined suite to **41** (29 application/transport cases +4 widget captures +8 native-channel cases). Full `flutter test` passed41; `flutter analyze` found no issues; formatter reported clean. Following independent review, tightened the sign-in/sign-up cases to require the exact user-selected native mode on cancellation **and** recovery, and verified initialization forwards the expected public publishable configuration. Re-ran the affected file:8 passed, analyzer clean, formatter applied. No application code changed in this iteration.
+
+The new cases exercise the real Dart `NativeAuthSession` against the mocked binary messenger, through API/model observable behavior:
+
+1. Sign-in cancellation leaves the view signed out without HTTP requests; retry loads the account.
+2. Sign-up cancellation and retry preserve sign-up intent and recover.
+3. Native error differs from cancellation, does not leak provider details, and permits retry.
+4. API401 forces token renewal, sends the replacement bearer token and succeeds.
+5. A rejected replacement bearer token ends after exactly two requests.
+6. Failed native sign-out clears sensitive state, blocks new authentication and recovers after sign-out retry.
+7. A late successful native sign-in cannot restore the view after sign-out.
+8. A late native initialization result cannot restore the session after sign-out.
+
+Commands from `apps/mobile`: `dart format test/native_auth_contract_test.dart`, `flutter analyze`, `flutter test test/native_auth_contract_test.dart`; the earlier complete iteration used `flutter test`. All used `/private/tmp/bundleen-flutter-toolchain/bin/` executables. Tests use synthetic tokens and local HTTP fakes. They verify Dart channel integration and observable state, **not** native Clerk SDK behavior, OS token storage, browser callbacks, actual device auth, session revocation or live backend acceptance. Those runtime/live gates remain open.
+
+Manager verification after the mode/config correction: formatter clean, analyzer no issues, full41 tests passed. Reviewer then requested an explicit getToken dispatch assertion alongside replacement-token outcome checks; added it and reran the affected8 tests successfully with formatting clean. No source behavior changed. Resulting-head remote CI evidence is maintained in draft PR42 after the scoped push.
