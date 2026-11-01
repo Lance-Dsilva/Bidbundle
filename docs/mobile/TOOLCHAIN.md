@@ -67,3 +67,24 @@ Manager subsequently authorized temporary SDK installation. Executed `git clone 
 Created `apps/mobile` using the pinned Flutter SDK, with iOS and Android platforms and provisional `com.bundleen.bundleen` identifiers. Resolved exact `http: 1.6.0` and `flutter_lints: 6.0.0`; committed-intent lockfile generated with `flutter pub get` (not yet Git committed). Flutter template selected AGP9.1.0 and Gradle9.3.1; platform integration owner now owns compatibility adjustments. iOS deployment target set17; Android min24/compile36/JVM17. JDK21 chosen for CI, superseding the earlier tentative JDK17 proposal. Local JDK21 still not installed. Native files handed to authentication engineer before compilation.
 
 Added `.github/workflows/mobile.yml`: mobile path filter, immutable action revisions, exact Flutter revision, Linux/JDK21 Android debug compile and macOS26 iOS simulator compile, with formatter/analyzer/tests and lock enforcement. Workflow has not run. No emulator, device or application build pass is implied.
+
+## Verified native build checkpoint — supersedes earlier unrun statuses
+
+On 2026-11-01 native authentication integration compiled successfully using the pinned temporary Flutter3.47.9/Dart3.13.7 installation. Android used the existing **Oracle JDK23.0.2** locally (not JDK21); Gradle9.3.1, AGP9.1.0, app Kotlin declaration2.4.21, JVM target17, minSdk24/compileSdk36, official Clerk Android1.3.0 and direct kotlinx-coroutines-android1.11.0. CI still proposes JDK21 and has not executed, so its compatibility is not claimed.
+
+`flutter build apk --debug` passed in227.4s after Gradle installed NDK28.2.13676358, Android platform36 revision2 and CMake3.22.1 using existing SDK license records. No license acceptance command was invoked. Final incremental rebuild after bridge/dependency edits passed in3.0s. Android cmdline-tools remain absent; they were not needed for this successful Gradle build.
+
+`flutter build ios --simulator --debug --no-codesign` passed initially49.3s and after retry/forceRefresh changes11.4s with Xcode26.4.1/Swift6.3.1, iOS deployment17 and ClerkKit1.6.2. Both SwiftPM Package.resolved files should be retained. These are debug/simulator artifacts, not signed beta/release packages.
+
+SHA-256 of verified artifacts at this checkpoint:
+
+- `apps/mobile/build/app/outputs/flutter-apk/app-debug.apk`: `798668dbea060160ec521d692c105dba982aafe518f13be6880128ac657c9356`
+- `apps/mobile/build/ios/iphonesimulator/Runner.app/Runner`: `61621c392b5a5e95acea896ec8c984eaca491bcd9fb49b9ef30e209708b166bd`
+
+Android packaged merged manifest confirms `allowBackup=false`, credential cloud/transfer backup-rule references, `usesCleartextTraffic=false`, disabled Clerk shared-session provider and the SDK callback receiver. Live sign-in, Bearer authorization, session persistence/renewal and device security remain unverified. Runtime smoke evidence is tracked separately; a configuration-only screen cannot satisfy authentication parity.
+
+## Android runtime smoke
+
+Started previously shutdown `Medium_Phone_API_36.0` AVD with emulator35.5.10.0, Android36 arm64 system image; `adb devices` initially showed no connected devices. First install ran before package service was ready and failed; waited for `sys.boot_completed=1`, then `adb install -r` succeeded. `am start -W -n com.bundleen.bundleen/.MainActivity` returned `Status: ok`, COLD launch, TotalTime6372ms on first emulator boot. This startup duration is not a representative performance benchmark. App process remained running and filtered AndroidRuntime/flutter error output was empty at the check.
+
+Inspected actual screenshot `docs/mobile/evidence/android-unconfigured.png`: Bundleen configuration-required screen rendered in cream/green with readable centered text and no clipping at default scale. This proves only installation/launch/no-config handling. No Clerk session, API call, role data, accessibility sweep or authenticated journey was exercised. Test-created emulator was shut down after capture; no pre-existing running device was touched.

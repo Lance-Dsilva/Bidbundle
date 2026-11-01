@@ -44,3 +44,9 @@ Reporter ran `/private/tmp/bundleen-flutter-toolchain/bin/flutter build ios --si
 ## Gate decision evidence
 
 Local Dart/widget prerequisite checks pass. Phase2 live authenticated slice gate remains open: test/staging credentials and approved identities, actual sign-in/sign-up/renewal/sign-out/deep-link behavior, live server-backed context/read, and iOS/Android runtime isolation must still be demonstrated. CI workflow exists but this local report does not claim a remote CI pass, release artifact/signature, store readiness or product parity.
+
+## Additional actual iOS runtime smoke
+
+After the report above, performed a limited real simulator launch on a previously **Shutdown** iPhone17 (`CEF9288A-AAED-41D2-9070-32CC401AA6BC`), runtime iOS26.4 (26.4.1 build23E254a). No already-running user simulator was altered. Installed the compiled `Runner.app`, then `xcrun simctl launch … com.bundleen.bundleen` returned process47230 successfully. Captured and visually inspected `docs/mobile/evidence/ios-no-config-runtime.png` (1206×2622): Bundleen displays “This build needs a configured environment before sign-in is available.” The app was then terminated and this simulator shut down successfully.
+
+Commands used: `xcrun simctl boot <udid>`, `bootstatus <udid> -b`, `install <udid> apps/mobile/build/ios/iphonesimulator/Runner.app`, `launch <udid> com.bundleen.bundleen`, and `io <udid> screenshot <absolute-evidence-path>`. The initial relative screenshot destination failed; retry with the absolute path succeeded. This is actual **unconfigured-runtime** evidence, distinct from widget fixtures. No environment defines, credentials, backend requests, sign-in or dashboard integration were supplied or exercised. It does not close the live authenticated-slice gate.
