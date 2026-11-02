@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R04 and local R05 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R05 and local R06 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -18,7 +18,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | Provider | earnings | provider/marketplace/earnings | Real recorded data only; do not imply payment processing beyond backend |
 | Provider | messages | provider/inbox + thread/messages/read | Same participant rows as customer; isolation tests |
 | Provider | reviews | provider/ratings | Server-backed ratings/reviews, honest empty state |
-| Provider | profile/business/verification/service areas | profile/provider; provider/service-areas and marketplace/service-areas; profile/avatar | Onboarding and editable allowed fields, document/status restrictions; map/permission-denial UX |
+| Provider | profile/business/verification/service areas | profile/provider; provider/service-areas and marketplace/service-areas; profile/avatar | R06 local saved Service areas summary independently reviewed/300tests; no maps/edits. Onboarding, business/verification and coverage editing remain PLANNED, with document/status and permission handling |
 | Authorized HOA manager | dashboard/community management | me/managed-communities; hoa/communities/id/units/invitations/requests/surveys | Scoped manager assignments, units/invitations, requests/surveys; delegated roles checked server-side |
 | Authorized HOA manager | requests/bids/awards/close | hoa/requests/id, bids, award; hoa/occurrences/id/close | Preserve live service lifecycle and manager/provider authority; missing participant address errors |
 | HOA resident/manager | agreement and visit reviews | hoa/agreements/id/review; hoa/visits/id/review | Eligible participants only, exact server review rules |

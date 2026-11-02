@@ -164,7 +164,13 @@ void main() {
           throwsA(failure(FailureKind.invalidResponse)),
         );
       }
-      expect(Dashboard.fromJson(dashboard()).savedCents, 1250);
+      for (final payload in [
+        dashboard()..remove('total_saved_cents'),
+        {...dashboard(), 'total_saved_cents': 'unusable'},
+      ]) {
+        expect(Dashboard.fromJson(payload).activeRequests, 2);
+        expect(Dashboard.fromJson(payload).activeBids, 3);
+      }
     });
     for (final change in [
       {'userId': 'u2'},

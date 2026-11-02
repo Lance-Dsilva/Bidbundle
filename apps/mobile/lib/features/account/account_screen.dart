@@ -1,3 +1,5 @@
+import '../service_areas/service_areas_screen.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -75,6 +77,13 @@ class AccountScreen extends StatelessWidget {
                 child: const Text('Recent notifications'),
               ),
               const SizedBox(height: 12),
+              if (model.serviceAreasAvailable) ...[
+                OutlinedButton(
+                  onPressed: model.openServiceAreas,
+                  child: const Text('Service areas'),
+                ),
+                const SizedBox(height: 12),
+              ],
               if (model.supportAvailable) ...[
                 OutlinedButton(
                   onPressed: model.openSupport,
@@ -188,8 +197,15 @@ class AccountNavigator extends StatelessWidget {
     }
 
     return NavigatorPopHandler<void>(
-      enabled: model.showingNotifications || model.showingSupport,
+      enabled:
+          model.showingNotifications ||
+          model.showingSupport ||
+          model.showingServiceAreas,
       onPopWithResult: (_) {
+        if (model.showingServiceAreas) {
+          model.closeServiceAreas();
+          return;
+        }
         if (model.showingSupport) {
           if (model.support?.selectedId != null) {
             model.support!.closeDetail();
@@ -217,6 +233,11 @@ class AccountNavigator extends StatelessWidget {
                 child: SupportScreen(model: model.support!, detailView: true),
               ),
           ],
+          if (model.showingServiceAreas && model.serviceAreas != null)
+            page(
+              key: const ValueKey('service-areas'),
+              child: ServiceAreasScreen(model: model.serviceAreas!),
+            ),
           if (model.showingNotifications)
             page(
               key: const ValueKey('notifications'),
@@ -224,6 +245,10 @@ class AccountNavigator extends StatelessWidget {
             ),
         ],
         onDidRemovePage: (removed) {
+          if (model.showingServiceAreas &&
+              removed.key == const ValueKey('service-areas')) {
+            model.closeServiceAreas();
+          }
           if (model.showingSupport) {
             if (removed.key == const ValueKey('support-list')) {
               model.closeSupport();

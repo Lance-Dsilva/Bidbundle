@@ -29,10 +29,9 @@ class Dashboard {
   Dashboard.fromJson(Map<String, dynamic> json)
     : coldStart = field<bool>(json, 'cold_start'),
       activeRequests = _count(json, 'active_requests'),
-      activeBids = _count(json, 'active_bids'),
-      savedCents = _count(json, 'total_saved_cents');
+      activeBids = _count(json, 'active_bids');
   final bool coldStart;
-  final int activeRequests, activeBids, savedCents;
+  final int activeRequests, activeBids;
   static int _count(Map<String, dynamic> json, String key) {
     final value = field<int>(json, key);
     if (value < 0) throw const ApiFailure(FailureKind.invalidResponse);

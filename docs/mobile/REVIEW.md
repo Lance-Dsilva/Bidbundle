@@ -173,3 +173,18 @@ Independent security source review agreed with the bounded Opportunities project
 Added one Home→Requests widget regression using nonzero amounts: savings/lowest-bid amounts stay hidden while the USD budget remains visible. Final post-correction full suite **253 passed**, analyzer clean, formatter37files/zero changes. Regenerated all captures and copied updated Home and Requests evidence; inspected Home dashboard and Requests list to confirm the monetary change. No backend arithmetic or API behavior changed. R05 budgets remain intentionally outside its approved slice.
 
 R05 final capture maintenance: refreshed provider fixtures for the new Opportunities navigation tab. Legacy Home capture harness now loads SDK MaterialIcons, replacing missing-glyph boxes; this is a fixture correction only. Post-fix full253tests, analyzer and formatting remain clean.
+
+
+## R06 independent Service areas review — 2026-11-01
+
+Reviewed the canonical lazy provider Account→Service areas read against the R06 appendix. No request occurs on Home initialization or Account open; only matched providers can enter the summary. It uses GET /api/provider/service-areas without a per-ID route, marketplace fetch, mutation, map or geolocation call. The retained DTO omits exact coordinates, formatted address and unused geocoded metadata. Saved labels and postal codes are plain text; UI explicitly distinguishes saved coverage from activation, credentials and bidding access.
+
+Nullable legacy radius remains absent; finite1..100 bounds, active status, canonical dates and required types fail closed. More than10 otherwise valid rows are retained, and no primary is synthesized. Empty success is not a missing-provider/onboarding or eligibility error. Read failures and unchanged1MiB transport rejection preserve Account; refresh clears old rows immediately; owner/close/generation fences discard stale replies. Global401/failed renewal clears session models and routes. No blocking source or UX finding.
+
+Updated older parser tests confirm missing/malformed unused total_saved_cents and bestBidCents no longer affect the used projections. Source declarations/parsing are removed; explicitUSD budget validation and existing monetary-display absence regression still pass. This is minimal retained-data cleanup, not a backend semantic change.
+
+Independent final evidence: **43 coverage cases and four captures added; full suite300 passed**, analyzer clean, formatter42files/zero changes. Widgets exercise the actual Service areas button at200%, plain label/private-data omission, back, iOS edge swipe, signout route removal and rapid Coverage→Support→Notifications→Coverage changes. Four inspected captures show coarse/legacy/empty states and scrollable large text without blocking overlap.
+
+Accepted for the bounded local read-only draft, subject to resulting-head CI/native builds. Source/mock evidence does not establish actual provider ownership isolation, live SDK session/storage/callback correctness, production font/device accessibility or screen-reader behavior. Existing live gates remain open; no server changes or external calls performed.
+
+Independent source-security audit also found no actionable R06 issue: canonical lazy provider read, no invented provider-profile/status authority, coarse-only retained projection, no10-row cap/maps/permissions/mutations, sibling-route clearing and owner/generation/global401/dispose fences. Monetary aggregate declarations are absent while fixed-USD budgets remain. This is bounded source acceptance only; live isolation is still unverified.

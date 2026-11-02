@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: R05 provider Opportunities preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: R06 read-only provider Service areas preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -9,6 +9,7 @@ Snapshot: R05 provider Opportunities preparation, 2026-11-01. No percentage is a
 | Homeowner Home | Profile/context identity matching; active request/bid counts from existing GETs; savings display withheld pending currency-aware contract | Source-contract/fixture tests; live data unverified |
 | Homeowner Requests | Own-request list, source status/category/budget/bid/date fields, empty/error/retry/refresh; up to100 server rows | Synthetic contract/widget/screenshots only until staging |
 | Neighborhood request detail | Separate authorized GET, description/counts/deadlines; platform routes/back; denial never uses list fallback | iOS gesture/scroll/session-race simulations, not native authenticated proof |
+| Provider Service areas | Saved active coverage labels, primary flag, coarse locality, radius/postal coverage and dates; no maps/edits/eligibility inference | R06 independent review/300tests passed; resulting-head CI pending |
 | Provider Opportunities | Server-eligible feed with inline description/details; limited candidate catalogue, no bid actions or private awarded-work fields | R05 local review/253tests passed; resulting-head native CI pending |
 | Provider Home | Server account status, active bids, active/completed agreements, nullable published rating and decided-bid win rate | R03 independent review,153 tests and exact-head native CI passed; money/trends and inbox deferred |
 | Support | Server-authorized recent tickets and customer-visible conversations, native list/detail routes | R04 local review/200tests and exact-head Android/iOS CI passed; long unpaginated threads may exceed1MiB; no writes/attachments/links |
@@ -36,3 +37,5 @@ R02 is checkpointed at d22b291 with106 local tests and independent review; its e
 R04 reviewed local implementation: customer Support list/detail source contracts prove read-only GETs and server-scoped own/managed-community visibility. Native presentation excludes internal notes/AI draft data, requester emails, staff assignments and unfiltered message counts. Replies are plain text; no actions, attachments or links. Existing1MiB transport limit can reject very long unpaginated conversations; compatible pagination remains separate backend work. Independent code/security/fixture UX review passed;200 full-suite tests, formatter and analyzer passed. Resulting-head native CI remains required.
 
 R05 reviewed local implementation: provider Opportunities uses the server-eligible current feed with inline detail and no direct-ID endpoint, bidding or other mutations. Shared workspace private awarded-work fields are discarded; the existing1MiB cap remains. Request budgets have an explicitUSD source contract; this first feed omits them by scope. Earlier Home savings and lowest-bid monetary displays are now withheld because their summaries lose currency information. This is a contract limitation, not an observed production incident. Independent source/security/fixtureUX review and253 full-suite tests passed; formatter/analyzer clean. Resulting-head native CI remains required.
+
+R06 reviewed locally:300 full-suite tests, formatter/analyzer and independent code/security/fixtureUX review passed. Service areas use the dedicated owner-scoped GET and drop exact coordinates/addresses. Unused savings/best-bid fields are removed from mobile DTOs; retained USD budgets remain validated. Native resulting-head CI remains required.

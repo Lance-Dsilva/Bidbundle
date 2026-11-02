@@ -42,7 +42,6 @@ class RequestSummary {
       communityName = requestText(json, 'communityName'),
       budgetMinCents = requestMoney(json, 'budgetMinCents'),
       budgetMaxCents = requestMoney(json, 'budgetMaxCents'),
-      bestBidCents = requestMoney(json, 'bestBidCents'),
       bidCount = requestCount(json, 'bidCount'),
       createdAt = requestDate(json, 'createdAt', nullable: false)!,
       enrollmentClosesAt = requestDate(json, 'enrollmentClosesAt') {
@@ -51,7 +50,7 @@ class RequestSummary {
     }
   }
   final String id, title, categoryLabel, status, context, communityName;
-  final int? budgetMinCents, budgetMaxCents, bestBidCents;
+  final int? budgetMinCents, budgetMaxCents;
   final int bidCount;
   final DateTime createdAt;
   final DateTime? enrollmentClosesAt;

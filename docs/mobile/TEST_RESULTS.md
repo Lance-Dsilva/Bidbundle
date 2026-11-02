@@ -117,3 +117,12 @@ Four inspected screenshots copied to evidence/opportunities with synthetic prove
 R05 final checkpoint also includes one additional Home→Requests monetary-display regression after source review found missing currency authority for savings/lowest bid. Both displays were removed; explicitUSD request budgets remain visible. Final post-correction total **253 passed**, analyzer clean, formatter37files/zero changes. Home and Requests screenshots regenerated, inspected and refreshed. This records a contract-gap correction, not a production-data incident; no server change was made.
 
 R05 final capture maintenance: refreshed provider fixtures for the new Opportunities navigation tab. Legacy Home capture harness now loads SDK MaterialIcons, replacing missing-glyph boxes; this is a fixture correction only. Post-fix full253tests, analyzer and formatting remain clean.
+
+
+## R06 local independent verification — 2026-11-01
+
+Added43 coverage tests plus4 synthetic captures; updated existing Home/Requests parser assertions for ignored unused monetary extras while retained USD budgets remain strict. Final complete flutter test: **300 passed**. flutter analyze: **No issues found**. Final formatter: **42 files, zero changes**.
+
+Coverage includes lazy provider-only canonicalGET, required/null/type fields, radius boundaries/nonfinite rejection, legacy postal-only data, strict active status/date,12rows without truncation or primary invention,403/409/500 retry, empty state,1MiB rejection preserving Account, refresh/late owner/close clearing,401failed-renewal global expiry,200% actualbutton flow, privatefield absence/plaintext, platformback/iOSgesture/signout and rapid Account-child route switching. Affected105-test run and final fullsuite both passed; no application fix was needed by this reviewer.
+
+Four inspected screenshots copied to evidence/coverage with synthetic provenance. No native build/live API/provider isolation verification by reviewer; resulting-head CI is required independently of historical R05 proof. Exact address/geometry still travels in authorized network responses before projection, bounded by the existing transport limit.

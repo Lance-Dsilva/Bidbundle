@@ -588,8 +588,14 @@ void main() {
     },
   );
   test('invalid amount and normalized date are rejected; unknown status is inert text', () {
+    for (final payload in [
+      summary()..remove('bestBidCents'),
+      {...summary(), 'bestBidCents': 'unusable'},
+    ]) {
+      expect(RequestSummary.fromJson(payload).budgetMaxCents, 12345);
+    }
     expect(
-      () => RequestSummary.fromJson({...summary(), 'bestBidCents': 1.5}),
+      () => RequestSummary.fromJson({...summary(), 'budgetMaxCents': 1.5}),
       throwsA(base.failure(FailureKind.invalidResponse)),
     );
     expect(

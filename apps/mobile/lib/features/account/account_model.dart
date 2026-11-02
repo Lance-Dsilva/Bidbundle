@@ -1,3 +1,5 @@
+import '../service_areas/service_areas_model.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/api.dart';
@@ -7,7 +9,38 @@ import '../support/support_model.dart';
 enum AccountStatus { idle, loading, ready, failed }
 
 class AccountModel extends ChangeNotifier {
-  AccountModel(this.repository, {required this.onSessionExpired, this.support});
+  AccountModel(
+    this.repository, {
+    required this.onSessionExpired,
+    this.support,
+    this.serviceAreas,
+  });
+  final ServiceAreasModel? serviceAreas;
+  bool showingServiceAreas = false;
+  bool get serviceAreasAvailable => serviceAreas != null && _role == 'provider';
+  Future<void> openServiceAreas() async {
+    if (!serviceAreasAvailable ||
+        _owner == null ||
+        profile == null ||
+        profileStatus != AccountStatus.ready ||
+        _disposed) {
+      return;
+    }
+    closeNotifications();
+    closeSupport();
+    showingServiceAreas = true;
+    _emit();
+    if (serviceAreas!.status == ServiceAreasStatus.idle) {
+      await serviceAreas!.load();
+    }
+  }
+
+  void closeServiceAreas() {
+    showingServiceAreas = false;
+    serviceAreas?.close();
+    _emit();
+  }
+
   final SupportModel? support;
   bool showingSupport = false;
   bool get supportAvailable => support != null;
@@ -20,6 +53,7 @@ class AccountModel extends ChangeNotifier {
       return;
     }
     closeNotifications();
+    closeServiceAreas();
     showingSupport = true;
     _emit();
     if (support!.listStatus == SupportStatus.idle) await support!.loadList();
@@ -53,10 +87,13 @@ class AccountModel extends ChangeNotifier {
       _owner = id;
       _role = role;
       support?.setOwner(id);
+      serviceAreas?.setOwner(role == 'provider' ? id : null);
     }
   }
 
   void clear() {
+    showingServiceAreas = false;
+    serviceAreas?.clear();
     showingSupport = false;
     support?.clear();
     _owner = null;
@@ -93,6 +130,7 @@ class AccountModel extends ChangeNotifier {
       return;
     }
     final generation = ++_profileGeneration;
+    closeServiceAreas();
     closeNotifications();
     closeSupport();
     _notificationsGeneration++;
@@ -128,6 +166,7 @@ class AccountModel extends ChangeNotifier {
       return;
     }
     closeSupport();
+    closeServiceAreas();
     showingNotifications = true;
     _emit();
     if (notificationsStatus == AccountStatus.idle) await loadNotifications();

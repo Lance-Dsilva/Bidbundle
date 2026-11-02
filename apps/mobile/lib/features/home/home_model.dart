@@ -1,3 +1,5 @@
+import '../service_areas/models.dart';
+import '../service_areas/service_areas_model.dart';
 import '../opportunities/models.dart';
 import '../opportunities/opportunities_model.dart';
 
@@ -28,6 +30,7 @@ class HomeModel extends ChangeNotifier {
     AccountRepository? accountRepository,
     ProviderRepository? providerRepository,
     SupportRepository? supportRepository,
+    ServiceAreasRepository? serviceAreasRepository,
     OpportunitiesRepository? opportunitiesRepository,
   }) {
     opportunities = OpportunitiesModel(
@@ -42,10 +45,15 @@ class HomeModel extends ChangeNotifier {
       supportRepository ?? SupportRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
+    serviceAreas = ServiceAreasModel(
+      serviceAreasRepository ?? ServiceAreasRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
     account = AccountModel(
       accountRepository ?? AccountRepository(repository.api),
       onSessionExpired: _sessionExpired,
       support: support,
+      serviceAreas: serviceAreas,
     );
     provider = ProviderModel(
       providerRepository ?? ProviderRepository(repository.api),
@@ -60,6 +68,7 @@ class HomeModel extends ChangeNotifier {
     showAccount = false;
     account.closeNotifications();
     account.closeSupport();
+    account.closeServiceAreas();
     showRequests = false;
     requests.closeDetail();
     showOpportunities = true;
@@ -74,6 +83,8 @@ class HomeModel extends ChangeNotifier {
     opportunities.close();
   }
 
+  late final ServiceAreasModel serviceAreas;
+  bool get canViewServiceAreas => canViewProvider;
   late final SupportModel support;
   bool get canViewSupport => canViewAccount;
   late final ProviderModel provider;
@@ -112,6 +123,7 @@ class HomeModel extends ChangeNotifier {
     showAccount = false;
     account.closeNotifications();
     account.closeSupport();
+    account.closeServiceAreas();
     showRequests = true;
     _emit();
     if (requests.listStatus == RequestStatus.idle) await requests.loadList();
@@ -122,6 +134,7 @@ class HomeModel extends ChangeNotifier {
     showAccount = false;
     account.closeNotifications();
     account.closeSupport();
+    account.closeServiceAreas();
     showRequests = false;
     requests.closeDetail();
     _emit();
@@ -298,6 +311,7 @@ class HomeModel extends ChangeNotifier {
     account.dispose();
     provider.dispose();
     support.dispose();
+    serviceAreas.dispose();
     opportunities.dispose();
     super.dispose();
   }
