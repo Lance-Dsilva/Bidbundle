@@ -11,7 +11,11 @@ import 'support/fixture_harness.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   WidgetController.hitTestWarningShouldBeFatal = true;
-  for (final scale in [1.0, 2.0]) {
+  const selectedScale = int.fromEnvironment('N04_TEXT_SCALE', defaultValue: 1);
+  if (selectedScale != 1 && selectedScale != 2) {
+    throw StateError('N04_TEXT_SCALE must be 1 or 2');
+  }
+  for (final scale in [selectedScale.toDouble()]) {
     testWidgets('external native navigation homeowner ${scale}x', (
       tester,
     ) async {
@@ -110,21 +114,27 @@ void main() {
         await binding.takeScreenshot(
           'synthetic-navigation-${scale.toInt()}x-signed-out',
         );
-        debugPrint(
-          'N04_READY homeowner ${scale.toInt()}x signed-out-back ${Platform.isAndroid ? 'ANDROID_KEYCODE_BACK' : 'IOS_EDGE_SWIPE_NO_ROUTE'}',
-        );
-        final until = DateTime.now().add(const Duration(seconds: 30));
-        while (DateTime.now().isBefore(until)) {
-          await tester.pump(const Duration(milliseconds: 100));
-        }
         expect(model.data, isNull);
         expect(model.signedIn, isFalse);
         expect(model.inbox.detail, isNull);
         expect(model.requests.detail, isNull);
         expect(model.account.profile, isNull);
+        expect(fixture.auth.active, isFalse);
         expect(fixture.violations, isEmpty);
         debugPrint(
-          'N04_OBSERVED homeowner ${scale.toInt()}x private-state-still-cleared; external delivery requires reviewer evidence',
+          'N04_ASSERTIONS_COMPLETE homeowner ${scale.toInt()}x routes-scale-semantics-guards-logout-cleared',
+        );
+        debugPrint(
+          'N04_TERMINAL_READY homeowner ${scale.toInt()}x signed-out-back ${Platform.isAndroid ? 'ANDROID_KEYCODE_BACK' : 'IOS_EDGE_SWIPE_NO_ROUTE'}; OS outcome recorded independently',
+        );
+        // Normal Android Activity finish can terminate this Dart engine/driver.
+        // No assertion after this marker is evidence of post-termination state.
+        final until = DateTime.now().add(const Duration(seconds: 90));
+        while (DateTime.now().isBefore(until)) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        debugPrint(
+          'N04_TERMINAL_WINDOW_ENDED; no external delivery or OS outcome inferred',
         );
       } finally {
         try {
