@@ -37,11 +37,11 @@ reviewer's explicit fresh device, and `N04_OUTPUT` a new task-local directory:
 ```sh
 "$FLUTTER" build ios --config-only --simulator --debug --flavor development --target integration_test/xcui_navigation_test.dart
 xcodebuild build-for-testing -workspace ios/Runner.xcworkspace -scheme n04-ui -configuration Debug-development -destination "platform=iOS Simulator,id=$N04_UDID" -destination-timeout 30 -derivedDataPath "$N04_OUTPUT/DerivedData" CODE_SIGNING_ALLOWED=NO FLUTTER_TARGET=integration_test/xcui_navigation_test.dart
-xcodebuild test-without-building -workspace ios/Runner.xcworkspace -scheme n04-ui -configuration Debug-development -destination "platform=iOS Simulator,id=$N04_UDID" -destination-timeout 30 -derivedDataPath "$N04_OUTPUT/DerivedData" -resultBundlePath "$N04_OUTPUT/Result.xcresult" -parallel-testing-enabled NO -test-iterations 1 -test-timeouts-enabled YES -default-test-execution-time-allowance 150 -maximum-test-execution-time-allowance 180 CODE_SIGNING_ALLOWED=NO
+xcodebuild test-without-building -workspace ios/Runner.xcworkspace -scheme n04-ui -configuration Debug-development -destination "platform=iOS Simulator,id=$N04_UDID" -destination-timeout 30 -derivedDataPath "$N04_OUTPUT/DerivedData" -resultBundlePath "$N04_OUTPUT/Result.xcresult" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 150 -maximum-test-execution-time-allowance 180 CODE_SIGNING_ALLOWED=NO
 ```
 
 Before execution inspect the generated `.xctestrun` for the intended UI-test
-bundle and fixture Runner.app. The test runner is the only launch owner. Repetition, retry, relaunch and recovery are prohibited; stop on first failure. Use a
+bundle and fixture Runner.app. The test runner is the only launch owner. Omitting iteration/retry options uses the default single execution. Repetition, retry, relaunch and recovery are prohibited; stop on first failure. Installed Xcode rejects `-test-iterations 1`, so do not add that option. Use a
 host-owned bounded process deadline (build 10 minutes, test 4 minutes); terminate
 only that owned subprocess on timeout and fail, without recovery. Preserve the
 result bundle's `synthetic-n04-100-ready` and `synthetic-n04-100-observed`
