@@ -1,10 +1,10 @@
 # Mobile product progress
 
-Snapshot: R09 read-only Inbox preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: N01 nonproduction native build isolation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
-| Startup | Invalid/missing config fails closed with a usable explanation | Actual Android/iOS unconfigured launch captured at foundation |
+| Startup | Invalid/missing config fails closed with a usable explanation | Development/staging side-by-side unconfigured launches captured on fresh Android/iOS devices |
 | Sign in / create account | Official native Clerk hosted flow bridges, cancellation/error retry, session renewal/sign-out handling | Native compile + mocked-channel tests; real auth unverified |
 | Homeowner Home | Profile/context identity matching; active request/bid counts from existing GETs; savings display withheld pending currency-aware contract | Source-contract/fixture tests; live data unverified |
 | Homeowner Requests | Own-request list, source status/category/budget/bid/date fields, empty/error/retry/refresh; up to100 server rows | Synthetic contract/widget/screenshots only until staging |
@@ -29,7 +29,7 @@ Snapshot: R09 read-only Inbox preparation, 2026-11-01. No percentage is assigned
 - Authorized HOA-manager and resident workflows: communities, invitations/units, requests/awards/surveys, amenities/bookings/issues/reviews.
 - Profile editing, notification actions and destination routing, device push, messaging and support. Account details and recent notification reading are implemented locally; independent local R02 review passed; resulting-head native CI is pending.
 - AI assistant/history/memory interfaces. Internal administration is explicitly excluded from the public app; server jobs remain server-only.
-- Environment-specific native IDs/flavors, final brand assets/fonts, complete accessibility/performance/offline hardening, real-device journeys, release signing and beta/store handoff.
+- Confirmed external native registrations, final brand assets/fonts, complete accessibility/performance/offline hardening, real-device journeys, release signing and beta/store handoff.
 
 ## Current gate and next slice
 
@@ -50,3 +50,7 @@ R08 reviewed locally:391 full-suite tests, clean formatter/analyzer and independ
 R09 reviewed locally:441 full-suite tests, clean formatter/analyzer and independent code/security/fixture UX acceptance. Inbox uses trusted role-specific customer/provider reads and strict thread/message binding. No send, mark-read, identity lookup or links. Five captures reviewed; current Account captures refreshed. Live participant isolation and combined-head native CI remain separate.
 
 Next priority after the Inbox checkpoint: usable native test-build prerequisites, per parent Engineering. Assess environment-specific identities/callback binding, local assets/fonts and native fixture UI/navigation/accessibility evidence without live accounts; choose one bounded implementation slice. R10 quote source discovery is backlog only, not an implementation commitment. Provisional identifiers remain unconfirmed and no external registration/settings change is authorized.
+
+N01 independently reviewed locally: 467 full-suite tests, clean formatter/analyzer, eight compiled startup scenarios and four native development/staging builds passed. Provisional application IDs and labels coexist on fresh task-owned Android/iOS devices; screenshots and effective metadata are in evidence/native-isolation. Devices were cleaned up. No-config entrypoints fail closed before auth/network construction. SDK source audit records flavor-derived callbacks and private storage defaults; real cross-flavor session persistence remains unverified. Resulting-head four-job CI and engineering artifact upload remain pending.
+
+Prior checkpoint R09 commit 8ffca3595b44ad635dddc28fef9a1745c087c3ee passed exact-head CI41371209164 (macOS125041867425, Ubuntu125041867587), including both native builds. This does not certify the new N01 configuration.

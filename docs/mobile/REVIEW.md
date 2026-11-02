@@ -230,3 +230,14 @@ Final independent results: **45 Inbox cases + five captures added; full441 tests
 Accepted for this bounded local read-only draft, subject to resulting-head CI/native builds. Actual session/storage/callback behavior, live participant isolation, read-state nonmutation and device/screen-reader accessibility remain unrun; no release/live gate advances.
 
 Independent source-security audit likewise found no actionable R09 issue in trusted role paths, listed-ID/response binding, bounded minimal plain projection, participant read source, no mutations, stale owner/role/generation fencing and global401/local failures. This source acceptance is not live privacy or receipt-state proof.
+
+
+## N01 independent native build isolation review — 2026-11-01
+
+Accepted for the bounded engineering build-isolation slice. Independent review found one concrete build blocker: Android flavor resValue labels required buildFeatures.resValues=true. Author corrected it, and all four development/staging Android/iOS simulator builds subsequently passed. Packaged suffix IDs and display names match; Android callback hosts/shared-session authorities are suffix-specific, shared-session provider disabled and backup/cleartext protections retained. iOS simulator metadata has suffix IDs and no added URL entitlement/registration or distribution signing.
+
+26 independent configuration cases plus eight compiled-flavor runs verify accidental mismatch rejection before auth/network construction. Full467 tests pass, analyzer clean and formatter58files/zero changes. CI matrix/artifact retention, empty credential/origin templates and absence of production flavor were inspected. No fixture entrypoint or fake responses were added to application builds.
+
+Real fresh-device evidence now confirms both variants coexist and render no-config screens on Android API36 and iOS26.4.1; six inspected captures and effective metadata are in evidence/native-isolation. Android first boot caused a system-process ANR/slow install; after Wait and cold relaunch, both final app screens rendered correctly. Android launcher truncates the long staging label visually but preserves its full accessible name; distinct Dev/St labels remain identifiable. Starter icons are intentionally unchanged. Both task-created devices were stopped and removed; existing device data was untouched.
+
+Independent security source review found no additional actionable regression. This acceptance does not prove live callback registration, backend/Clerk environment isolation, token persistence, secure-storage isolation, late callback after logout, authenticated navigation or screen-reader/device accessibility. No live/release gate advances; resulting-head CI is still required. See evidence/native-isolation/README.md for exact build/runtime limits.

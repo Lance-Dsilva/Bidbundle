@@ -128,3 +128,13 @@ Security reviewer independently ran both authored-by-test-reviewer regressions w
 - `initial token network error does not falsely expire existing account`
 
 The second test also checks that detail data is cleared during the failure, private error detail is not displayed, and retry can recover. R01 has no remaining actionable finding from this bounded security source review. This closes only R01-S1's source/unit evidence; it does not establish live SDK expiry, middleware Bearer acceptance, cross-account/community isolation or platform runtime auth.
+
+## N01 flavor callback and storage source audit
+
+Development/staging identifiers are provisional suffixed variants; current expected returns are listed in ENVIRONMENTS.md. The entry point rejects unsupported/mismatched appFlavor/environment and missing HTTPS/test-key configuration before auth/network construction. This is accidental configuration protection, not tamper resistance or proof of backend/Clerk pairing. No external registration or Native API setting changed.
+
+Pinned iOS Clerk1.6.2 revision7ca663a635d552082b30c31024611b6c6065ecc3: ClerkOptions defaults the Keychain service to Bundle.main.bundleIdentifier, keychain accessGroup to nil, and the callback to {bundleIdentifier}://callback. DependencyContainer uses the app-local store when no group is configured; SystemKeychain defaults AfterFirstUnlockThisDeviceOnly. The app sets no shared keychain group, and flavor settings introduce no sharing entitlements.
+
+Pinned Android Clerk1.3.0: applicationId derives from context.packageName; callback/OAuth receivers and shared-sync authority derive from that ID. The shared-sync provider is disabled (enabled=false), with grantUriPermissions=false. Storage uses MODE_PRIVATE clerk_preferences and AndroidKeyStore-backed AES/GCM with no plaintext fallback. App allowBackup=false and cloud/device-transfer preference exclusions remain unchanged; no sharedUserId is introduced.
+
+Effective artifact/manifest and fresh-device no-config checks are recorded separately by the independent reviewer. Source defaults support distinct app-scoped storage expectations; they do not measure real Clerk session persistence, cross-flavor token isolation or unsigned-simulator Keychain behavior. Late hosted-auth callback after logout and subsequent resume remains a required live/native acceptance case. No auth gate closes from build success or no-config launch.

@@ -153,3 +153,12 @@ Added45 Inbox cases plus5 synthetic captures. Final complete flutter test: **441
 Coverage includes exact role mapping/lazyGET, encodedlistedID/detailquery50/0,100list/50message uniqueness bounds, requiredfields/canonicaldates/nullpreview, thread/message binding, untrustedrole rejection, onlyGET/no read/send calls,403/404/409/500 nofallback retry,1MiB/timeout errors preservingAccount, refreshreplacement and stale owner/role/close/old401/globalexpiry, actual200%button/scrollreset/back, iOSedge/reopen and allAccountchild clearing. Five captures inspected/copied to evidence/inbox. No appsource correction needed.
 
 Mock tests do not establish live cross-participant privacy or actual receipt nonmutation; those require staging evidence. No server/live/nativebuild performed by reviewer; resulting-head CI remains separate from historical R08 proof.
+
+
+## N01 local independent verification — 2026-11-01
+
+Added26 flavor/config cases. Full flutter test: **467 passed**; flutter analyze: **No issues found**; formatter: **58 files, zero changes**. Eight compiled --flavor scenarios separately passed26 cases each, exercising accepted factory configurations and rejected real main startup with zero native-auth calls/HttpClient creation. Production/missing/mismatch inputs fail closed.
+
+After author resolved disabled Android resValues, debug builds passed: Android development11.9s/staging12.8s; iOS simulator development36.0s/staging89.4s. Effective suffix IDs/labels and Android callback/shared-session/backup metadata inspected. Both variants installed side by side and rendered no-config UI on fresh task-owned Android API36 and iOS26.4.1 devices. Six final screenshots inspected. Android initial system-process first-boot delay recovered after Wait and cold relaunch; no performance claim. Devices stopped/deleted afterward without touching existing device state.
+
+Evidence and limitations: evidence/native-isolation/README.md. No live Clerk/API credentials, callbacks, authenticated UI, secure-storage isolation or physical-device accessibility tested. No production flavor/registration/signing/backend changes. Native simulator linker ad hoc signatures are not release signing. Resulting-head CI remains outstanding, separate from prior Inbox CI.

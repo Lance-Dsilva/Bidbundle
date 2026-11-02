@@ -16,6 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-26]
+        flavor: [development, staging]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     defaults:
@@ -39,9 +40,24 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
       - run: flutter test
+      - name: Verify compiled flavor configuration boundaries
+        if: runner.os == 'Linux' && matrix.flavor == 'development'
+        run: bash tool/verify_flavor_config.sh
       - name: Android debug compile
         if: runner.os == 'Linux'
-        run: flutter build apk --debug
+        run: flutter build apk --debug --flavor ${{ matrix.flavor }}
       - name: iOS simulator compile
         if: runner.os == 'macOS'
-        run: flutter build ios --simulator --debug --no-codesign
+        run: flutter build ios --simulator --debug --no-codesign --flavor ${{ matrix.flavor }}
+      - name: Package unsigned simulator application
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app build/ios/simulator-${{ matrix.flavor }}.zip
+      - name: Retain unconfigured engineering artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mobile-unconfigured-${{ runner.os }}-${{ matrix.flavor }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            apps/mobile/build/app/outputs/flutter-apk/app-${{ matrix.flavor }}-debug.apk
+            apps/mobile/build/ios/simulator-${{ matrix.flavor }}.zip

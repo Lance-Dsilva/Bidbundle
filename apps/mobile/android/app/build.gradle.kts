@@ -29,6 +29,24 @@ android {
         versionName = flutter.versionName
     }
 
+    buildFeatures {
+        resValues = true
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            applicationIdSuffix = ".development"
+            resValue("string", "app_name", "Bundleen Dev")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            resValue("string", "app_name", "Bundleen Staging")
+        }
+    }
+
     buildTypes {
         release {
             // Distribution signing is intentionally not configured.

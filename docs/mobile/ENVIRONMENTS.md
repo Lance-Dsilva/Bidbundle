@@ -8,7 +8,14 @@ No configured test backend or Clerk development instance was supplied during thi
 | staging | owner-supplied HTTPS staging backend | matching development instance | safe role/negative-test identities | missing |
 | production | existing Bundleen backend, confirm release origin | production instance | no test submissions | not authorized for deployment/distribution |
 
-The current scaffold uses provisional `com.bundleen.bundleen` for both platform identifiers. Before side-by-side environment installation/distribution, add distinct reviewed bundle/application IDs and registered callbacks per flavor. Do not switch environments over a persisted SDK session as a substitute for proper isolation. Current launch configuration validates environment name, HTTPS origin without userinfo/path/query/fragment, and test/live publishable-key prefix. This does not cryptographically prove origin/Clerk pairing; the server must validate issuer/session and staging setup must verify the pairing.
+N01 implements supported `development` and `staging` native flavors; all identifiers remain provisional pending owner confirmation. The base `com.bundleen.bundleen` is preserved as a provisional legacy configuration, with no supported production flavor. The real entry point requires Flutter appFlavor to match BUNDLEEN_ENV and accepts only nonproduction test keys plus a valid HTTPS origin. Empty public templates intentionally cannot connect. Use explicit --flavor build/run commands from apps/mobile/README.md.
+
+| Flavor | Provisional bundle/application ID | iOS SDK return | Android SDK return |
+| --- | --- | --- | --- |
+| development | com.bundleen.bundleen.development | com.bundleen.bundleen.development://callback | clerk://com.bundleen.bundleen.development.callback |
+| staging | com.bundleen.bundleen.staging | com.bundleen.bundleen.staging://callback | clerk://com.bundleen.bundleen.staging.callback |
+
+These are expected SDK-derived return identifiers, not registered/approved external callbacks. No Native API/account settings changed. Separate install IDs and configuration validation reduce build mistakes; they do not prove distinct backend/Clerk/database resources or measured token/keychain isolation. Do not switch environments over a persisted session as a substitute for approved isolation. Parent must still confirm origin/issuer pairing and all external resources.
 
 Owner inputs needed through secure local/CI configuration:
 
@@ -46,7 +53,7 @@ The profile/context/dashboard GET slice has no direct limiter requirement. Befor
 | Authorized manager community A | Live assignments and scoped read success; role string alone gives no authority |
 | Ordinary resident/request owner without manager grant | Manager-only award/management denied; test writes only in separately approved disposable fixture plan |
 | Unrelated identity/community B | A's protected resources not exposed; record actual contract-appropriate403/404 |
-| Expired/revoked/wrong-instance sessions | Fail closed; bounded renewal for expiry, no renewal after revocation, wrong issuer rejected |
+| Expired/revoked/wrong-instance sessions | Fail closed; bounded renewal for expiry, revoked sessions must not yield a usable renewed token, wrong issuer rejected |
 | Test-only role/grant removal | Next resource authorization reflects removal; performed only by assigned authorized test administrator |
 
 Create synthetic identities/fixtures only after environment approval and authorized owner assignment. Do not create credentials or change security settings through this checklist automatically.
@@ -58,12 +65,12 @@ Exactly three current Dart defines are supported:
 ```json
 {
   "BUNDLEEN_ENV": "staging",
-  "BUNDLEEN_API_ORIGIN": "https://APPROVED-STAGING-ORIGIN.invalid",
-  "CLERK_PUBLISHABLE_KEY": "pk_test_REPLACE_WITH_MATCHING_PUBLIC_CONFIGURATION"
+  "BUNDLEEN_API_ORIGIN": "",
+  "CLERK_PUBLISHABLE_KEY": ""
 }
 ```
 
-This is a nonworking template, not an approved destination/key. Origin must be HTTPS with no credentials, query, fragment or path other than `/`. Use an owner-approved public-config file outside tracked source. No production fallback is permitted. Native IDs are currently compiled as `com.bundleen.bundleen` on both platforms, with iOS callback `com.bundleen.bundleen://callback` and Android callback `clerk://com.bundleen.bundleen.callback`. These identifiers are provisional; there are no implemented environment flavors or runtime ID defines. Agree distinct development/staging/production identifiers with the parent before registering callbacks or side-by-side installation; update native configuration and rebuild as a reviewed mobile change. Do not merely pass unsupported ID defines or change environments over an existing persisted session.
+This empty template cannot connect and supplies no approved destination/key. Fill only an owner-approved public-config file outside tracked source. Origin must be HTTPS with no credentials, query, fragment or path other than `/`. Select the matching development/staging flavor explicitly; native IDs and SDK-derived callbacks are listed in the provisional matrix above. There are no runtime ID defines or production fallback. Owner confirmation and external callback registration remain outstanding. Do not switch an existing persisted session to another environment as a substitute for approved isolation.
 
 ### Optional services for this read-only slice
 
@@ -81,8 +88,11 @@ flutter pub get --enforce-lockfile
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
-flutter build apk --debug
-flutter build ios --simulator --debug --no-codesign
+bash tool/verify_flavor_config.sh
+flutter build apk --debug --flavor development
+flutter build apk --debug --flavor staging
+flutter build ios --simulator --debug --no-codesign --flavor development
+flutter build ios --simulator --debug --no-codesign --flavor staging
 flutter devices
 ```
 
@@ -91,7 +101,7 @@ Only after parent confirms isolated staging and the account owner confirms requi
 ```sh
 # Set BUNDLEEN_MOBILE_CONFIG to an absolute path outside tracked source.
 # Set BUNDLEEN_TEST_DEVICE to the intended simulator/emulator identifier.
-flutter run -d "$BUNDLEEN_TEST_DEVICE" --dart-define-from-file="$BUNDLEEN_MOBILE_CONFIG"
+flutter run --flavor staging -d "$BUNDLEEN_TEST_DEVICE" --dart-define-from-file="$BUNDLEEN_MOBILE_CONFIG"
 ```
 
 Do not put auth credentials in those variables. Enter authorized test identity credentials through the system-browser Clerk flow. API probes requiring tokens must use a reviewed redacted harness; no curl commands with bearer values in shell history. Existing root `npm run build` runs migrations and is not a local compile command.
