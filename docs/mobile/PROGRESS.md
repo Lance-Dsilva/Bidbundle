@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: R02 read-only Account and Recent notifications preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: R03 read-only provider overview preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -9,6 +9,7 @@ Snapshot: R02 read-only Account and Recent notifications preparation, 2026-11-01
 | Homeowner Home | Profile/context identity matching; active requests/bids and recorded savings from existing GETs | Source-contract/fixture tests; live data unverified |
 | Homeowner Requests | Own-request list, source status/category/budget/bid/date fields, empty/error/retry/refresh; up to100 server rows | Synthetic contract/widget/screenshots only until staging |
 | Neighborhood request detail | Separate authorized GET, description/counts/deadlines; platform routes/back; denial never uses list fallback | iOS gesture/scroll/session-race simulations, not native authenticated proof |
+| Provider Home | Server account status, active bids, active/completed agreements, nullable published rating and decided-bid win rate | R03 independent local review and153-test suite passed; resulting-head native CI pending; money/trends and inbox deferred |
 | Account | Own profile, email verification, nullable contact fields and membership date for homeowner/provider/HOA staff | Independent fixture/source review passed; live data unverified |
 | Recent notifications | Latest30 server records with read/unread state, text, refresh and native back; links inert | R02 source implementation; no mark-read, dismissal, push or complete-history claim |
 | Session isolation in UI | Sign-out/expiry/role/account refresh clears list/detail/navigation; late replies rejected | Deterministic tests, including failed renewal after401; runtime storage/resume still open |
@@ -28,4 +29,4 @@ Snapshot: R02 read-only Account and Recent notifications preparation, 2026-11-01
 
 Draft PR42 holds the reviewed foundation and read-only preparation. Real Phase1/2 auth gates and all business-write/release gates remain open. Parent Engineering is the first contact for safe staging; its Vercel dashboard access needs the human's manual sign-in before resource verification can continue. A READY Preview and environment-variable target metadata are not proof of isolated services or matching Clerk configuration.
 
-Current independent slice: R02 Account and Recent notifications is implemented and independently reviewed locally; resulting-head native CI is pending. Dates now include the year and explicit timezone offset. No write endpoints are introduced. Next eligible candidate is the provider overview, subject to source-contract review and a bounded acceptance scope. This remains presentation/contract preparation while live access is unresolved.
+R02 is checkpointed at d22b291 with106 local tests and independent review; its exact-head native CI result is recorded in the PR handoff. R03 provider overview passed independent local review and153 tests; resulting-head native CI is pending. Provider-console errors preserve personal Account access; session expiry clears all private views. Revenue/trends are deferred because the contract can aggregate differing currency strings and caps period rows without completeness metadata. This is a source limitation, not evidence of mixed production data or incorrect customer totals. Parent owns any separate backend contract work. Live access remains unresolved.

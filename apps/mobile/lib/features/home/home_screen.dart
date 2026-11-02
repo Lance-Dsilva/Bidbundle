@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'home_model.dart';
 import '../requests/requests_screen.dart';
 import '../account/account_screen.dart';
+import '../provider/provider_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.model});
@@ -40,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       widget.model,
       widget.model.requests,
       widget.model.account,
+      widget.model.provider,
     ]),
     builder: (context, _) {
       final model = widget.model;
@@ -118,20 +120,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 : ListView(
                     padding: const EdgeInsets.all(24),
                     children: [
-                      Text(
-                        model.signedIn
-                            ? 'Your neighborhood, together.'
-                            : 'Home services, with your neighbors.',
-                        style: Theme.of(context).textTheme.headlineLarge
-                            ?.copyWith(
-                              fontFamily:
-                                  Theme.of(context).platform ==
-                                      TargetPlatform.iOS
-                                  ? 'Georgia'
-                                  : 'serif',
-                            ),
-                      ),
-                      const SizedBox(height: 16),
+                      if (!model.canViewProvider)
+                        Text(
+                          model.signedIn
+                              ? 'Your neighborhood, together.'
+                              : 'Home services, with your neighbors.',
+                          style: Theme.of(context).textTheme.headlineLarge
+                              ?.copyWith(
+                                fontFamily:
+                                    Theme.of(context).platform ==
+                                        TargetPlatform.iOS
+                                    ? 'Georgia'
+                                    : 'serif',
+                              ),
+                        ),
+                      if (!model.canViewProvider) const SizedBox(height: 16),
                       if (!model.signedIn)
                         const Text(
                           'Sign in to see your Bundleen account and current requests.',
@@ -200,7 +203,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           const Text(
                             'Based on your recorded requests and agreements. Discounts are not guaranteed.',
                           ),
-                        ] else
+                        ] else if (model.canViewProvider)
+                          ProviderScreen(
+                            model: model.provider,
+                            fallbackName: data.profile.name,
+                          )
+                        else
                           Text(
                             model.canViewAccount
                                 ? 'This preview provides your account and recent notifications. Other workflows are not yet available here.'

@@ -128,3 +128,16 @@ Visually inspected four Account fixtures and regenerated Requests list/large-tex
 **Accepted as an independently reviewed local read-only draft slice**, subject to resulting-head CI/native build checks. Live authenticated iOS/Android behavior, native SDK session/storage/callback-after-logout handling, cross-user isolation, VoiceOver/TalkBack, and complete production font/device accessibility remain unrun. This review does not pass the live staging or release gates.
 
 Independent security reviewer also found no actionable R02 source issue: matched ID/role, generation fences, global clearing, GET-only transport, inert paths/plain Text, no avatar/coordinate fetch, and email-only verification. This security acceptance is source-scoped; native session/storage and live isolation gates remain open.
+
+
+## R03 independent provider Home review — 2026-11-01
+
+Reviewed the strict rendered overview subset, provider child state, Home integration and role gates against the R03 API appendix. Required nullable keys are distinguished from missing fields; unknown status, negative/unsafe counts, fractional/out-of-range win rate and nonfinite/out-of-range rating fail closed. Pending, active and suspended remain read states. Company fallback uses the already matched profile name. Metrics retain agreement/count semantics; money, trends, unread totals and inbox previews are excluded, with no mutation affordance or verification claim.
+
+The child failure state preserves personal Account after 403/409/500 or malformed success. Role and identity are established before provider GET; other roles make no provider call and providers make no homeowner calls. Owner/generation fencing discards late signout/role-switch/owner-switch results. A 401 followed by failed native renewal clears global Home/Account/provider state. No actionable security or correctness finding remains in the reviewed source.
+
+UX review requested removal of the inherited generic Home hero from provider Home because it pushed useful data below the viewport and split a long heading at 200%. Author applied the provider-only refinement; regenerated captures now begin with matched identity and provider overview. Five synthetic captures inspected, including the scrolled null-rate/rating state: honest absence labels, zero published reviews, clear denial/retry and usable persistent Account navigation. At 200%, content wraps and scrolls without blocking overlap.
+
+Final independent verification: **42 provider tests + five provider capture cases; full suite 153 passed**, analyzer clean, formatter 27 files/zero changes. Accepted for this bounded read-only draft slice, subject to resulting-head CI/native builds. These are source and mocked widget results only; actual provider identity isolation, live authorization/session renewal, device SDK storage/resume/callback behavior, and VoiceOver/TalkBack remain open. No live gate or financial/messaging parity is passed by this review.
+
+R03 security source audit: auth/security specialist found no actionable issue in matched-role call isolation, child error preservation of Account access,401 global clearing, owner/generation fencing or plain status presentation. No mutation/authority is derived from status. This is source-only acceptance of the local R03 slice, not live or earlier-head CI proof.

@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01 and local R02 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01, R02 and local R03 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -12,7 +12,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | Homeowner/resident | neighbourhood, community | homeowner/neighbourhood; HOA requests, join, surveys/vote | Coverage, membership, community requests/participation/surveys; no resident manager rights |
 | Homeowner | chat | homeowner/inbox + thread/messages/read | Participant-only conversations, unread, send/retry/empty states |
 | Homeowner | profile/preferences/avatar | profile, profile/homeowner, profile/avatar | Address/coverage/preferences/upload; no mutable role or verification |
-| Provider | dashboard | provider/overview; provider/marketplace | Read server eligibility/account state and active work |
+| Provider | dashboard | provider/overview; provider/marketplace | R03 local: status/activity counts, nullable published rating and decided-bid win rate. Independent local review passed; resulting-head CI pending. Money/trends and inbox deferred; marketplace/eligibility remain PLANNED. |
 | Provider | job-feed, bids, hoa | provider/marketplace; requests/id/bid | Eligible mixed HOA/neighborhood feed, bid submit/update according to service; verification and coverage restrictions |
 | Provider | schedule | provider/marketplace; occurrences/id/plan; visits/id/status | Assigned agreements/visits/day plans and valid lifecycle updates |
 | Provider | earnings | provider/marketplace/earnings | Real recorded data only; do not imply payment processing beyond backend |

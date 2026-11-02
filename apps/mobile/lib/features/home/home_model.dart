@@ -9,6 +9,8 @@ import '../requests/models.dart';
 import '../requests/requests_model.dart';
 import '../account/models.dart';
 import '../account/account_model.dart';
+import '../provider/models.dart';
+import '../provider/provider_model.dart';
 
 enum HomeStatus { starting, signedOut, loading, ready, failed }
 
@@ -19,6 +21,7 @@ class HomeModel extends ChangeNotifier {
     this.repository, {
     RequestsRepository? requestsRepository,
     AccountRepository? accountRepository,
+    ProviderRepository? providerRepository,
   }) {
     requests = RequestsModel(
       requestsRepository ?? RequestsRepository(repository.api),
@@ -28,7 +31,16 @@ class HomeModel extends ChangeNotifier {
       accountRepository ?? AccountRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
+    provider = ProviderModel(
+      providerRepository ?? ProviderRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
   }
+  late final ProviderModel provider;
+  bool get canViewProvider =>
+      signedIn &&
+      data?.context.role == 'provider' &&
+      data?.profile.id == data?.context.userId;
   late final RequestsModel requests;
   late final AccountModel account;
   bool showAccount = false;
@@ -71,6 +83,7 @@ class HomeModel extends ChangeNotifier {
   }
 
   void _clearPrivateState() {
+    provider.clear();
     showAccount = false;
     account.clear();
     showRequests = false;
@@ -185,8 +198,13 @@ class HomeModel extends ChangeNotifier {
         loaded.context.role == 'homeowner' ? loaded.profile.id : null,
       );
       account.setOwner(loaded.profile.id, loaded.context.role);
+      provider.setOwner(
+        loaded.context.role == 'provider' ? loaded.profile.id : null,
+      );
       status = HomeStatus.ready;
       _emit();
+      // Local provider failures preserve matched identity and Account access.
+      if (loaded.context.role == 'provider') await provider.load();
     } on ApiFailure catch (error) {
       if (!_current(generation)) return;
       if (error.kind == FailureKind.unauthenticated) signedIn = false;
@@ -228,6 +246,7 @@ class HomeModel extends ChangeNotifier {
     _generation++;
     requests.dispose();
     account.dispose();
+    provider.dispose();
     super.dispose();
   }
 }

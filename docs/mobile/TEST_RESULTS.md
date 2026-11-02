@@ -86,3 +86,12 @@ Four final fixture screenshots are in evidence/requests; README identifies fake 
 - Covered ID/role binding, public-role navigation, nullable/strict dates, GET-only behavior, 303/403/500 retry, profile errors, notification 401 and forced-renewal failure clearing global state, owner/navigation late responses, 30-row preservation, inert arbitrary links/plain text, native-style back/iOS edge swipe and signout route removal, 200% text flow, and year+UTC-offset shared dates.
 - Initial widget failures were test assumptions about lazily built offscreen fields and `.first` on an absent finder; test harness corrected without app changes.
 - Inspected four Account captures and refreshed Requests list/large-text captures. Evidence is synthetic with fake auth, MockClient and substituted fonts; no live API, device, native authentication, or screen-reader proof. Resulting-head CI/build evidence must be recorded separately after push; no earlier-head run proves R02.
+
+
+## R03 local independent verification — 2026-11-01
+
+Added 42 cases in provider_test.dart and five synthetic scenarios in evidence/provider_screenshots_test.dart. Final complete flutter test: **153 passed**. flutter analyze: **No issues found**. dart format --output=none --set-exit-if-changed lib test: **27 files, zero changes**.
+
+Coverage includes all required rendered fields, nullable versus zero values, three statuses/unknown rejection, numeric boundaries/NaN/infinity, exact GET/envelope/no identity query, all-role endpoint isolation, 403/409/framework500/malformed retry with Account retained, forced-renewal401 global clearing, late signout/owner/role changes, and 200% navigation. Five inspected captures are stored in evidence/provider with fixture-only provenance. Initial lint was corrected in test code; no failing application regression was observed. The reviewer requested a provider-only generic-hero removal for readability; final run and captures include that source change.
+
+No live API or native build was run for R03 by this reviewer. Resulting-head CI/build and authenticated device/isolation evidence remain separate requirements; prior R02 proof is unchanged and does not verify R03.
