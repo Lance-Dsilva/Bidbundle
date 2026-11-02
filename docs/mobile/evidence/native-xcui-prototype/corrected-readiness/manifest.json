@@ -1,0 +1,56 @@
+{
+  "source": "01bacee5bf0ecb87d1a503bd04f0a83c9dd17f3d",
+  "result": "Dart ready; native marker absent; zero gesture",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "69c1c5ec09ecb3e9a77f6857cd5e7105bee7c02d5f3b3fca1bbc8266e113ffd8",
+      "bytes": 4375
+    },
+    {
+      "path": "build-command-result.json",
+      "sha256": "40168ea85517fbeb4444d52de6d351c5315e6808246c8b2e42be757b017f0f86",
+      "bytes": 563
+    },
+    {
+      "path": "dart-milestones.txt",
+      "sha256": "8f6dc9037e47304da30778c0534380ae8a852cb66fbb4f9ef979db5e61d69637",
+      "bytes": 801
+    },
+    {
+      "path": "native-readiness-diagnostic.txt",
+      "sha256": "c8a9dd44aee4361c4826caf66dd0bac42a667b5ba22c3dc39223d3b566cf2b1f",
+      "bytes": 692
+    },
+    {
+      "path": "synthetic-visible-ready.png",
+      "sha256": "dd3034e7a814df6260b781b697a0ffecfe3c94965e00e44cb5400e03b6e05cbc",
+      "bytes": 265733
+    },
+    {
+      "path": "synthetic-xctest-failure.png",
+      "sha256": "96d0057dcae822a047d4cc4df33c11cd18e64dd2e8afe0e14cbb17b3f2ea82c8",
+      "bytes": 234716
+    },
+    {
+      "path": "test-command-result.json",
+      "sha256": "d5da2ec9f1b6f8fa39ef0ed2f6d51bc977791eb8c7e13c578b18f6537c90d744",
+      "bytes": 791
+    },
+    {
+      "path": "xcresult-activities.json",
+      "sha256": "831390aa4f9721be81b07d1c2db74b4561db713fabbcb2a2d49ed1bd64249e9a",
+      "bytes": 15966
+    },
+    {
+      "path": "xcresult-tests.json",
+      "sha256": "f2653a93fcd6bd60b41425cfae4a661542c259f7e6dccf728be98df9b0a589ad",
+      "bytes": 1987
+    },
+    {
+      "path": "xctestrun-summary.json",
+      "sha256": "25885e07b293a937284d580917d984f10e74a4e392c100daadf58f0a6bb5686f",
+      "bytes": 441
+    }
+  ]
+}
