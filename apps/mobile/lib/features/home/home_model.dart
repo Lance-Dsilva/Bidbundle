@@ -11,6 +11,8 @@ import '../account/models.dart';
 import '../account/account_model.dart';
 import '../provider/models.dart';
 import '../provider/provider_model.dart';
+import '../support/models.dart';
+import '../support/support_model.dart';
 
 enum HomeStatus { starting, signedOut, loading, ready, failed }
 
@@ -22,20 +24,28 @@ class HomeModel extends ChangeNotifier {
     RequestsRepository? requestsRepository,
     AccountRepository? accountRepository,
     ProviderRepository? providerRepository,
+    SupportRepository? supportRepository,
   }) {
     requests = RequestsModel(
       requestsRepository ?? RequestsRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
+    support = SupportModel(
+      supportRepository ?? SupportRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
     account = AccountModel(
       accountRepository ?? AccountRepository(repository.api),
       onSessionExpired: _sessionExpired,
+      support: support,
     );
     provider = ProviderModel(
       providerRepository ?? ProviderRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
   }
+  late final SupportModel support;
+  bool get canViewSupport => canViewAccount;
   late final ProviderModel provider;
   bool get canViewProvider =>
       signedIn &&
@@ -69,6 +79,7 @@ class HomeModel extends ChangeNotifier {
     if (!canViewRequests) return;
     showAccount = false;
     account.closeNotifications();
+    account.closeSupport();
     showRequests = true;
     _emit();
     if (requests.listStatus == RequestStatus.idle) await requests.loadList();
@@ -77,6 +88,7 @@ class HomeModel extends ChangeNotifier {
   void showHome() {
     showAccount = false;
     account.closeNotifications();
+    account.closeSupport();
     showRequests = false;
     requests.closeDetail();
     _emit();
@@ -247,6 +259,7 @@ class HomeModel extends ChangeNotifier {
     requests.dispose();
     account.dispose();
     provider.dispose();
+    support.dispose();
     super.dispose();
   }
 }

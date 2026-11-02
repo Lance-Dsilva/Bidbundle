@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01, R02 and local R03 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R03 and local R04 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -12,7 +12,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | Homeowner/resident | neighbourhood, community | homeowner/neighbourhood; HOA requests, join, surveys/vote | Coverage, membership, community requests/participation/surveys; no resident manager rights |
 | Homeowner | chat | homeowner/inbox + thread/messages/read | Participant-only conversations, unread, send/retry/empty states |
 | Homeowner | profile/preferences/avatar | profile, profile/homeowner, profile/avatar | Address/coverage/preferences/upload; no mutable role or verification |
-| Provider | dashboard | provider/overview; provider/marketplace | R03 local: status/activity counts, nullable published rating and decided-bid win rate. Independent local review passed; resulting-head CI pending. Money/trends and inbox deferred; marketplace/eligibility remain PLANNED. |
+| Provider | dashboard | provider/overview; provider/marketplace | R03 local: status/activity counts, nullable published rating and decided-bid win rate. Independent local review and exact-head native CI passed. Money/trends and inbox deferred; marketplace/eligibility remain PLANNED. |
 | Provider | job-feed, bids, hoa | provider/marketplace; requests/id/bid | Eligible mixed HOA/neighborhood feed, bid submit/update according to service; verification and coverage restrictions |
 | Provider | schedule | provider/marketplace; occurrences/id/plan; visits/id/status | Assigned agreements/visits/day plans and valid lifecycle updates |
 | Provider | earnings | provider/marketplace/earnings | Real recorded data only; do not imply payment processing beyond backend |
@@ -27,7 +27,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | HOA resident | amenity reviews/issues/photos/messages | id/reviews; reviews/id/photos; id/issues; issues/id/photos/messages; media/id | Upload permission/failure, ownership, reporting, review edit per API |
 | Authorized HOA manager | amenities operations | amenities/manager; id/status; id/closures; booking/decision; issues/id; reviews/id/moderate/response; amenities/broadcast | Scoped operations, closures, decisions, moderation, responses/broadcast; not public admin powers |
 | Supported customer roles | account / in-app notifications | profile; me/notifications + notificationId | R02 local: own account details and recent notification list with server read state; independent local review passed, resulting-head CI pending. Editing, mark-read/dismissal and native destination mapping remain PLANNED; NOT device push |
-| All supported customer roles | support list/ticket/messages/reopen | support/tickets + id + messages + reopen | Own tickets only, attachments only if supported by exact contract |
+| All supported customer roles | support list/ticket/messages/reopen | support/tickets + id + messages + reopen | R04 local read-only list/customer-visible conversation: server scopes own or actively managed community tickets. Independent review/200 local tests passed; resulting-head CI pending. Create/reply/reopen remain PLANNED; no attachment contract exists. |
 | Customer roles incl HOA manager | AI assistant surfaces (HOA assistant page and shared assistant) | ai/chat/history/memory | NDJSON streaming, cancellation/history/memory; role-restricted tools remain server-side; never hide feature omission |
 | Internal admin | dashboard, access, staff, audit, communications, communities, providers, support/AI drafts, assistant, profile | admin/* | EXPLICITLY DEFERRED from public mobile; keep existing internal web portal |
 | Server automation | reminders/outbox | jobs/* | EXCLUDED: server-only jobs, no app UI or embedded job credentials |

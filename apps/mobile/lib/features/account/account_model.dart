@@ -2,11 +2,35 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/api.dart';
 import 'models.dart';
+import '../support/support_model.dart';
 
 enum AccountStatus { idle, loading, ready, failed }
 
 class AccountModel extends ChangeNotifier {
-  AccountModel(this.repository, {required this.onSessionExpired});
+  AccountModel(this.repository, {required this.onSessionExpired, this.support});
+  final SupportModel? support;
+  bool showingSupport = false;
+  bool get supportAvailable => support != null;
+  Future<void> openSupport() async {
+    if (_owner == null ||
+        profile == null ||
+        profileStatus != AccountStatus.ready ||
+        _disposed ||
+        support == null) {
+      return;
+    }
+    closeNotifications();
+    showingSupport = true;
+    _emit();
+    if (support!.listStatus == SupportStatus.idle) await support!.loadList();
+  }
+
+  void closeSupport() {
+    showingSupport = false;
+    support?.close();
+    _emit();
+  }
+
   final AccountRepository repository;
   final VoidCallback onSessionExpired;
   String? _owner, _role;
@@ -28,10 +52,13 @@ class AccountModel extends ChangeNotifier {
     if (id != null && id.isNotEmpty && personalAccountRoles.contains(role)) {
       _owner = id;
       _role = role;
+      support?.setOwner(id);
     }
   }
 
   void clear() {
+    showingSupport = false;
+    support?.clear();
     _owner = null;
     _role = null;
     _profileGeneration++;
@@ -67,6 +94,7 @@ class AccountModel extends ChangeNotifier {
     }
     final generation = ++_profileGeneration;
     closeNotifications();
+    closeSupport();
     _notificationsGeneration++;
     notifications = const [];
     notificationsStatus = AccountStatus.idle;
@@ -99,6 +127,7 @@ class AccountModel extends ChangeNotifier {
         _disposed) {
       return;
     }
+    closeSupport();
     showingNotifications = true;
     _emit();
     if (notificationsStatus == AccountStatus.idle) await loadNotifications();

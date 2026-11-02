@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/ui/date_label.dart';
 import 'account_model.dart';
+import '../support/support_screen.dart';
 
 String notificationKindLabel(String kind) => switch (kind) {
   'invitation' => 'Invitation',
@@ -74,6 +75,13 @@ class AccountScreen extends StatelessWidget {
                 child: const Text('Recent notifications'),
               ),
               const SizedBox(height: 12),
+              if (model.supportAvailable) ...[
+                OutlinedButton(
+                  onPressed: model.openSupport,
+                  child: const Text('Support requests'),
+                ),
+                const SizedBox(height: 12),
+              ],
               OutlinedButton(
                 onPressed: model.loadProfile,
                 child: const Text('Refresh account'),
@@ -180,14 +188,35 @@ class AccountNavigator extends StatelessWidget {
     }
 
     return NavigatorPopHandler<void>(
-      enabled: model.showingNotifications,
-      onPopWithResult: (_) => model.closeNotifications(),
+      enabled: model.showingNotifications || model.showingSupport,
+      onPopWithResult: (_) {
+        if (model.showingSupport) {
+          if (model.support?.selectedId != null) {
+            model.support!.closeDetail();
+          } else {
+            model.closeSupport();
+          }
+        } else {
+          model.closeNotifications();
+        }
+      },
       child: Navigator(
         pages: [
           page(
             key: const ValueKey('account'),
             child: AccountScreen(model: model),
           ),
+          if (model.showingSupport && model.support != null) ...[
+            page(
+              key: const ValueKey('support-list'),
+              child: SupportScreen(model: model.support!),
+            ),
+            if (model.support!.selectedId != null)
+              page(
+                key: ValueKey('support-detail-${model.support!.selectedId}'),
+                child: SupportScreen(model: model.support!, detailView: true),
+              ),
+          ],
           if (model.showingNotifications)
             page(
               key: const ValueKey('notifications'),
@@ -195,6 +224,15 @@ class AccountNavigator extends StatelessWidget {
             ),
         ],
         onDidRemovePage: (removed) {
+          if (model.showingSupport) {
+            if (removed.key == const ValueKey('support-list')) {
+              model.closeSupport();
+            } else if (model.support?.selectedId != null &&
+                removed.key ==
+                    ValueKey('support-detail-${model.support!.selectedId}')) {
+              model.support!.closeDetail();
+            }
+          }
           if (model.showingNotifications &&
               removed.key == const ValueKey('notifications')) {
             model.closeNotifications();

@@ -343,3 +343,68 @@ The existing web provider dashboard combines overview **and a separate marketpla
 Integration recommendation: after existing HomeRepository verifies matching profile/context ids and roles, request this overview only for role provider; no provider GET for homeowner/hoa_staff/admin/unknown. Extend HomeData with a nullable provider projection alongside the existing homeowner dashboard. Preserve Account for matched public-role providers even if the overview read returns missing-provider409 or a recoverable read failure; avoid making a provider-console problem erase otherwise authorized personal account navigation. This may warrant a separately typed provider-overview substate/failure rather than failing the entire identity/context load. Any401/failed forced renewal must still globally clear Home/Requests/Account and every route. Role/account refresh, sign-out and late response fences must prevent old-provider data reappearing. Pending/suspended are successful read states with honest labels and no made-up upgrade/activate buttons.
 
 Independent tests should cover the200 envelope; nullable company/rating/percent; all3 statuses and unknown status; zero/positive counts; negative/decimal/overflow/NaN-invalid numbers; nullable vs zero win rate; -100/>100 revenue change if parsed;6 UTC month labels across year boundary; unknown currency; non-provider no-read; missing-provider409 distinguished from successful pending; HTML/framework500 and generic retry; account navigation retained after overview-only failure;401 global clearing and renewal failure; sign-out/account/role-switch late responses; no mutation endpoints;200% text and screenshots with synthetic data. Existing server tests `tests/provider-console-reads.test.ts` assert arithmetic/query ownership and `tests/provider-console-routes.test.ts` cover route gates; inspect/run relevant safe tests if server adaptations are ever separately approved. Live provider identity isolation and native runtime still require staging evidence and do not pass from mocks.
+
+## R04 discovery: read-only Support list and visible conversation
+
+Source-only inspection, 2026-11-01; no R04 implementation, live call or server change. Candidate flow: Account → Support requests → Ticket conversation, for existing matched public roles. Sources: `src/app/api/support/tickets/route.ts`, `src/app/api/support/tickets/[ticketId]/route.ts`, `src/lib/server/support-api.ts`, `src/lib/server/support.ts`, `src/lib/validation/support.ts`, `prisma/schema.prisma`, `src/components/support/SupportCenter.tsx`, `src/components/support/SupportThread.tsx`, `src/components/admin/support/supportPresentation.ts`, and customer support page/layout files.
+
+### Read-only feasibility and authority
+
+Both GET routes call `requireSupportUser()` → `authorizeRequest()` with no role allow-list, then session-scoped read services. The source call graph performs database reads only: active staff assignment lookup, ticket read, optional visible-message read, pure serialization/time calculations. It does **not** update read status, lastActivityAt, notifications, audit rows, SLA state, AI drafts or outbox, and sends no email. Mutating functions elsewhere in the same service are not called by these GETs. There is no support-message readAt field. This makes a bounded read-only mobile slice viable without hidden write consent. No direct read-rate-limit guard. Both routes declare nodejs; neither explicitly declares force-dynamic (the authenticated route path still invokes auth); do not introduce client caching of private ticket data.
+
+**Visibility is broader than only the caller's own tickets.** `requesterVisibilityWhere(userId)` queries CommunityStaffAssignment where userId matches, status=active and role in hoa_manager/hoa_team. It then allows requesterUserId=userId OR communityId in those assignment community IDs. There is no client-supplied requester/community filter and no 'all tickets' branch. The query does not add community.status or global-role conditions to those assignments. Thus active assigned staff, including qualifying homeowner accounts, can see community tickets raised by someone else; a generic resident does not gain that access. Do not label every result 'your ticket', infer authority from global role, or try to client-authorize by requesterEmail/name. Use 'Support requests' and describe records as tickets available to this account, including authorized community tickets where applicable.
+
+`getTicketForRequester` re-runs the same visibility condition with the requested id. Missing and unauthorized tickets both produce404, concealing existence. Revoked assignment after list fetch can therefore produce404 on detail; never fall back to the list as a conversation or claim ownership. Encode id as a single path segment and match the returned detail id. Do not request admin support APIs. Although the raw support gate accepts any signed-in valid role, public mobile navigation should remain homeowner/provider/hoa_staff only; admin and unknown roles keep the established excluded public-navigation policy. Customer web detail redirects admin to the separate admin queue.
+
+### GET /api/support/tickets
+
+No body, query parsing, cursor, filters, owner or community parameters. HTTP200 `{tickets: SupportTicketSummary[]}`; newest lastActivityAt first, **at most100**. No totalCount/hasMore/nextCursor. Label 'Up to 100 recent support requests', not all history. Empty array is success.
+
+All Summary keys are required:
+
+| Fields | JSON type / meaning |
+|---|---|
+| id,ticketNumber,subject | strings; opaque id and human ticket number (generated BDL-sequence) |
+| category | account,billing,service_request,bidding,scheduling,provider_issue,community,technical,other |
+| status | new,open,pending_customer,pending_internal,resolved,closed |
+| priority | low,normal,high,urgent |
+| requesterName,requesterEmail | strings; requester information, not proof current viewer owns ticket |
+| requesterRole | role string captured when ticket was created, not current viewer authority |
+| communityId,communityName | string or null |
+| assignedAdminUserId,assignedAdminName | string or null; unnecessary for proposed public mobile projection |
+| messageCount | nonnegative integer, **unfiltered count of all messages**, including internal notes |
+| awaitingAdminReply,firstResponseOverdue | booleans computed server-side |
+| ageHours | nonnegative finite number, rounded to1 decimal; server time calculation |
+| lastActivityAt,createdAt,updatedAt | ISO UTC timestamp strings |
+
+**Do not display or retain messageCount in the mobile projection.** `ticketSelect._count.messages:true` is not filtered by `customerMessageWhere`; it can exceed visible messages and expose an internal-note count. Do not show 'N replies' from it or compare it to detail messages. Similarly, lastActivityAt is ticket activity, not necessarily the last visible reply: name it 'Last activity'. Omit requesterEmail, admin assignment identity, priority/SLA flags and computed age from the minimal customer UI. Those fields are present in the wire DTO, but this slice does not need to expose them or promise response times.
+
+Web customer status labels map new→Received, open/pending_internal→With our team, pending_customer→Waiting on you, resolved→Resolved, closed→Closed. Because authorized community viewers may not be the requester, prefer neutral **Waiting on requester** for pending_customer in this mobile read-only view. Unknown statuses/categories should be safe inert labels or strict parse failures; never derive permission or a write action. Subject max160 and message max10000 are current write-validation constraints, not permission to render HTML.
+
+### GET /api/support/tickets/{ticketId}
+
+HTTP200 `{ticket: SupportTicketDetail}`. Detail is Summary plus these required keys:
+
+| Fields | JSON type |
+|---|---|
+| messages | SupportMessageView[], createdAt ascending; **no pagination or take limit** in current query |
+| relatedRequestId,relatedBidId,relatedVisitId,reopenedFromTicketId | string or null; stored contextual ids, not route authorization |
+| canReply,canReopen | booleans, calculated server-side for actual requester and lifecycle |
+
+Each message requires `id,kind,body,authorName,authorSide,fromAi,createdAt`. Strings: id/body/authorName; authorSide is you/support/customer; createdAt ISO UTC; fromAi boolean. The shared TypeScript message type permits customer_reply/admin_reply/internal_note, **but the customer read query excludes internal_note**. For this mobile customer projection accept only customer_reply/admin_reply; reject internal_note or unknown kind rather than rendering unexpected privileged content. The customer serializer always calls `toMessageView(...,false)`: support reply authorName becomes 'Bundleen Support' (not the staff author's name), fromAi is always false, and authorSide is resolved on the server. AI draft/explanation tables are not queried. An approved AI-assisted admin reply may appear as normal support text; do not invent an AI draft or staff-internal view from it. A defensive fromAi=true response can fail the customer contract rather than reveal unreviewed metadata.
+
+A manager/team member viewing another requester's community ticket may read its customer-visible conversation, but canReply/canReopen are false unless they are the actual requester. This slice ignores both booleans for actions regardless of value: no composer, reopen, create, send, edit, delete or upload. Preserve message body as plain multiline text and server author-side semantics; no HTML/Markdown rendering or auto-linking.
+
+**Long-thread limit:** the service returns every customer-visible message without a page boundary. The existing mobile transport rejects bodies above1MiB; a large legitimate conversation may therefore fail safely. Do not silently truncate a thread or synthesize a success from list metadata, and do not relax the shared byte limit as an incidental UI change. Native pagination would require a separate compatible backend contract. Record this current limit in the slice checkpoint and exercise the oversized-response state.
+
+### Errors, attachments and unsafe links
+
+Shared401/409 missing Bundleen profile/500 errors apply. Detail404 body is `{error:'That ticket does not exist.'}` for both missing and forbidden ids. `SupportError` propagates its status/error string. Generic support error500 adds a reference and text saying the request 'was not saved' even on reads; prefer existing safe ApiFailure read-error copy rather than repeating that inaccurate mutation wording. Shared error mapper also maps P2025 and P2002/23505 to409, though those are normally write-race cases. Do not treat409 as a successful empty conversation, or403/404 as permission to use stale detail. Native401/failed forced renewal clears all session-scoped models/routes; local read failures preserve Account access.
+
+There is **no attachment URL, attachment collection, upload endpoint or media field** in these inspected customer DTOs or SupportTicketMessage schema. Related ids are plain strings and must stay inert. Message/subject text can contain arbitrary URLs or markup-looking content: render plain text, never launch, preload or fetch it. Do not infer attachments from URLs or route notification linkPath automatically into support. External/admin/unsupported links remain inert under the established policy.
+
+### Recommended bounded R04 and independent acceptance
+
+Use a separately scoped Support child model reached from Account, with native Account→list→detail back navigation and platform gestures. Retain only ticket id/number/subject/category/status/communityName/createdAt/lastActivityAt for list and the same plus customer-visible message projection for detail. Hide unnecessary requester/admin identity metadata and unfiltered counts. Each detail GET must reauthorize and response-id-match; no list-backed conversation fallback. Empty tickets and empty visible-message arrays are genuine empty states. Preserve year+explicit timezone in timestamps, wrapping long text and200% scaling,48px actions, loading/error/retry/refresh and immediate sensitive-state clearing on logout/identity/role refresh. A list read does not establish individual ownership or unrestricted community management authority.
+
+Tests should prove GET-only traffic, encoded ids, response id match, unknown/wrong role no navigation, authorized community ticket wording, own vs community authorSide presentation, null community,100-result limit honesty, all statuses/categories (neutral waiting-on-requester), internal_note/unknown message kind rejection, fromAi contract handling, ignored internal-note count/admin metadata/related ids, text-only malicious URLs/HTML, detail403/404 after a previously visible list, generic500/409/401, forced-renewal expiry, unbounded-server/1MiB-client failure behavior, late list/detail after sign-out or role switch, list→detail scroll reset, Android back/iOS swipe and200% screenshots. Existing source test `tests/support-ai-safety.test.ts` checks customer filter use and exclusion of AI draft tables, but source assertions are not live role-isolation proof. No hidden GET mutation blocks this bounded plan; live staging authorization and the long-thread API limitation remain explicit gates/limitations.

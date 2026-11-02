@@ -95,3 +95,12 @@ Added 42 cases in provider_test.dart and five synthetic scenarios in evidence/pr
 Coverage includes all required rendered fields, nullable versus zero values, three statuses/unknown rejection, numeric boundaries/NaN/infinity, exact GET/envelope/no identity query, all-role endpoint isolation, 403/409/framework500/malformed retry with Account retained, forced-renewal401 global clearing, late signout/owner/role changes, and 200% navigation. Five inspected captures are stored in evidence/provider with fixture-only provenance. Initial lint was corrected in test code; no failing application regression was observed. The reviewer requested a provider-only generic-hero removal for readability; final run and captures include that source change.
 
 No live API or native build was run for R03 by this reviewer. Resulting-head CI/build and authenticated device/isolation evidence remain separate requirements; prior R02 proof is unchanged and does not verify R03.
+
+
+## R04 local independent verification — 2026-11-01
+
+Added43 cases in support_test.dart plus4 synthetic captures. Final complete flutter test: **200 passed**. flutter analyze: **No issues found**. Final formatter: **32 files, zero changes**.
+
+Coverage: required rendered fields/null community,100-row GET-only list and encoded detail ID/match, all lifecycle statuses, empty visible conversation, strict internal_note/unknown/fromAi rejection, plain multiline bodies,403/404/409/500 no-fallback retry,1MiB oversized response rejection, list loading/empty/failure, public-role gate, forced-renewal401 global clearing, stale owner/list/detail/old401 results,200% actual list-button navigation/scroll reset/message reachability, platform back/iOS edge swipe/logout, and rapid route switching/reopen. Constructor compile failure was corrected by author; final test-only lint fixed before clean full run.
+
+Four captures copied to evidence/support with synthetic provenance. No live API, native build, device accessibility or actual managed-community isolation check performed by this reviewer. Existing R03 exact-head CI proof is unchanged; R04 requires resulting-head CI and the same live runtime gates.

@@ -42,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       widget.model.requests,
       widget.model.account,
       widget.model.provider,
+      widget.model.support,
     ]),
     builder: (context, _) {
       final model = widget.model;
@@ -53,8 +54,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           accountVisible && model.account.showingNotifications;
       final detailVisible =
           requestsVisible && model.requests.selectedId != null;
+      final supportVisible = accountVisible && model.account.showingSupport;
+      final supportDetailVisible =
+          supportVisible && model.support.selectedId != null;
       final secondaryVisible = requestsVisible || accountVisible;
-      final nestedVisible = detailVisible || notificationsVisible;
+      final nestedVisible =
+          detailVisible || notificationsVisible || supportVisible;
       return PopScope<void>(
         canPop: !secondaryVisible,
         onPopInvokedWithResult: (didPop, result) {
@@ -68,6 +73,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ? BackButton(
                     onPressed: detailVisible
                         ? model.requests.closeDetail
+                        : supportDetailVisible
+                        ? model.support.closeDetail
+                        : supportVisible
+                        ? model.account.closeSupport
                         : model.account.closeNotifications,
                   )
                 : null,
