@@ -620,3 +620,39 @@ The server sorts total quotes by currency then amount, and legacy quotes by ID. 
 ### Acceptance and explicit remaining gap
 
 A read-only quotes section within existing homeowner Requests detail is source-feasible with theUSD-only price rendering fallback above. Test permissionfalse+rows failclosed; allowednull unavailable vs allowedempty none; selected-request binding/duplicateIDs; only submitted/accepted/rejected; total+nonnullperHomeCents contradiction; all three basis labels; exactUSD cents including0 andlarge safe integers; unknowncurrency neverUSD/converted; dropped provideridentity/verification metadata; scope/terms/dates null and plain text; no computed averages/comparison/action; refresh/logout/role/denial stale-data clearing; oversized entiredetail and200% scrolling. Multi-currency accurate display remains a bounded gap until its currency convention is explicitly accepted; no server pricing fix or production incident claim is part of this appendix. Source evidence does not replace live quote visibility testing.
+
+## N04 source-only first transaction: homeowner request creation
+
+Inspected at mobile base f0272811b1c1604ae9025f149ccc81aca3bf2e55. No endpoint was called and no database/account/server file was changed. These source observations are not live acceptance.
+
+### Preconditions and transport
+
+`POST /api/homeowner/requests` uses `authorizeRequest`, per-account `guardHoaMutation`, JSON body reader and `createHomeownerRequestSchema`. Missing verified Clerk session is 401; missing Bundleen profile is 409; profile lookup outage can be 500. Read eligibility from existing `GET /api/homeowner/requests`, but POST rechecks it. Only homeowner role may create; an active HOA membership blocks individual creation. An active neighborhood membership in an active community and a saved routeable address (nonblank address plus finite in-range latitude/longitude) are required. Pending membership, no profile location, no community and HOA residence yield explicit 409 reasons; wrong role yields 403. Membership/address must not be invented by client state.
+
+Body is strict: `title`, `category`, `description`, `budgetMinCents`, `budgetMaxCents` only. Owner/community/status fields are rejected. Text normalization removes specified control characters, normalizes line endings, limits consecutive blank lines and trims. Title is 1–120 characters; description 1–4000; category normalizes into the existing service-category enum. Budgets are integers in USD cents, 0–100,000,000 inclusive, maximum >= minimum. The validator's whole-dollar error string does not alter the cents contract. JSON body limit is 32 KiB. Preserve structured validation field errors and distinguish content-type/body-size/parse errors, authorization/product refusal, rate limiting/unavailable limiter, and server failure. Do not follow returned web action paths blindly as native navigation.
+
+Successful route returns 201 `{request: ...}`. Creation sets server-owned optional_group/collecting_interest, default minimum one home, one occurrence and server enrollment deadline. The owner is automatically joined. Existing own-list and authorized neighborhood-detail GETs are the persistence/read-back path; they have separate serializers and authorization. A creation response is not permission to expose fields absent from the selected mobile projection.
+
+### Duplicate and uncertain-result contract limitations
+
+`src/lib/server/homeowner-requests.ts:306` defines a 120-second duplicate window. Lookup matches owner, normalized title/category/description; it omits budgets, community, kind and status. It runs before the write transaction, with a new UUID for each new creation. Thus it is best-effort sequential dedupe, not a unique idempotency key or concurrency-safe exactly-once operation. A changed-budget submission may return an earlier row; concurrent identical submissions can both pass the lookup. Returning an existing row still produces 201. These are source limitations, not observed production incidents.
+
+After the transaction, the code reads the created record again. A null result yields an explicit saved-but-not-displayable 500; a thrown read/serialization error may reach the generic route error saying not saved even though the transaction committed. Network loss/timeouts or malformed success can also leave an unknown outcome. A 500 is not reliable proof of noncommit.
+
+Mobile proposal: one in-flight submit, account/session-bound draft and operation generation; no automatic POST replay (including copying the GET client's forced-renewal retry behavior). Reauthenticate separately and retain an honest ambiguous-result state. Reconcile through own-list GET then fresh authorized detail, comparing normalized fields, budgets and community where present. The own-list is capped at 100; a missing match cannot prove no commit. A candidate match is not an idempotency receipt. Never use expiry of 120 seconds as a retry-safety guarantee. Require explicit reviewed user resubmission after reconciliation rather than silently issuing another mutation. Parent owns any separately assigned server idempotency/response repair.
+
+### Profile completion and side effects
+
+`POST /api/auth/profile` verifies Clerk identity and primary email, validates `onboardingProfileSchema` (4 KiB auth body limit), then upserts the profile; existing stored role wins over submitted public role. It may retry selected transient persistence failures once. Homeowner address placement is best-effort after profile persistence; profileReady does not prove neighborhood eligibility. Recheck matched profile/context and request eligibility. Profile synchronization also queues a deduplicated welcome notification. It must not be treated as a harmless read or automatically invoked during every mobile startup.
+
+New request transaction includes request, owner participation, audit and preference-aware notifications. Active neighbors other than owner are selected; in-app records and email outbox can be queued, with drain after response. A disposable requester alone does not isolate side effects. Approved fixtures must include an isolated neighborhood and controlled recipients/outbox alongside matched API/database/Clerk/limiter resources. No live fixture creation is currently authorized here.
+
+### Proposed staged acceptance after live-auth gate
+
+1. Parent approves isolated resources, controlled notification recipients/outbox, disposable identities and membership/address setup; verify actual native Bearer profile/context access first.
+2. Eligible homeowner: submit a uniquely identified request once, assert returned ID, own-list appearance, authorized detail and persistence after refresh/relaunch; check server-derived ownership/community and auto-joined participation through approved evidence.
+3. Unauthorized roles, HOA/pending/no-community/no-location states and revoked membership fail without creating records. Invalid/extra fields, budget bounds/order and malformed bodies show truthful errors.
+4. Controlled response-loss/postcommit-read failure tests verify ambiguous UI and no automatic replay. Sequential changed-budget and concurrent identical submissions must be characterized under a separately approved isolated backend test; do not claim idempotency or intentionally generate duplicate notifications outside that scope.
+5. Logout/account switch invalidates pending UI results; no draft/result crosses identity. Verify notification recipients and cleanup via parent-assigned fixture ownership. Native keyboard/form accessibility and physical-device evidence remain distinct gates.
+
+Key source references: `src/app/api/homeowner/requests/route.ts`, `src/lib/validation/homeowner-requests.ts`, `src/lib/server/homeowner-requests.ts`, `src/lib/server/auth.ts`, `src/lib/server/auth-guard.ts`, `src/lib/server/notifications.ts`, `src/app/api/auth/profile/route.ts`, `src/lib/validation/profile.ts`, and `src/lib/home-address.ts`.
