@@ -1,0 +1,163 @@
+{
+  "source": "b2b6aecdd3e0dce4a2a9e7854559fef874242ded",
+  "platform": "Android 16 API 36",
+  "captureMethod": "adb exec-out screencap -p",
+  "data": "synthetic fixture; launcher captures are OS shell",
+  "files": [
+    {
+      "path": "1x/account.png",
+      "sha256": "4b2f2a6ed581689ff67204158437a1d4c68438aedf593eb3d771c7c122704493",
+      "bytes": 154735
+    },
+    {
+      "path": "1x/account.xml",
+      "sha256": "c332fd0dc70e9c8ab2d9fad0ad7177ee28dedfea03c362c7ef720b185328b128",
+      "bytes": 14999
+    },
+    {
+      "path": "1x/inbox-detail.png",
+      "sha256": "b8f24b55eee4e6ccd8897cfc34f64bc9653dbcabcf84cb6c61569e22b49e6a58",
+      "bytes": 226486
+    },
+    {
+      "path": "1x/inbox-detail.xml",
+      "sha256": "034ce5905926c72b8fd19fc22780be81ce4d853a58bf4d78d8469104a5132cd6",
+      "bytes": 13762
+    },
+    {
+      "path": "1x/inbox-list.png",
+      "sha256": "3677a3bcfddecdeecd66e853bb547cf8cab2709ab086220e7b83219c3916c76a",
+      "bytes": 132483
+    },
+    {
+      "path": "1x/inbox-list.xml",
+      "sha256": "9fb7f7fd152f61057218d9bfc63ec68fd345420200c487b507914d0990f657a1",
+      "bytes": 12021
+    },
+    {
+      "path": "1x/inputs.jsonl",
+      "sha256": "aa0651b63d9c97509365aaa4a53de439df30608b1ccbbc8c8a4ce39620c46f12",
+      "bytes": 1152
+    },
+    {
+      "path": "1x/os-after-terminal-back.png",
+      "sha256": "46939456cb8329825f0cfda98190aa668ed59ea3445a1144ab338d7eab85d418",
+      "bytes": 1378818
+    },
+    {
+      "path": "1x/os-foreground.txt",
+      "sha256": "98fb70f8cb175ac0fa62a928e95d82cc959e241f39cfbfcfba060c7ade119569",
+      "bytes": 239
+    },
+    {
+      "path": "1x/request-detail.png",
+      "sha256": "975437ea79d6f4abfa273d338d9789507bcfa5a0f53260dff73cfaeaaca8c341",
+      "bytes": 206545
+    },
+    {
+      "path": "1x/request-detail.xml",
+      "sha256": "71b89e2acabdc6c57c94b63276effee46b3fae4347ef327a9b79bbf427934cc0",
+      "bytes": 14767
+    },
+    {
+      "path": "1x/runtime-markers.txt",
+      "sha256": "8ff33015b5929abbd62042cc7937e93982989b622259ebe150dce8539d47a8d3",
+      "bytes": 1022
+    },
+    {
+      "path": "1x/signed-out.png",
+      "sha256": "a559ba046b1110671eaf277856bc5150296497b7582ba926d83b3ea02cef471c",
+      "bytes": 102090
+    },
+    {
+      "path": "1x/signed-out.xml",
+      "sha256": "dde1d384368d868739d80454814cc0fbf652e135ade5e116ba6f3af9c61c3512",
+      "bytes": 8590
+    },
+    {
+      "path": "2x/account.png",
+      "sha256": "1704c062911699df4bf46f1ef9cb98cb5ba266066dae386755acb424ba30ae12",
+      "bytes": 187439
+    },
+    {
+      "path": "2x/account.xml",
+      "sha256": "45dfcf4d8f0b7bb7e65db73d7e947cf3b4541c57ff3f38409dc34f746b7dfa26",
+      "bytes": 14208
+    },
+    {
+      "path": "2x/inbox-detail.png",
+      "sha256": "1000dec55cf40ea0fc4a51c8f5d5dc7f49c3c98f79f637ea3984bd42eb124e85",
+      "bytes": 272493
+    },
+    {
+      "path": "2x/inbox-detail.xml",
+      "sha256": "278348ff15847e58931820ccbecbd98803a2e6257c69162daa98b9d012054a3c",
+      "bytes": 12201
+    },
+    {
+      "path": "2x/inbox-list.png",
+      "sha256": "81945f3eaff3d441e58e375ebefed204adba3148ed432e211261155657dcae75",
+      "bytes": 222212
+    },
+    {
+      "path": "2x/inbox-list.xml",
+      "sha256": "3d0bf7c0c28e2692c94eeccb67cd4a8ef0706a79a8c56916232983a5455c0b7d",
+      "bytes": 12396
+    },
+    {
+      "path": "2x/inputs.jsonl",
+      "sha256": "8098fef8cb9519638e03bb2db941c9f53ec6f5511dd8248913d39fb7dec77c80",
+      "bytes": 1152
+    },
+    {
+      "path": "2x/os-after-terminal-back.png",
+      "sha256": "95872d9725f767ea2846c99c54bf07b069f0d8a80288c633a4a090db4d5a45cd",
+      "bytes": 1378695
+    },
+    {
+      "path": "2x/os-foreground.txt",
+      "sha256": "98fb70f8cb175ac0fa62a928e95d82cc959e241f39cfbfcfba060c7ade119569",
+      "bytes": 239
+    },
+    {
+      "path": "2x/request-detail.png",
+      "sha256": "8a3723c3834600b1c3e3fddc85c08fc406479f33401371e301c1355c86d3b77a",
+      "bytes": 200272
+    },
+    {
+      "path": "2x/request-detail.xml",
+      "sha256": "f4c62d8d1ec69733f093d2626c7d469122c1783bdc28b2cbe0931ec779cc8d7f",
+      "bytes": 11986
+    },
+    {
+      "path": "2x/runtime-markers.txt",
+      "sha256": "d4e6e1210c87bcb813dcd6dd59ce65e3949aa89c8b98d5a34927270864691ea7",
+      "bytes": 1022
+    },
+    {
+      "path": "2x/signed-out.png",
+      "sha256": "5b99d8ab839312f158c8a3e797370078d168ad938b77afd9a00792a335822e1e",
+      "bytes": 179329
+    },
+    {
+      "path": "2x/signed-out.xml",
+      "sha256": "59c94464c7c403f15d228adfe7f04a830c88ad125102ae4441da9439b176bfd5",
+      "bytes": 8977
+    },
+    {
+      "path": "README.md",
+      "sha256": "efc8778f142b1615f5f92acdd48fa28dc84316381109be433cd84b907d1e8f75",
+      "bytes": 5966
+    },
+    {
+      "path": "initial-run-markers.txt",
+      "sha256": "992ac35c52b523f6fecd60bc7e6cde0da4557e8016f1bdc7055e9fc1b05c6a12",
+      "bytes": 878
+    },
+    {
+      "path": "metadata-summary.json",
+      "sha256": "0d2af295466718931422516a793ecbc2502eac635aa7bb1413b3d32de349ed7c",
+      "bytes": 15731
+    }
+  ]
+}

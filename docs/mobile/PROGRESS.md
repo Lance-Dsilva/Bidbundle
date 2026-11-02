@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: N03 canonical native presentation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: N04 actual Android navigation evidence, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -60,3 +60,5 @@ N01 exact-head CI41372909197 passed all four native jobs and artifact uploads at
 N02 corrected source 4ac16367ed04206ea76cebecb15a72423c807bdb passed five scenarios on each actual task-owned Android/iOS runtime, covering two roles at 100%/200% and guard self-checks. Initial failed harness source 5efbb41 is not accepted evidence. Test-only fixes addressed scrolling/lazy finders and cleanup; no production source changes. Native synthetic captures and final review are under evidence/native-fixtures. Exact pushed-head CI remains required. Tester BackButton taps and semantics assertions do not prove OS input or assistive-technology operation.
 
 N03 adds the approved canonical company mark to native headers and deterministic launcher assets, retaining platform fonts and provisional flavor identities. Service areas now places errors/Retry above compact read-only/no-eligibility disclosures. Source 15a88ee5075f7eb47f78b7c72f4a26c00334e2d2 passed two affected scenarios on each native platform at 100%/200%, all four normal builds and both OS launcher reviews; independent source/asset reproduction passed. Independent evidence review and 467 regression tests passed, analyzer clean and 62 formatted files unchanged. Resulting-head CI remains pending. No live, screen-reader or release acceptance is implied.
+
+N04 Android system Back is independently exercised at 100%/200% on source b2b6aec: Requests detail, Inbox detail/list, Account-to-Home and separate signed-out Activity exit. Guards/private-state assertions precede process exit; no persisted-session proof. iOS actual edge gestures remain blocked by unavailable locked-host UI control. Semantics metadata is not screen-reader traversal. 467 local tests passed; source-only first-write tracing identifies best-effort dedupe and postcommit ambiguity, with no business writes or server changes. Native and live gates are not fully closed; final evidence CI is pending.
