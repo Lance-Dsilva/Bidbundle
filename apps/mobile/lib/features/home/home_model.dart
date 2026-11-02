@@ -5,11 +5,58 @@ import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/config.dart';
 import 'models.dart';
+import '../requests/models.dart';
+import '../requests/requests_model.dart';
 
 enum HomeStatus { starting, signedOut, loading, ready, failed }
 
 class HomeModel extends ChangeNotifier {
-  HomeModel(this.config, this.auth, this.repository);
+  HomeModel(
+    this.config,
+    this.auth,
+    this.repository, {
+    RequestsRepository? requestsRepository,
+  }) {
+    requests = RequestsModel(
+      requestsRepository ?? RequestsRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
+  }
+  late final RequestsModel requests;
+  bool showRequests = false;
+  bool get canViewRequests =>
+      signedIn &&
+      data?.context.role == 'homeowner' &&
+      data?.profile.id == data?.context.userId;
+  Future<void> openRequests() async {
+    if (!canViewRequests) return;
+    showRequests = true;
+    _emit();
+    if (requests.listStatus == RequestStatus.idle) await requests.loadList();
+  }
+
+  void showHome() {
+    showRequests = false;
+    requests.closeDetail();
+    _emit();
+  }
+
+  void _clearRequests() {
+    showRequests = false;
+    requests.clear();
+  }
+
+  void _sessionExpired() {
+    if (_disposed) return;
+    _generation++;
+    signedIn = false;
+    data = null;
+    status = HomeStatus.signedOut;
+    message = const ApiFailure(FailureKind.unauthenticated).message;
+    _clearRequests();
+    _emit();
+  }
+
   final AppConfig config;
   final AuthSession auth;
   final HomeRepository repository;
@@ -31,6 +78,10 @@ class HomeModel extends ChangeNotifier {
   Future<void> initialize() async {
     if (logoutPending) return;
     status = HomeStatus.starting;
+    initialized = false;
+    signedIn = false;
+    data = null;
+    _clearRequests();
     message = null;
     _emit();
     final generation = ++_generation;
@@ -59,6 +110,7 @@ class HomeModel extends ChangeNotifier {
     status = HomeStatus.loading;
     message = null;
     data = null;
+    _clearRequests();
     _emit();
     try {
       if (createAccount) {
@@ -91,12 +143,16 @@ class HomeModel extends ChangeNotifier {
     final generation = ++_generation;
     status = HomeStatus.loading;
     data = null;
+    _clearRequests();
     message = null;
     _emit();
     try {
       final loaded = await repository.load();
       if (!_current(generation)) return;
       data = loaded;
+      requests.setOwner(
+        loaded.context.role == 'homeowner' ? loaded.profile.id : null,
+      );
       status = HomeStatus.ready;
       _emit();
     } on ApiFailure catch (error) {
@@ -118,6 +174,7 @@ class HomeModel extends ChangeNotifier {
     signedIn = false;
     logoutPending = true;
     data = null;
+    _clearRequests();
     message = null;
     status = HomeStatus.loading;
     _emit();
@@ -137,6 +194,7 @@ class HomeModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _generation++;
+    requests.dispose();
     super.dispose();
   }
 }

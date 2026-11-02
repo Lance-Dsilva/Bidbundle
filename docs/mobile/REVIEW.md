@@ -82,3 +82,36 @@ No checklist blocker found. Source review of tests is conditional on N1 correcti
 N1 **resolved and source-verified**: both cancellation/recovery modes now assert the exact signIn/signUp method and initial public configuration forwarding. The two renewal cases additionally assert the native getToken method before interpreting forceRefresh, while retaining replacement-header and retry-bound outcome checks. Manager reports all41 tests/analyzer/format passed before the last method-name assertion and affected8 tests passed after it; this reviewer inspected source and did not independently rerun commands. Current-head CI must rerun rather than inherit the prior milestone head's pass.
 
 **Approved for the bounded draft-PR update**: native Dart boundary regression tests and environment-readiness documentation only. No application/server changes or external setup are approved by this review, and no live/native SDK/device authorization gate is closed. No outstanding findings remain for this scope.
+
+## Read-only homeowner Requests slice — independent test, UX and code review
+
+Reviewed current request DTOs/repository/model/screens plus HomeModel/HomeScreen integration and API renewal adaptation against server handlers/services and the API_CONTRACT appendix. Scope is GET list and separately authorized GET neighborhood detail with Home/Requests navigation. Creation, participation, bidding, awards, HOA detail, schedule and other writes remain unavailable; none is implied by this acceptance.
+
+### Findings and resolution
+
+- **R02 / P2, resolved:** the initial single-Scaffold detail replacement lacked an actual iOS back-swipe route and retained the long list scroll position on detail. The independent200% widget test failed to find the detail heading after scrolling to View details. Author replaced it with nested CupertinoPage/MaterialPage navigation and distinct scroll keys. The same test now passes, as do platform-back and simulated iOS edge-swipe tests. Session cleanup removes the requests navigator. A rapid back→reopen same-ID probe passes; no stale-removal callback defect was reproduced.
+- **R01 security regression, resolved:** after a server401, a native forced-refresh exception previously could leave global account/list state active. Security reviewer raised this; author maps failed second-attempt renewal to unauthenticated. Independent HomeModel integration test confirms account/list/detail/navigation clear. A distinct initial-token network-error test confirms it does not falsely expire the account, hides provider details, clears detail and recovers on retry. This is fake token-service evidence, not real revoked-session proof.
+- No other blocking source finding remains for this bounded slice. List/detail DTOs are separate, opaque IDs encoded, response ID verified, membership denial never synthesizes detail from list, unsupported HOA rows cannot invoke neighborhood detail, and client permission fields grant no business actions. Renewal remains bounded and redirects disabled.
+
+### Tests actually run by independent reviewer
+
+Added28 cases in apps/mobile/test/requests_test.dart and four capture cases in test/evidence/requests_screenshots_test.dart. Coverage includes distinct source-contract DTOs and nullable amounts, malformed cents/date rejection, unknown status as inert text, encoded IDs,403/404 denial after successful list, all eligibility refusal reasons without following arbitrary actionPath, HOA row limitation, unscoped/wrong-role no requests calls or navigation, expired session/global clearing, late owner/detail/sign-out responses, empty/error/retry,200% scrolling/back, iOS gesture simulation, logout route removal and rapid same-request reopening.
+
+Executed with /private/tmp/bundleen-flutter-toolchain/bin from apps/mobile:
+
+- `flutter analyze`: no issues.
+- `dart format --output=none --set-exit-if-changed lib test`:15 files,0 changed.
+- `flutter test`: **73 passed** (prior41 plus28 request regressions plus4 request captures).
+- Full-suite log: /private/tmp/bundleen-requests-full-tests.log.
+
+Initial test failures included missing test list setup and fake widget-time HTTP handling, corrected in tests; platform override was restored before framework invariants. These were test harness failures, distinct from the reproduced detail-scroll issue. Final suite passed after all source fixes. No web/server tests or native builds were run by this reviewer for this iteration; release operations must record those separately.
+
+### Screenshot review and limits
+
+Generated and inspected apps/mobile/build/evidence/request-fixtures/{requests-list,requests-detail,requests-denied,requests-large-text}.png. Fake source-shaped data,390×844 logical viewport; Roboto substitutes test text fonts, actual SDK MaterialIcons is loaded. Updated captures show recognizable navigation/back icons, clear denial+Retry without leaked detail, explicit USD/nullable-date labels, and200% list text wrapping with reachable scrolling. Detail begins at top after actual list navigation in the regression test. Long detail content extends below viewport and remains scrollable; the capture is not proof of full screen-reader or device behavior. No blocking overlap found in these fixture captures.
+
+**Accepted for a reviewed draft milestone within this read-only scope**, subject to current-head CI/native build results from release operations. This is independent local fixture/source acceptance only. Real iOS/Android authenticated runtime, membership revocation, cross-user/community isolation, VoiceOver/TalkBack and secure-session/callback behavior remain unrun. Phase2 live gate and overall parity/release gates remain open.
+
+### Final compact-list UX refinement
+
+Author compacted list metadata into wrapping inline label/value rows, preserving every field, nullable labels and48px actions; detail layout unchanged. Regenerated all four captures and visually re-inspected list and200% text: normal-size rows are easier to scan, with no horizontal truncation or overlap at200%. Independent affected32 tests passed, followed by the **complete73-test suite** on final source. Analyzer: no issues; formatter:15 files,0 changes. Evidence copied to docs/mobile/evidence/requests with a fixture-only README. Acceptance above remains limited to this draft read-only slice; no live gate advances.

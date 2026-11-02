@@ -102,3 +102,29 @@ Retry after bootstrap failure uses Android `Clerk.reinitialize()` and iOS `refre
 Validation run: `flutter build ios --simulator --debug --no-codesign` with Flutter3.47.9, Xcode26.4.1. Initial compile passed (49.3s); rerun after force-refresh/retry fixes passed (11.4s). Artifact: `apps/mobile/build/ios/iphonesimulator/Runner.app`. SPM resolution files are generated under both workspace/project shared SwiftPM directories and must be retained for reproducibility. No device/runtime/live auth claim follows from compilation. Android debug build was still provisioning SDK36/NDK28.2 at this checkpoint using licenses already accepted in the machine's SDK; no license acceptance command was run.
 
 Android final compile succeeded (227.4s first build, 3.0s final incremental). Actual no-config emulator launch and screenshot passed; see TOOLCHAIN.md for checksums/device evidence. No Clerk methods were invoked by that configuration-blocked screen, so all live auth/session/authorization gates remain open.
+
+## R01 Requests independent security source review — 2026-11-01
+
+Scope: `features/requests/models.dart`, `requests_model.dart`, `requests_screen.dart`, HomeModel/HomeScreen integration, shared ApiClient/AuthSession and exact R01 API contract. Reviewer owns this review only; application author and independent test/code reviewer own fixes/tests. This is source review plus a small local URI behavior probe, not live SDK/backend authorization verification.
+
+Confirmed from source:
+
+- Requests owner comes from a successfully matched server profile/context and is set only for homeowner role. Home refresh clears requests before reloading role/context; sign-out, auth restart, expiry and disposal invalidate generations. Both successful and failed late list/detail responses check owner and generation; old responses cannot restore navigation/data after account changes through these paths.
+- Detail fetch uses its separate protected endpoint and DTO. It clears previous detail before fetch and keeps detail null on403/404/failure; no fallback to list fields. List context=hoa cannot open the neighborhood-only detail. Server remains responsible for current membership/ownership checks.
+- Request IDs are encoded as a single URI component; blank/dot traversal IDs are rejected and the returned detail ID must exactly match. A temporary Dart probe tested `r1`, `../profile`, `/api/profile`, `?x=1#f`, `%2e%2e`, `//other.invalid`, and `a/b`: all stayed one path segment on the original host with no injected query/fragment. Shared transport disables redirects.
+- Server eligibility only supplies explanatory text. No create/manage/respond/bid/award authority is inferred from owner, role, eligibility, list context or client clock. Unused nested participant/bid/visit data is not retained by the read-only DTO, and UI renders plain text.
+
+Actionable finding R01-S1 (P2, reported to manager/author/test reviewer): after a protected read returns401, ApiClient's forced SDK token renewal can throw PlatformException (for example revoked-session token failure). That error previously escaped as a generic failure instead of confirmed unauthenticated state. On a detail refresh, RequestsModel consequently kept Home account/list state even though the server had explicitly returned401. Preserve that401 across failed forced renewal and invoke the existing global expiry clearing path; keep initial token/network failures distinct so an ordinary offline error does not become an invented revocation. Independent regression must cover detail401 -> forced-refresh exception -> Home/data/list/detail/navigation cleared. Finding disposition is pending author fix and reviewer verification at this checkpoint.
+
+No additional actionable source finding identified in the requested stale-callback, denied-detail fallback, path-injection or client-authority areas. Conditional source approval only; live sign-in, token expiry/renewal and actual cross-user/community denial still require staging identities on both platforms. Native iOS back behavior is owned by the separate UX review.
+
+### R01-S1 resolution
+
+Resolved in source and focused independent tests on 2026-11-01. ApiClient now wraps token acquisition per attempt: a failed forced renewal after the first server401 becomes `ApiFailure.unauthenticated`, activating existing global Home/request clearing; an initial token exception is rethrown without falsely declaring session loss. The retry remains bounded to one safe GET and no raw SDK error reaches the UI.
+
+Security reviewer independently ran both authored-by-test-reviewer regressions with `flutter test test/requests_test.dart --plain-name <name>`; each passed1/1:
+
+- `401 then native refresh error clears all protected home and request state`
+- `initial token network error does not falsely expire existing account`
+
+The second test also checks that detail data is cleared during the failure, private error detail is not displayed, and retry can recover. R01 has no remaining actionable finding from this bounded security source review. This closes only R01-S1's source/unit evidence; it does not establish live SDK expiry, middleware Bearer acceptance, cross-account/community isolation or platform runtime auth.

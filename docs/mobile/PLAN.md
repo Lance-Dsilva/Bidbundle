@@ -33,3 +33,19 @@ After every task: implement → independent verification/review → fix → reru
 ## Milestone status
 
 M01 inventory and first-slice contracts recorded; later-slice payload expansion explicitly pending. M02 exact SDK/source audit plus native bridge compile completed, live staging feasibility pending. M03 toolchain installed/pinned and both native targets compiled. M04 independent architecture/code/fixture-UX review accepted draft prerequisite milestone after F1–F4 fixes. M05 blocked on owner-provided staging/Clerk/test identities. M06 read-only scaffold, typed client, state screens, native bridges and CI implemented; 33 tests and analyzer/formatter pass. M07 native adapter exists but live slice remains blocked. M08–M15 not started. Phase 1/live feasibility and Phase 2 gates remain open; no dependent business-write parity progression.
+
+## R01 — reordered read-only homeowner request browsing
+
+Authorized by parent Engineering under the human's instruction to continue/complete Flutter work. This is an independently testable M09 presentation/contract preparation slice moved ahead of unresolved M07 live prerequisites. It does not pass Phase 1/2 or permit dependent business writes.
+
+Owners: backend specialist owns API_CONTRACT appendix only; Flutter application engineer owns mobile lib/ implementation; independent test/UX/code reviewer owns request tests/captures/review; mobile manager owns acceptance and checkpoint. No shared-server writer or server edits.
+
+Acceptance criteria:
+
+- Native homeowner Home/Requests navigation; real GET /api/homeowner/requests and GET /api/homeowner/requests/{encodedId}, separate strict typed DTOs per actual services.
+- Read real title/status/category/community, available budgets/dates/counts. Handle null values honestly. No create/join/edit/award or inferred manager authority. Provider/admin contexts do not receive homeowner request navigation.
+- Loading, empty, malformed/error/denied, retry and refresh states. Detail denial never falls back to owner-list data. Legacy HOA rows remain visible but explicitly lack mobile detail support because no compatible HOA detail GET exists.
+- Back navigation and200% text work. Sign-out/session expiry/account change clear protected request state/detail; late requests cannot resurrect it. Session errors distinguish access denial from expiry.
+- Meaningful contract/repository/widget/race tests, formatter/analyzer, independent UX/code/security review and fixture screenshots. Resulting-head Android/iOS CI builds required. Fixtures do not prove native runtime/backend authorization.
+
+First live acceptance remains sign-in → profile/context → homeowner overview → sign-out/expiry on approved isolated staging, then real request list/detail and denied membership cases. Backend/API integration, native auth/storage/callback/resume and business-write gates remain open. Other M09 actions and all other PARITY rows are unchanged backlog.

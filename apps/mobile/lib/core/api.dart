@@ -61,9 +61,15 @@ class ApiClient {
     }
     try {
       for (var attempt = 0; attempt < 2; attempt++) {
-        final token = await auth
-            .token(forceRefresh: attempt > 0)
-            .timeout(timeout);
+        final String? token;
+        try {
+          token = await auth.token(forceRefresh: attempt > 0).timeout(timeout);
+        } catch (_) {
+          // A server rejection followed by failed renewal cannot retain a
+          // signed-in view, even when the native SDK returns a platform error.
+          if (attempt > 0) throw const ApiFailure(FailureKind.unauthenticated);
+          rethrow;
+        }
         if (token == null || token.isEmpty) {
           throw const ApiFailure(FailureKind.unauthenticated);
         }

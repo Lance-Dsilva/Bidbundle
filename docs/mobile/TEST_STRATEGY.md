@@ -18,7 +18,7 @@ No result below is assumed from a plan or mocked SDK. Every run records head, co
 - Source baseline verified: fb4a245721ffdd69dd0255c0ef021e6b6fbb08ed.
 - Public homepage and email-first Clerk sign-in visually inspected in browser, no form submissions. Protected product journeys not exercised.
 - Route/page inventory: source inspection only; see API_CONTRACT/PARITY.
-- Flutter formatter/analyzer pass; 41 independent unit/widget/contract/capture tests pass (TEST_RESULTS.md).
+- Flutter formatter/analyzer pass; 73 local unit/widget/contract/capture tests pass for R01 (TEST_RESULTS.md).
 - Android debug APK and iOS simulator builds pass. Four fake widget captures preserved under evidence/. Live staging/auth, secure persistence runtime and platform journey/accessibility tests remain unrun. Runtime launch-only smoke is recorded separately when completed.
 - Independent architecture/code/fixture-UX review accepted draft prerequisite milestone; see REVIEW.md.
 

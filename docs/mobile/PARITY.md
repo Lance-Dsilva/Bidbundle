@@ -1,13 +1,13 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. All mobile rows below are PLANNED, not implemented or live verified. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation and R01 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
 | All public | Homepage, information/help, community onboarding, post-request entry | community-interest | Native welcome/help and coverage interest; marketing web pages may open system browser; no invented availability |
-| All identities | sign-in, get-started sign-up/profile, auth/continue | Clerk + auth/profile; profile; me/context | Phase 2 auth/profile/context; full onboarding Phase 3; sign-up verification, expiry, refresh, sign-out, profile-incomplete |
-| Homeowner | dashboard | homeowner/dashboard | First protected read; honest cold start/loading/errors and server cents |
-| Homeowner | request/new, requests/detail | homeowner/requests + id + transition + participation + award | Create/edit/cancel, participation and owner lifecycle; server eligibility/status/provider-selection rules |
+| All identities | sign-in, get-started sign-up/profile, auth/continue | Clerk + auth/profile; profile; me/context | Native SDK/auth shell and profile/context read code implemented; live auth unverified. Full onboarding remains Phase 3, including verification and profile completion. |
+| Homeowner | dashboard | homeowner/dashboard | Implemented summary read/UI with cold start/loading/errors and server cents; real authenticated runtime proof pending. |
+| Homeowner | request/new, requests/detail | homeowner/requests + id + transition + participation + award | R01: read-only own-request list and authorized neighborhood detail implemented; legacy HOA detail explicitly unsupported. Create/edit/cancel, participation and lifecycle remain PLANNED; no award authority inferred. |
 | Homeowner | bidding-room, bids | homeowner/bids; homeowner/requests/id/award; hoa/requests/id/bids | Requester/participant bid comparison; provider selection only by the server-authorized community manager; no auto-award |
 | Homeowner/resident | neighbourhood, community | homeowner/neighbourhood; HOA requests, join, surveys/vote | Coverage, membership, community requests/participation/surveys; no resident manager rights |
 | Homeowner | chat | homeowner/inbox + thread/messages/read | Participant-only conversations, unread, send/retry/empty states |
