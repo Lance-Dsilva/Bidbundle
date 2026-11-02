@@ -1,0 +1,24 @@
+{
+  "applicationId": "com.bundleen.bundleen.staging",
+  "allowBackup": "false",
+  "usesCleartextTraffic": "false",
+  "sharedSessionProvider": [
+    {
+      "name": "com.clerk.api.sharedsession.SharedSessionSyncProvider",
+      "authorities": "com.bundleen.bundleen.staging.clerk.shared-session-sync",
+      "enabled": "false",
+      "exported": "true",
+      "grantUriPermissions": "false"
+    }
+  ],
+  "callbackData": [
+    {
+      "host": "com.bundleen.bundleen.staging.callback",
+      "scheme": "clerk"
+    },
+    {
+      "host": "com.bundleen.bundleen.staging.oauth",
+      "scheme": "clerk"
+    }
+  ]
+}

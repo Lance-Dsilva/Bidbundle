@@ -1,0 +1,658 @@
+# Mobile API contract discovery
+
+Baseline `fb4a245721ffdd69dd0255c0ef021e6b6fbb08ed`, inspected 2026-11-01. Static source evidence, not live-auth certification. Use existing HTTPS backend; no duplicate backend/direct Postgres.
+
+## Exact first-slice contracts
+
+- `GET /api/profile`: no body/query. 200 object: id,email,fullName,role strings; isVerified boolean; phone,address,neighborhood,avatarUrl,avatarUpdatedAt nullable strings; latitude,longitude nullable numbers; createdAt ISO timestamp; communityRadiusMi number. Roles homeowner/provider/hoa_staff/admin. Source `src/lib/server/profile.ts::serializeCommonProfile`.
+- `GET /api/me/context`: no body/query. 200: userId,fullName,initials,email,role,roleLabel strings; avatarUrl/providerStatus nullable; assignments[] with communityId,communityName,communityType,role,roleLabel; communities[] with communityId,communityName,communityType,status,isPrimary; canManageCommunity boolean. Source `src/lib/server/communities.ts::resolveViewerContext`. Display/navigation only; server rechecks permissions per operation.
+- `GET /api/homeowner/dashboard`: homeowner-only, no body/query. 200 `{cold_start:boolean,active_requests:number,active_bids:number,total_saved_cents:number}`. Every aggregate is scoped to authenticated owner. Savings sums nonnegative budget-max minus agreement amount, not advertised discounts. Source `src/lib/server/homeowner-requests.ts::getHomeownerDashboard`.
+
+Shared `authorizeRequest` handler errors: 401 authentication required, 409 incomplete Bundleen profile, 403 wrong role/inactive admin grant, 500 database lookup failure, each `{error:string}`. Profile additionally 404; dashboard 500 includes reference. All three GETs force dynamic; no pagination or direct rate-limit guards. Middleware calls auth.protect() for /api/me and /api/auth: actual unauthenticated status/content type must be tested; do not assume handler JSON always reaches mobile.
+
+Proposed live slice: Clerk sign-in → profile → viewer context → homeowner dashboard → sign-out and protected-read rejection. Native Bearer acceptance, refresh, revoked tokens and middleware behavior remain staging gates, not proven by source inspection.
+
+## Mutations and domain boundaries
+
+POST /api/auth/profile is onboarding, not login. Requires Clerk identity, JSON and bounded body (MAX_AUTH_BODY_BYTES), validates onboardingProfileSchema in src/lib/validation/profile.ts, derives verified email from Clerk, retains existing database role, rejects suspended providers. Returns `{profileReady:true,role,redirectTo}`; errors include 400 fields, 401,403,409,413,415,429,503,500. Map known web redirectTo destinations to native navigation.
+
+PATCH /api/profile uses strict commonProfileUpdateSchema; email/role/isVerified rejected. GET /api/homeowner/requests returns `{requests,eligibility}`; handler permits any profiled identity, service derives eligibility. POST uses strict createHomeownerRequestSchema: title 1–120, description 1–4000 after normalization, category from service-category vocabulary, budgetMinCents/budgetMaxCents integers 0–100000000 and max>=min. No owner/community/status fields; max body 32768 bytes. Success 201 `{request}`; workflow failure `{error,reason}` with domain status. List cap 100, no exposed cursor.
+
+GET /api/provider/marketplace requires provider and returns `{workspace}` from getProviderHoaWorkspace (coverage, eligible feed, own bids, won agreements, day plans). Role alone is not bidding eligibility. Customer inbox requires homeowner/hoa_staff; GET lists participant-scoped threads; POST startCustomerConversationSchema uses bidId and returns 201 `{thread}` for an eligible quote. Never address arbitrary users by id.
+
+GET /api/me/notifications returns `{notifications}` (default latest 30, no cursor); POST marks all caller notifications read, `{ok:true}`. This is not mobile push. POST /api/ai/chat uses aiChatMessageSchema, max body 4096 bytes, per-account AI limiter; response application/x-ndjson with delta/tool/done/error events. Handle partial chunks/cancellation/errors; history and memory are separate APIs.
+
+Auth resolves Clerk identity to a live database profile. hoa-api gates homeowner/hoa_staff or provider; domain services enforce membership, owner, eligibility and manager grants. hoa_staff alone gives no management authority. Homeowner managers are restricted to their live assigned community. Award/provider selection and price decisions remain server-owned. Owner transitions, manager award/close and provider planning/visit status are distinct state-machine operations; do not infer transitions in Flutter.
+
+Guard failures: 429 with Retry-After or 503 when limiter unavailable. Canonical quotas src/lib/server/rate-limit.ts: registration 20/15min; HOA mutations 60/5min; endpoint-specific AI/support/media/broadcast buckets. Production fails closed on missing limiter. Do not retry ambiguous writes automatically: no universal idempotency key contract found.
+
+## Gaps and required follow-up
+
+Native auth/middleware must be proved with isolated staging and safe identities; none established here. No versioned OpenAPI/Dart contract exists. First-slice DTOs above are implementable; later slices must expand referenced schema and service types into exact fixtures before coding. Inventory below is exhaustive at route level, not a claim of exhaustive payload review. Pagination is inconsistent: requests capped 100, notifications 30, conversation service limits/offsets are not automatically public query parameters. No push registration/delivery or account deletion API route found. HOA invitation accept/join and Clerk continuation use server-rendered pages and need reviewed native deep links/contracts. Multipart uploads require route-specific size/content/ownership tests. All admin/jobs APIs excluded from public mobile.
+
+## Complete route inventory
+
+Generated from exported handlers in every src/app/api/**/route.ts. References are direct schema/guard identifiers; nested service authorization still requires slice review.
+
+| Path | Methods | Direct schema/guard references |
+|---|---|---|
+| `/api/admin/access/[grantId]/permissions` | PUT | adminPermissionsSchema, requireAdminOwnerMutation |
+| `/api/admin/access/[grantId]` | DELETE | requireAdminOwnerMutation |
+| `/api/admin/access` | GET, POST | adminAccessGrantSchema, requireAdminOwnerMutation |
+| `/api/admin/audit` | GET | auditListQuerySchema |
+| `/api/admin/communications/broadcasts/[broadcastId]/retry` | POST | guardBroadcastMutation, guardFailureResponse, requireAdminPermissionMutation |
+| `/api/admin/communications/broadcasts/[broadcastId]` | GET, PUT, DELETE | broadcastDraftSchema, requireAdminPermissionMutation |
+| `/api/admin/communications/broadcasts/[broadcastId]/send` | POST | broadcastSendSchema, guardBroadcastMutation, guardFailureResponse, requireAdminPermissionMutation |
+| `/api/admin/communications/broadcasts/[broadcastId]/test` | POST | guardBroadcastMutation, guardFailureResponse, requireAdminPermissionMutation |
+| `/api/admin/communications/broadcasts` | GET, POST | broadcastDraftSchema, requireAdminPermissionMutation |
+| `/api/admin/communications/preview` | POST | previewSchema |
+| `/api/admin/communities/[communityId]/candidates` | GET | inspect handler/service |
+| `/api/admin/communities/[communityId]/hoa-profile` | GET, PUT, PATCH | hoaOnboardingStatusSchema, hoaProfileSchema, requireAdminMutation |
+| `/api/admin/communities/[communityId]/manager-invitations/[invitationId]` | DELETE | requireAdminMutation |
+| `/api/admin/communities/[communityId]/manager-invitations` | GET, POST | hoaManagerInvitationCreateSchema, requireAdminMutation |
+| `/api/admin/communities/[communityId]/members/[membershipId]` | PATCH, DELETE | membershipUpdateSchema, requireAdminMutation |
+| `/api/admin/communities/[communityId]/members` | POST | membershipCreateSchema, requireAdminMutation |
+| `/api/admin/communities/[communityId]` | GET, PATCH | communityUpdateSchema, requireAdminMutation |
+| `/api/admin/communities/[communityId]/staff/[assignmentId]` | DELETE | requireAdminMutation, staffRevokeSchema |
+| `/api/admin/communities/[communityId]/staff` | POST | requireAdminMutation, staffAssignSchema |
+| `/api/admin/communities/[communityId]/units/[unitId]` | PATCH, DELETE | requireAdminMutation, unitUpdateSchema |
+| `/api/admin/communities/[communityId]/units/import` | POST | requireAdminMutation, unitImportSchema |
+| `/api/admin/communities/[communityId]/units` | GET, POST | requireAdminMutation, unitCreateSchema |
+| `/api/admin/communities` | GET, POST | communityCreateSchema, communityListQuerySchema, requireAdminMutation |
+| `/api/admin/community-interest` | GET | communityInterestListQuerySchema |
+| `/api/admin/geocode` | POST | addressSearchSchema, requireAdminMutation |
+| `/api/admin/homeowners` | GET | inspect handler/service |
+| `/api/admin/overview` | GET | inspect handler/service |
+| `/api/admin/providers/[userId]` | GET, PATCH | providerAdminUpdateSchema, providerProfileUpdateSchema, requireAdminMutation |
+| `/api/admin/providers/[userId]/tickets` | POST | adminProviderTicketCreateSchema, requireAdminMutation |
+| `/api/admin/providers` | GET | providerListQuerySchema |
+| `/api/admin/staff/[grantId]` | DELETE | requireAdminPermissionMutation |
+| `/api/admin/staff` | GET, POST | adminAccessGrantSchema, requireAdminPermissionMutation |
+| `/api/admin/support/tickets/[ticketId]/ai-draft` | GET, POST, PUT, DELETE | aiDraftApprovalSchema, aiDraftDiscardSchema, guardFailureResponse, guardSupportAi, requireAdminMutation |
+| `/api/admin/support/tickets/[ticketId]/ai-explanation` | GET, POST | guardFailureResponse, guardSupportAi |
+| `/api/admin/support/tickets/[ticketId]/messages` | POST | adminTicketMessageSchema, requireAdminMutation |
+| `/api/admin/support/tickets/[ticketId]` | GET, PATCH | adminTicketUpdateSchema, requireAdminMutation |
+| `/api/admin/support/tickets` | GET | adminTicketQuerySchema |
+| `/api/ai/chat` | POST | aiChatMessageSchema, requireAiChatMutation |
+| `/api/ai/history` | GET | requireAiUser |
+| `/api/ai/memory` | DELETE | requireAiUser |
+| `/api/auth/me` | GET | authorizeRequest |
+| `/api/auth/profile` | POST | guardFailureResponse, guardRegistration, onboardingProfileSchema |
+| `/api/community-interest` | POST | communityInterestSchema, guardCommunityInterest |
+| `/api/hoa/agreements/[agreementId]/review` | POST | requireHoaMutation, reviewCreateSchema |
+| `/api/hoa/amenities/[amenityId]/availability` | GET | availabilityQuerySchema |
+| `/api/hoa/amenities/[amenityId]/bookings` | POST | bookingCreateSchema |
+| `/api/hoa/amenities/[amenityId]/closures/[closureId]` | DELETE | inspect handler/service |
+| `/api/hoa/amenities/[amenityId]/closures` | POST | amenityClosureSchema |
+| `/api/hoa/amenities/[amenityId]/gallery` | POST | amenityCoverSchema, amenityGalleryOrderSchema |
+| `/api/hoa/amenities/[amenityId]/issues` | POST | issueCreateSchema |
+| `/api/hoa/amenities/[amenityId]/photos` | POST | inspect handler/service |
+| `/api/hoa/amenities/[amenityId]/reviews` | GET, POST | amenityReviewSchema, reviewListQuerySchema |
+| `/api/hoa/amenities/[amenityId]` | GET, PATCH | amenityUpdateSchema |
+| `/api/hoa/amenities/[amenityId]/status` | POST | amenityStatusSchema |
+| `/api/hoa/amenities/bookings/[bookingId]/cancel` | POST | bookingCancelSchema |
+| `/api/hoa/amenities/bookings/[bookingId]/decision` | POST | managerBookingDecisionSchema |
+| `/api/hoa/amenities/bookings/[bookingId]/reschedule` | POST | bookingRescheduleSchema |
+| `/api/hoa/amenities/bookings` | GET | inspect handler/service |
+| `/api/hoa/amenities/broadcast` | POST | amenityBroadcastSchema |
+| `/api/hoa/amenities/issues/[issueId]/messages` | POST | issueMessageSchema |
+| `/api/hoa/amenities/issues/[issueId]/photos` | POST | inspect handler/service |
+| `/api/hoa/amenities/issues/[issueId]` | GET, PATCH | issueUpdateSchema, issueWithdrawSchema |
+| `/api/hoa/amenities/issues` | GET | inspect handler/service |
+| `/api/hoa/amenities/manager` | GET | inspect handler/service |
+| `/api/hoa/amenities/media/[mediaId]` | GET, DELETE | inspect handler/service |
+| `/api/hoa/amenities/reviews/[reviewId]/moderate` | POST | reviewModerationSchema |
+| `/api/hoa/amenities/reviews/[reviewId]/photos` | POST | inspect handler/service |
+| `/api/hoa/amenities/reviews/[reviewId]/response` | POST | reviewResponseSchema |
+| `/api/hoa/amenities/reviews/[reviewId]` | PATCH, DELETE | amenityReviewSchema |
+| `/api/hoa/amenities` | GET, POST | amenityCreateSchema |
+| `/api/hoa/communities/[communityId]/invitations/[invitationId]` | DELETE | requireHoaMutation |
+| `/api/hoa/communities/[communityId]/invitations` | POST | hoaResidentInvitationCreateSchema, requireHoaMutation |
+| `/api/hoa/communities/[communityId]/requests` | POST | hoaRequestCreateSchema, requireHoaMutation |
+| `/api/hoa/communities/[communityId]/surveys` | POST | hoaSurveyCreateSchema, requireHoaMutation |
+| `/api/hoa/communities/[communityId]/units/[unitId]` | PATCH | requireHoaMutation, unitUpdateSchema |
+| `/api/hoa/communities/[communityId]/units` | GET, POST | requireHoaMutation, requireHoaUser, unitCreateSchema |
+| `/api/hoa/occurrences/[occurrenceId]/close` | POST | emptyMutationSchema, requireHoaMutation |
+| `/api/hoa/requests/[requestId]/award` | POST | awardSchema, requireHoaMutation |
+| `/api/hoa/requests/[requestId]/bids` | GET | requireHoaUser |
+| `/api/hoa/requests/[requestId]/join` | POST | participationResponseSchema, requireHoaMutation |
+| `/api/hoa/requests/[requestId]` | PATCH | hoaRequestTransitionSchema, requireHoaMutation |
+| `/api/hoa/surveys/[surveyId]` | PATCH | hoaSurveyStatusSchema, requireHoaMutation |
+| `/api/hoa/surveys/[surveyId]/vote` | POST | hoaSurveyVoteSchema, requireHoaMutation |
+| `/api/hoa/visits/[visitId]/review` | POST | requireHoaMutation, reviewCreateSchema |
+| `/api/homeowner/bids` | GET | requireHoaUser |
+| `/api/homeowner/dashboard` | GET | authorizeRequest |
+| `/api/homeowner/inbox/[threadId]/messages` | POST | conversationMessageSchema, requireHoaMutation |
+| `/api/homeowner/inbox/[threadId]/read` | POST | requireHoaMutation |
+| `/api/homeowner/inbox/[threadId]` | GET | requireHoaUser |
+| `/api/homeowner/inbox` | GET, POST | requireHoaMutation, requireHoaUser, startCustomerConversationSchema |
+| `/api/homeowner/neighbourhood` | GET | requireHoaUser |
+| `/api/homeowner/requests/[requestId]/award` | POST | neighborhoodAwardSchema, requireHoaMutation |
+| `/api/homeowner/requests/[requestId]/participation` | POST | participationSchema, requireHoaMutation |
+| `/api/homeowner/requests/[requestId]` | GET, PATCH | ownerRequestMutationSchema, requireHoaMutation, requireHoaUser |
+| `/api/homeowner/requests/[requestId]/transition` | POST | neighborhoodTransitionSchema, requireHoaMutation |
+| `/api/homeowner/requests` | GET, POST | authorizeRequest, createHomeownerRequestSchema, guardFailureResponse, guardHoaMutation |
+| `/api/jobs/outbox` | GET, POST | inspect handler/service |
+| `/api/jobs/reminders` | GET, POST | inspect handler/service |
+| `/api/me/context` | GET | authorizeRequest |
+| `/api/me/managed-communities` | GET | authorizeRequest |
+| `/api/me/notifications/[notificationId]` | POST, DELETE | authorizeRequest |
+| `/api/me/notifications` | GET, POST | authorizeRequest |
+| `/api/onboarding/coverage` | POST | guardOnboardingCoverage, onboardingCoverageSchema |
+| `/api/profile/avatar` | POST, DELETE | authorizeRequest, guardAvatarUpload, guardFailureResponse |
+| `/api/profile/homeowner` | GET, PATCH | authorizeRequest, homeownerProfileUpdateSchema |
+| `/api/profile/provider` | GET, PATCH, PUT | authorizeRequest, providerFullUpdateSchema, providerProfileUpdateSchema |
+| `/api/profile` | GET, PATCH | authorizeRequest, commonProfileUpdateSchema |
+| `/api/provider/inbox/[threadId]/messages` | POST | conversationMessageSchema, requireProviderConsoleMutation |
+| `/api/provider/inbox/[threadId]/read` | POST | requireProviderConsoleMutation |
+| `/api/provider/inbox/[threadId]` | GET | inspect handler/service |
+| `/api/provider/inbox` | GET, POST | requireProviderConsoleMutation, startConversationSchema |
+| `/api/provider/marketplace/earnings` | GET | requireProviderUser |
+| `/api/provider/marketplace/occurrences/[occurrenceId]/plan` | POST | dayPlanSchema, requireProviderMutation |
+| `/api/provider/marketplace/requests/[requestId]/bid` | PUT, DELETE | bidSubmitSchema, requireProviderMutation |
+| `/api/provider/marketplace` | GET | requireProviderUser |
+| `/api/provider/marketplace/service-areas/[areaId]` | PUT, DELETE | requireProviderMutation, serviceAreaSchema |
+| `/api/provider/marketplace/service-areas` | POST | requireProviderMutation, serviceAreaSchema |
+| `/api/provider/marketplace/visits/[visitId]/status` | POST | requireProviderMutation, visitStatusSchema |
+| `/api/provider/overview` | GET | inspect handler/service |
+| `/api/provider/ratings` | GET | inspect handler/service |
+| `/api/provider/service-areas/[areaId]` | PUT, DELETE | providerServiceAreaSchema, requireProviderMutation |
+| `/api/provider/service-areas` | GET, POST | providerServiceAreaSchema, requireProviderMutation, requireProviderUser |
+| `/api/support/tickets/[ticketId]/messages` | POST | customerReplySchema, requireSupportMutation |
+| `/api/support/tickets/[ticketId]/reopen` | POST | customerReplySchema, requireSupportMutation |
+| `/api/support/tickets/[ticketId]` | GET | requireSupportUser |
+| `/api/support/tickets` | GET, POST | createTicketSchema, requireSupportMutation, requireSupportUser |
+
+## Bounded Phase 3 preparation: homeowner request browsing (read-only)
+
+Inspected 2026-11-01 after foundation head `249ed4f`. This section authorizes DTO/UI preparation only; live Phase 2 gates remain open. No create/edit/join/award/transition action belongs to this browsing slice.
+
+### List: GET /api/homeowner/requests
+
+No request body, query, owner id, cursor or filter. Handler calls authorizeRequest() with no role argument. HTTP 200 `{requests: HomeownerRequestView[], eligibility: HomeownerRequestEligibility}`. `listHomeownerRequests(sessionUser.id)` filters createdByUserId, orders createdAt descending and takes at most 100. Do not invent infinite scrolling or claim the result is an uncapped history. The filter itself does not restrict community type: context can be hoa or neighborhood for existing/legacy owned rows. It does not recheck membership for each listed record.
+
+HomeownerRequestView required keys:
+
+| Keys | Wire type / meaning |
+|---|---|
+| id,title,category,categoryLabel,description,status,communityId,communityName | string |
+| context | `neighborhood` or `hoa` |
+| budgetMinCents,budgetMaxCents | integer or null; whole US cents under the request budget contract; legacy budgets may be null |
+| bestBidCents | integer or null; selected bid amount in cents, but bid currency is omitted from this projection; not safe to label USD |
+| bidCount | integer, count of ALL related bids, unlike detail count |
+| enrollmentClosesAt | ISO timestamp string or null |
+| createdAt,updatedAt | ISO timestamp strings |
+
+BestBidCents selects the lowest numeric amount among submitted/accepted bids; null means none. Because the projection omits bid currency, this is not a supported cross-currency price comparison. Do not label it USD, compute a discount or treat it as an awarded amount. categoryLabel falls back to raw category if not recognized. Status vocabulary currently draft,collecting_interest,open_for_bids,bidding_closed,awarded,scheduled,in_progress,completed,cancelled,failed; keep unknown status display safe without granting actions.
+
+Eligibility is a discriminated union: `{canCreate:true,communityId:string,communityName:string}` OR `{canCreate:false,reason:string,message:string,actionLabel:string,actionPath:string}`. Reasons: wrong_role,hoa_resident,membership_pending,no_profile_location,no_community. Eligibility refusal is still HTTP 200, not a list failure. The message is server-owned. Action paths currently homeowner community/profile, provider dashboard or admin dashboard; whitelist native destinations, never blindly launch a server string or expose public admin navigation. For hoa_staff wrong_role currently uses admin dashboard fallback, so do not infer role from actionPath.
+
+Eligibility checks role homeowner; active HOA membership takes priority over neighborhood; pending neighborhood blocks; active neighborhood plus routeable address enables creation; missing address or no coverage remains blocked. For this read-only slice canCreate is explanatory, not permission to add a create button without its separate reviewed flow.
+
+Errors: shared 401,403 where applicable,409 missing Bundleen profile,500 profile lookup. List service exception is 500 `{error:"We could not load your requests. Please try again.",reference:string}`. No direct read limiter. Force-dynamic. Sources: src/app/api/homeowner/requests/route.ts; src/lib/server/homeowner-requests.ts (HomeownerRequestView, serialize, listHomeownerRequests, getRequestEligibility).
+
+### Detail: GET /api/homeowner/requests/{requestId}
+
+This is NOT the list DTO nor the internal getHomeownerRequest helper. Handler calls requireHoaUser() (homeowner or hoa_staff), then getNeighborhoodRequest(user.id,requestId). HTTP 200 `{request:NeighborhoodRequestView}`. Only neighborhood records are supported, with exact-community ACTIVE membership and active community. Missing row, HOA row, or another user's draft: 404 `{error:"That service request does not exist."}`. Nonmember/pending/removed membership or archived community: 403 `{error:"You do not have access to this neighbourhood request."}`. Other domain errors use hoaErrorResponse; generic service failure 500 `{error:string}`. Shared auth/profile errors still apply. GET has no mutation guard/rate limit, body or query.
+
+Never use the owned-list payload as a detail authorization fallback after 403/404. Existing HOA/legacy owner rows in list must not be sent to this neighborhood-only detail as though supported; show an honest unsupported detail state or route to separately implemented HOA community flow. `/api/hoa/requests/{id}` exports PATCH only, no GET; do not invent an HOA detail GET. `/api/homeowner/neighbourhood` is the neighborhood hub, a different endpoint.
+
+NeighborhoodRequestView required keys:
+
+| Keys | Wire type |
+|---|---|
+| id,communityId,communityName,title,category,categoryLabel,description,status,createdByName,createdAt | string; createdAt ISO timestamp |
+| budgetMinCents,budgetMaxCents,maxHomes | integer or null |
+| minHomes,totalOccurrences,joinedCount,declinedCount,bidCount | integer; minHomes serialized fallback 1 |
+| enrollmentClosesAt,biddingClosesAt,participantsLockedAt,awardedAt,startDate | ISO timestamp string or null |
+| viewerResponse | joined,declined or null |
+| isOwner | boolean |
+| permissions | object: canRespond,canManage,canViewBids,canEdit booleans |
+| bids | BidSummary[] or null |
+| participants | NeighborhoodParticipant[] or null |
+| agreement | AgreementSummary or null |
+| myVisits | VisitSummary[] |
+| occurrences | OccurrenceSummary[] or null |
+
+There is NO detail context, updatedAt or bestBidCents key. Detail bidCount counts submitted/accepted/rejected; list bidCount counts all bids, so do not assert equality. Permissions are server-derived presentation hints, never authorization. canManage is the assigned neighborhood manager (NOT owner fallback). canViewBids includes manager, owner or joined participant. canRespond requires open unlocked enrollment and not owner. canEdit requires homeowner creator, optional_group, draft/collecting_interest, no lock/agreement/bid.
+
+Bids may be null even when canViewBids=true: serializer catches listRequestBids failures to null. Null is unavailable/not included, not zero bids. Participants contains manager-only `{userId:string,displayName:string,addressReady:boolean,response:joined|declined,isViewer:boolean}`; names only, no addresses. Agreement may be included independently of canViewBids. myVisits contains only caller's own stops. Manager occurrences redact stop locations/access notes. Do not reconstruct or enrich redacted fields from other records.
+
+Nested DTO definitions are canonical in src/lib/hoa-types.ts:
+- BidSummary required string keys id,requestId,providerUserId,providerName,status,currency,pricingBasis,scope,submittedAt; boolean providerVerified; integer amountCents,version; nullable providerCompany,proposedStartDate,estimatedDurationLabel,exclusions,cadenceLabel,validUntil; nullable integer perHomeCents; OPTIONAL integer homeCount,totalOccurrences. pricingBasis total/per_home/per_visit; status draft/submitted/withdrawn/accepted/rejected/expired.
+- AgreementSummary strings id,requestId,requestTitle,communityId,communityName,providerUserId,providerName,currency,pricingBasis,scope,status,createdAt; integers amountCents,lockedHomeCount; nullable integer perHomeCents; nullable strings providerCompany,cadenceLabel,startDate,endDate. status active/completed/cancelled.
+- VisitSummary strings id,occurrenceId,targetKind,stopLabel,status; nullable strings unitId,homeownerUserId,addressLine1,accessNotes,scheduledDate,windowStart,windowEnd,completionNote,completedAt; nullable numbers latitude,longitude; nullable integers stopRank,estimatedMinutes. targetKind unit/homeowner; status unscheduled/scheduled/en_route/in_progress/completed/skipped/blocked/cancelled.
+- OccurrenceSummary strings id,agreementId,serviceDate,status; integer sequence; nullable string schedulePublishedAt; visits array. Status planned/in_progress/completed/cancelled.
+
+Money remains integer cents. Budget is USD; bids/agreements carry currency and pricingBasis, which must be displayed accurately rather than labeling all quotes per-home. Server timestamps use toISOString; localize instants for display and label timezone where deadlines matter. Visit windowStart/windowEnd are strings, not guaranteed ISO timestamps; preserve them as time-window labels. Do not calculate lifecycle changes from the device clock. Null dates/budgets show an absence label, not epoch/zero.
+
+Sources: src/lib/neighborhood-types.ts; src/lib/server/neighborhood-market.ts (requestSelect, permissionsFor, serializeRequest, visitsFor, getNeighborhoodRequest); src/lib/server/market-auth.ts::requireActiveNeighborhoodMember; src/lib/server/visit-views.ts; src/lib/hoa-types.ts; src/app/api/homeowner/requests/[requestId]/route.ts.
+
+### Acceptance boundaries for this slice
+
+Test list zero/multiple/capped results; both eligibility union branches and every reason; nullable legacy budget/deadline/best bid; unknown category/status; authorized neighborhood detail; 401/409/403/404/500; revoked membership after list; a list context=hoa row; denied/null nested arrays; null bids with canViewBids=true; whole-cent formatting and unknown currency fallback; slow/offline retry without duplicate navigation; session/sign-out clears request state. Do not show mutations, claim scheduling/bidding parity, or expose participant detail beyond returned fields. Contract fixtures are test evidence only; live source-backed reads and cross-user/community isolation still require nonproduction runtime tests.
+
+## R02 discovery: read-only Account and recent in-app notifications
+
+Prepared 2026-11-01 while R01 verification continues. This is contract discovery for a prospective slice, not delivery or live verification. No app/backend writes, mark-read, dismissal, profile editing, push permissions or device-token registration are included. Preserve existing Phase 2/live release gates.
+
+### GET /api/profile: complete Account DTO
+
+No body, query, user id or pagination. `authorizeRequest()` resolves the current Clerk identity to live Bundleen profile; database read uses only that session user's id. HTTP 200 returns the CommonProfile object directly (NO profile envelope). Force-dynamic, nodejs. No direct rate-limit guard.
+
+| Required key | Wire type | Display rule |
+|---|---|---|
+| id | string | Opaque Bundleen id; not Clerk id; need not show to customer |
+| email,fullName | string | Server account details, plain text |
+| role | homeowner/provider/hoa_staff/admin | Account type only; cannot infer manager authority |
+| isVerified | boolean | Clerk email verification, NOT provider vetting or confirmed residence |
+| phone,address,neighborhood | string or null | Explicit unavailable/not supplied state for null |
+| latitude,longitude | number or null | Location hints; no need to expose raw coordinates on Account screen |
+| avatarUrl | string or null | Optional photo; missing/failed photo must retain initials fallback |
+| avatarUpdatedAt | ISO timestamp string or null | Metadata, not necessary to display |
+| createdAt | ISO timestamp string | Honest member-since date; localize for display |
+| communityRadiusMi | number | Backend-owned fixed radius; not proof of coverage or editable preference |
+
+Source `src/lib/profile-types.ts::CommonProfile`; `src/lib/server/profile.ts::commonProfileSelect,serializeCommonProfile`; `src/app/api/profile/route.ts`. Serializer falls back unknown server role to homeowner, but mobile should still handle unexpected values without enabling privileged routes. Neighborhood is profile text, not a guaranteed live membership; use separate viewer context/community contracts for membership. A verified-email label must not become a generic verified-provider badge.
+
+Errors are `{error:string}`: shared authorization 401 unauthenticated,409 missing Bundleen profile,500 lookup outage; GET own-record race may return404 "Profile not found." and internal read failure500 "Something went wrong on our end. Please try again.". No role restriction is passed to authorizeRequest, so normally no wrong-role403 from this handler. Middleware/transport can still differ; retain API client's general response handling. Do not return an earlier user's cached profile after sign-out/account switch or substitute invented account details after failure.
+
+### GET /api/me/notifications: exact recent-list contract
+
+No body or query parsing: no client limit, cursor, unread-only filter, userId or pagination. Handler returns HTTP200 `{notifications:NotificationSummary[]}`. `listNotifications(sessionUser.id)` filters WHERE userId, orders createdAt descending, and requests default30 rows. Service helper internally clamps its optional limit to1..100, but this GET never exposes that parameter. There is no total/unread-count/hasMore/nextCursor field. Call the screen "Recent notifications" and do not imply a complete history, a globally accurate unread badge or infinite scroll. Empty array is a valid successful empty state.
+
+Every notification has required keys:
+
+| Key | Wire type | Meaning |
+|---|---|---|
+| id | string | Opaque notification identity |
+| kind | string | Known values invitation,survey,request,bid,award,schedule,visit,review,account,security,reminder,booking,issue,message; safe generic fallback for future kinds |
+| title,body | string | Plain text; canonical notification builder caps200/1000 characters respectively; never interpret HTML/Markdown |
+| linkPath | string or null | Stored navigation hint, not authority or proof mobile supports destination |
+| readAt | ISO timestamp string or null | null=unread; nonnull=read on server |
+| createdAt | ISO timestamp string | Server event timestamp |
+
+GET is force-dynamic and has no direct rate-limit guard. It only reads: opening/refreshing/tapping a card must NOT mark it read in this slice. Read status can change in web; refresh re-fetches authoritative data. There is no notification-detail GET; a native full-text view can use its already-fetched item, with session-scoped memory only. POST /api/me/notifications marks all read; POST /api/me/notifications/{id} marks one; DELETE same path dismisses. Those are explicitly outside R02. Do not call them automatically or add swipe-dismiss.
+
+Shared auth errors apply (401,409,500). Handler list failure500 `{error:"Something went wrong on our end. Please try again."}`. `/api/me/*` is middleware-protected with auth.protect(), so unauthenticated content/status may precede handler JSON; use established API client semantics. No individual404 applies to this collection GET. Ownership is database WHERE userId, never a user id provided by mobile. Sources: src/app/api/me/notifications/route.ts; src/lib/server/notifications.ts::listNotifications; src/lib/hoa-types.ts::NotificationSummary; prisma/schema.prisma::NotificationKind.
+
+### Link targets and routing boundaries
+
+Observed producers point to homeowner dashboard/community/neighbourhood/chat, provider dashboard/hoa/schedule/messages, HOA dashboard/amenities, homeowner amenities/{amenityId}, homeowner amenities/issues, support/{ticketId}, internal admin pages, and `/`; conversation links include a `?thread={conversationId}` query. Broadcast links can add other paths. This is an open stored string, not a closed enum. Some targets have no independent matching page (such as homeowner amenities/issues) or are not yet implemented natively. Do not infer a request id from a neighborhood hub link. Do not claim all notifications are actionable on mobile.
+
+The lowest-risk useful R02 scope is text-only notification cards and optional local full-text expansion with no outbound/deep-link action at all. If navigation is added later, explicitly whitelist fully supported native paths, keep role/ownership revalidation, reject arbitrary schemes/hosts/protocol-relative URLs and unsupported/internal-admin destinations, and show an honest unavailable destination state. Never pass linkPath straight to a URL launcher/router. The notification GET simply serializes the stored path; broadcast input validation elsewhere is not a client security guarantee.
+
+### Recommended minimal native scope and acceptance
+
+Account: server full name, email, phone, address/neighborhood, account type, member-since, specifically labeled email-verification state; optional accessible avatar fallback. Do not add manager controls, profile edit or location permission. Notifications: latest30 server records, chronological title/body/date, accessible read/unread text, pull-to-refresh/retry and meaningful empty/offline/expired-session states. This improves actual parity without pretending profile settings, push or notification mutations exist in mobile.
+
+Tests: direct profile envelope; all nullable fields; true/false email verification label; all roles/unknown fallback without privilege; invalid response handling; notifications empty/mixed read state, unknown kind, long text/text scaling, null/unsupported/malicious link hints rendered inert, no POST/PATCH/DELETE on opening/refresh/selection, accurate recent-list labeling with30 rows, no fabricated total unread, session loss/account switch clears sensitive data, 401/409/404(profile)/500, late response after sign-out. Contract fixtures prove parser/UI behavior only; live identity isolation and actual iOS/Android runtime remain gated separately.
+
+## R03 discovery: read-only provider Home overview
+
+Source inspection only, 2026-11-01. No live requests, server changes or R03 app implementation performed. This is a proposed next slice, not delivered parity. Sources: `src/app/api/provider/overview/route.ts`, `src/lib/server/provider-api.ts`, `src/lib/server/provider-overview.ts`, `src/lib/server/provider-reviews.ts`, `src/lib/server/conversations.ts`, `src/lib/server/hoa-api.ts`, `src/lib/server/auth.ts`, `src/hooks/useProviderOverview.ts`, `src/app/app/provider/dashboard/page.tsx`, `src/components/layout/ProviderShell.tsx`, `src/components/layout/ViewerIdentity.tsx`, and `prisma/schema.prisma`.
+
+### HTTP contract and read gate
+
+`GET /api/provider/overview`: no body, query, provider/user id, filters or pagination. HTTP200 `{overview: ProviderOverview}` (required envelope). Nodejs, force-dynamic, no direct read-rate-limit guard. Handler first calls `requireProviderConsole()`, which calls `requireProviderUser()` → `authorizeRequest(['provider'])`, then looks up `ProviderProfile` by the verified session's Bundleen user id. All overview queries carry that id in their WHERE clauses, including participant-scoped conversations. Do not supply identity from mobile.
+
+A real provider profile must exist. Its `accountStatus` enum is `pending | active | suspended`. **All three may read their own overview**, history and personal account. Pending is not an API failure; suspended does not mean delete/hide history. The separate mutation gate blocks suspended accounts with403 and applies mutation rate limits, but is not invoked for this GET. Active status alone is not proof of license/insurance vetting, bid eligibility, coverage or email verification. This slice must not enable bid/message/account-status mutations based on a status label.
+
+Errors:401 `{error:'Authentication required.'}`;403 wrong role `{error:'You do not have access to this resource.'}`;409 missing common Bundleen user `{error:'Complete your Bundleen profile before continuing.'}`;409 missing provider profile `{error:'Finish setting up your provider account to use this.'}`. Shared common-profile lookup500 is JSON. Errors thrown by `getProviderOverview` are normalized by `hoaErrorResponse` (generic500 JSON, known domain statuses where applicable). **ProviderProfile lookup inside `requireProviderConsole` happens before the handler's try/catch**, so its database failure may be framework-generated500/non-JSON; retain existing transport rejection rather than inventing a successful empty overview. Middleware may also precede handler responses. No successful-empty404 contract exists for this aggregate endpoint.
+
+There are two provider-profile reads (gate, then aggregate): if the profile disappears between them, the aggregate's fallback is `companyName:null,accountStatus:'pending'`, not another409. Do not confuse the internal aggregator fallback with the route's normal missing-provider409 behavior.
+
+### Exact required overview fields
+
+| Field | JSON type / source meaning |
+|---|---|
+| companyName | string or null; nullable provider trading name |
+| accountStatus | string enum pending/active/suspended; database account state |
+| activeBids | nonnegative integer; ServiceBid status submitted only |
+| jobsCompleted | nonnegative integer; ServiceAgreement status completed count, all time |
+| activeJobs | nonnegative integer; ServiceAgreement status active count |
+| revenueTotalCents | nonnegative integer; sum of snapshotted amountCents on all completed agreements |
+| revenue30dCents | nonnegative integer; completed-agreement amountCents with updatedAt >= server now minus30 days, within bounded recent query |
+| previous30dCents | nonnegative integer; same for updatedAt >= now minus60 days and < now minus30 days |
+| revenueChangePct | integer or null; rounded ((current-prior)/prior)*100 when prior>0, otherwise null; negative and >100 values are valid |
+| monthlyRevenue | array of6 `{month:string,cents:nonnegative integer}`; YYYY-MM UTC month keys, oldest first, ending in server current month; zeros inserted by server |
+| currency | string; newest recent completed agreement's currency, otherwise `usd` |
+| winRatePct | integer0..100 or null; rounded accepted/(accepted+rejected)*100; null if no decided bids; submitted/withdrawn/expired do not count as losses |
+| averageRating | finite number1..5 or null; published reviews only, rounded to1 decimal; null when no published reviews |
+| reviewsCount | nonnegative integer; count of published reviews (removed reviews excluded) |
+| unreadMessages | nonnegative integer; all unread messages from other people in conversations where caller is provider OR customer; not an in-app notification count |
+| recentThreads | array, at most3 ConversationThread records ordered by lastMessageAt descending nulls last, then createdAt descending |
+
+No `userId`, `providerId`, completion timestamp, `asOf`, next cursor, payout balance, paid amount, future revenue estimate or permission boolean is returned. Currency and nullable comparisons must not be replaced with invented USD/0% defaults on malformed data. Unknown accountStatus must display a neutral unavailable/unknown state or fail strict parsing; never promote to active.
+
+ConversationThread required strings: `id,requestId,requestTitle,communityName,otherPartyName`; `otherPartyRole` customer/provider; nullable strings `lastMessagePreview,lastMessageAt`; nonnegative integer `unreadCount`. `lastMessageAt` is ISO UTC when present. The three previews are not a complete inbox; the global unreadMessages value is independently counted and need not equal their sum. Opening this aggregate never marks messages read. A later messaging slice needs separately authorized transcript routes; a preview is not authority to view a guessed thread.
+
+### Money, time and completeness limitations
+
+These are **completed-agreement values**, not observed payments, settled payouts, cash received or bank balances. Amounts are accepted agreement snapshots, not current bid amounts. The server dates completion using agreement `updatedAt` (last write), not a dedicated immutable paid/completed timestamp. Do not reproduce the web's 'Total earned' wording as proof of collected funds.
+
+The all-time completed sum is an aggregate across all matching rows. Period/trend fields instead use **at most500 newest completed agreements** with updatedAt >= the earlier of now-minus60days or the first UTC day of the trailing6-month window. Thus heavily active providers can have truncated period/trend sums; the response exposes no truncation flag. Month buckets use UTC calendar months; do not shift YYYY-MM keys into the previous local month, infer daily timestamps or replace years with month-only ambiguous labels. RevenueChangePct can be -100, zero, positive, or far above100; null means no valid prior-period comparison. Do not recompute client-side business arithmetic or substitute0% for null.
+
+**Currency gap:** the aggregator sums `amountCents` across agreements without grouping/filtering currency, then labels the entire result using `recent[0]?.currency ?? 'usd'`. Schema fields are strings with USD defaults, not a single-currency database constraint. Current bid/award paths normally propagate the USD default/snapshot, but this source inspection does not prove every historical/imported row is USD. Unknown or mixed currencies are therefore not safe to convert/relabel as one currency. A strict money UI must not assume this response establishes single-currency accounting. No backend change is authorized by this discovery.
+
+### Proposed bounded R03 scope and gates
+
+Recommended first provider Home slice: server company name (fall back to existing matched profile name when null), explicit Pending review/Active/Suspended account state, active bids, active/completed agreements, published rating plus review count, decided-bid win rate with null 'Not available yet', and optional plain unread-message count with messaging explicitly unavailable. No actionable inbox previews are needed for this bounded slice. Document revenue/trend and conversation previews as deferred if excluded; they are not silently completed parity. Given the currency/completeness gaps above, **prefer deferring money/trend presentation until the manager accepts precise limited wording or a separate reviewed backend contract resolves those gaps**. Do not display estimated payout or claim all-time/period paid income.
+
+The existing web provider dashboard combines overview **and a separate marketplace read**. Its discovery cards, estimated job revenue, bid chips and upcoming stops derive from `/api/provider/marketplace`, not this overview. They are outside this slice. Its shell obtains viewer context separately and `ViewerIdentity.roleLine` labels pending as 'Service provider · Pending review', suspended as 'Service provider · Suspended'; active has no special verification badge. Mobile can state status explicitly without borrowing authority from shell labels.
+
+Integration recommendation: after existing HomeRepository verifies matching profile/context ids and roles, request this overview only for role provider; no provider GET for homeowner/hoa_staff/admin/unknown. Extend HomeData with a nullable provider projection alongside the existing homeowner dashboard. Preserve Account for matched public-role providers even if the overview read returns missing-provider409 or a recoverable read failure; avoid making a provider-console problem erase otherwise authorized personal account navigation. This may warrant a separately typed provider-overview substate/failure rather than failing the entire identity/context load. Any401/failed forced renewal must still globally clear Home/Requests/Account and every route. Role/account refresh, sign-out and late response fences must prevent old-provider data reappearing. Pending/suspended are successful read states with honest labels and no made-up upgrade/activate buttons.
+
+Independent tests should cover the200 envelope; nullable company/rating/percent; all3 statuses and unknown status; zero/positive counts; negative/decimal/overflow/NaN-invalid numbers; nullable vs zero win rate; -100/>100 revenue change if parsed;6 UTC month labels across year boundary; unknown currency; non-provider no-read; missing-provider409 distinguished from successful pending; HTML/framework500 and generic retry; account navigation retained after overview-only failure;401 global clearing and renewal failure; sign-out/account/role-switch late responses; no mutation endpoints;200% text and screenshots with synthetic data. Existing server tests `tests/provider-console-reads.test.ts` assert arithmetic/query ownership and `tests/provider-console-routes.test.ts` cover route gates; inspect/run relevant safe tests if server adaptations are ever separately approved. Live provider identity isolation and native runtime still require staging evidence and do not pass from mocks.
+
+## R04 discovery: read-only Support list and visible conversation
+
+Source-only inspection, 2026-11-01; no R04 implementation, live call or server change. Candidate flow: Account → Support requests → Ticket conversation, for existing matched public roles. Sources: `src/app/api/support/tickets/route.ts`, `src/app/api/support/tickets/[ticketId]/route.ts`, `src/lib/server/support-api.ts`, `src/lib/server/support.ts`, `src/lib/validation/support.ts`, `prisma/schema.prisma`, `src/components/support/SupportCenter.tsx`, `src/components/support/SupportThread.tsx`, `src/components/admin/support/supportPresentation.ts`, and customer support page/layout files.
+
+### Read-only feasibility and authority
+
+Both GET routes call `requireSupportUser()` → `authorizeRequest()` with no role allow-list, then session-scoped read services. The source call graph performs database reads only: active staff assignment lookup, ticket read, optional visible-message read, pure serialization/time calculations. It does **not** update read status, lastActivityAt, notifications, audit rows, SLA state, AI drafts or outbox, and sends no email. Mutating functions elsewhere in the same service are not called by these GETs. There is no support-message readAt field. This makes a bounded read-only mobile slice viable without hidden write consent. No direct read-rate-limit guard. Both routes declare nodejs; neither explicitly declares force-dynamic (the authenticated route path still invokes auth); do not introduce client caching of private ticket data.
+
+**Visibility is broader than only the caller's own tickets.** `requesterVisibilityWhere(userId)` queries CommunityStaffAssignment where userId matches, status=active and role in hoa_manager/hoa_team. It then allows requesterUserId=userId OR communityId in those assignment community IDs. There is no client-supplied requester/community filter and no 'all tickets' branch. The query does not add community.status or global-role conditions to those assignments. Thus active assigned staff, including qualifying homeowner accounts, can see community tickets raised by someone else; a generic resident does not gain that access. Do not label every result 'your ticket', infer authority from global role, or try to client-authorize by requesterEmail/name. Use 'Support requests' and describe records as tickets available to this account, including authorized community tickets where applicable.
+
+`getTicketForRequester` re-runs the same visibility condition with the requested id. Missing and unauthorized tickets both produce404, concealing existence. Revoked assignment after list fetch can therefore produce404 on detail; never fall back to the list as a conversation or claim ownership. Encode id as a single path segment and match the returned detail id. Do not request admin support APIs. Although the raw support gate accepts any signed-in valid role, public mobile navigation should remain homeowner/provider/hoa_staff only; admin and unknown roles keep the established excluded public-navigation policy. Customer web detail redirects admin to the separate admin queue.
+
+### GET /api/support/tickets
+
+No body, query parsing, cursor, filters, owner or community parameters. HTTP200 `{tickets: SupportTicketSummary[]}`; newest lastActivityAt first, **at most100**. No totalCount/hasMore/nextCursor. Label 'Up to 100 recent support requests', not all history. Empty array is success.
+
+All Summary keys are required:
+
+| Fields | JSON type / meaning |
+|---|---|
+| id,ticketNumber,subject | strings; opaque id and human ticket number (generated BDL-sequence) |
+| category | account,billing,service_request,bidding,scheduling,provider_issue,community,technical,other |
+| status | new,open,pending_customer,pending_internal,resolved,closed |
+| priority | low,normal,high,urgent |
+| requesterName,requesterEmail | strings; requester information, not proof current viewer owns ticket |
+| requesterRole | role string captured when ticket was created, not current viewer authority |
+| communityId,communityName | string or null |
+| assignedAdminUserId,assignedAdminName | string or null; unnecessary for proposed public mobile projection |
+| messageCount | nonnegative integer, **unfiltered count of all messages**, including internal notes |
+| awaitingAdminReply,firstResponseOverdue | booleans computed server-side |
+| ageHours | nonnegative finite number, rounded to1 decimal; server time calculation |
+| lastActivityAt,createdAt,updatedAt | ISO UTC timestamp strings |
+
+**Do not display or retain messageCount in the mobile projection.** `ticketSelect._count.messages:true` is not filtered by `customerMessageWhere`; it can exceed visible messages and expose an internal-note count. Do not show 'N replies' from it or compare it to detail messages. Similarly, lastActivityAt is ticket activity, not necessarily the last visible reply: name it 'Last activity'. Omit requesterEmail, admin assignment identity, priority/SLA flags and computed age from the minimal customer UI. Those fields are present in the wire DTO, but this slice does not need to expose them or promise response times.
+
+Web customer status labels map new→Received, open/pending_internal→With our team, pending_customer→Waiting on you, resolved→Resolved, closed→Closed. Because authorized community viewers may not be the requester, prefer neutral **Waiting on requester** for pending_customer in this mobile read-only view. Unknown statuses/categories should be safe inert labels or strict parse failures; never derive permission or a write action. Subject max160 and message max10000 are current write-validation constraints, not permission to render HTML.
+
+### GET /api/support/tickets/{ticketId}
+
+HTTP200 `{ticket: SupportTicketDetail}`. Detail is Summary plus these required keys:
+
+| Fields | JSON type |
+|---|---|
+| messages | SupportMessageView[], createdAt ascending; **no pagination or take limit** in current query |
+| relatedRequestId,relatedBidId,relatedVisitId,reopenedFromTicketId | string or null; stored contextual ids, not route authorization |
+| canReply,canReopen | booleans, calculated server-side for actual requester and lifecycle |
+
+Each message requires `id,kind,body,authorName,authorSide,fromAi,createdAt`. Strings: id/body/authorName; authorSide is you/support/customer; createdAt ISO UTC; fromAi boolean. The shared TypeScript message type permits customer_reply/admin_reply/internal_note, **but the customer read query excludes internal_note**. For this mobile customer projection accept only customer_reply/admin_reply; reject internal_note or unknown kind rather than rendering unexpected privileged content. The customer serializer always calls `toMessageView(...,false)`: support reply authorName becomes 'Bundleen Support' (not the staff author's name), fromAi is always false, and authorSide is resolved on the server. AI draft/explanation tables are not queried. An approved AI-assisted admin reply may appear as normal support text; do not invent an AI draft or staff-internal view from it. A defensive fromAi=true response can fail the customer contract rather than reveal unreviewed metadata.
+
+A manager/team member viewing another requester's community ticket may read its customer-visible conversation, but canReply/canReopen are false unless they are the actual requester. This slice ignores both booleans for actions regardless of value: no composer, reopen, create, send, edit, delete or upload. Preserve message body as plain multiline text and server author-side semantics; no HTML/Markdown rendering or auto-linking.
+
+**Long-thread limit:** the service returns every customer-visible message without a page boundary. The existing mobile transport rejects bodies above1MiB; a large legitimate conversation may therefore fail safely. Do not silently truncate a thread or synthesize a success from list metadata, and do not relax the shared byte limit as an incidental UI change. Native pagination would require a separate compatible backend contract. Record this current limit in the slice checkpoint and exercise the oversized-response state.
+
+### Errors, attachments and unsafe links
+
+Shared401/409 missing Bundleen profile/500 errors apply. Detail404 body is `{error:'That ticket does not exist.'}` for both missing and forbidden ids. `SupportError` propagates its status/error string. Generic support error500 adds a reference and text saying the request 'was not saved' even on reads; prefer existing safe ApiFailure read-error copy rather than repeating that inaccurate mutation wording. Shared error mapper also maps P2025 and P2002/23505 to409, though those are normally write-race cases. Do not treat409 as a successful empty conversation, or403/404 as permission to use stale detail. Native401/failed forced renewal clears all session-scoped models/routes; local read failures preserve Account access.
+
+There is **no attachment URL, attachment collection, upload endpoint or media field** in these inspected customer DTOs or SupportTicketMessage schema. Related ids are plain strings and must stay inert. Message/subject text can contain arbitrary URLs or markup-looking content: render plain text, never launch, preload or fetch it. Do not infer attachments from URLs or route notification linkPath automatically into support. External/admin/unsupported links remain inert under the established policy.
+
+### Recommended bounded R04 and independent acceptance
+
+Use a separately scoped Support child model reached from Account, with native Account→list→detail back navigation and platform gestures. Retain only ticket id/number/subject/category/status/communityName/createdAt/lastActivityAt for list and the same plus customer-visible message projection for detail. Hide unnecessary requester/admin identity metadata and unfiltered counts. Each detail GET must reauthorize and response-id-match; no list-backed conversation fallback. Empty tickets and empty visible-message arrays are genuine empty states. Preserve year+explicit timezone in timestamps, wrapping long text and200% scaling,48px actions, loading/error/retry/refresh and immediate sensitive-state clearing on logout/identity/role refresh. A list read does not establish individual ownership or unrestricted community management authority.
+
+Tests should prove GET-only traffic, encoded ids, response id match, unknown/wrong role no navigation, authorized community ticket wording, own vs community authorSide presentation, null community,100-result limit honesty, all statuses/categories (neutral waiting-on-requester), internal_note/unknown message kind rejection, fromAi contract handling, ignored internal-note count/admin metadata/related ids, text-only malicious URLs/HTML, detail403/404 after a previously visible list, generic500/409/401, forced-renewal expiry, unbounded-server/1MiB-client failure behavior, late list/detail after sign-out or role switch, list→detail scroll reset, Android back/iOS swipe and200% screenshots. Existing source test `tests/support-ai-safety.test.ts` checks customer filter use and exclusion of AI draft tables, but source assertions are not live role-isolation proof. No hidden GET mutation blocks this bounded plan; live staging authorization and the long-thread API limitation remain explicit gates/limitations.
+
+## R05 discovery: provider opportunities, source-only candidate
+
+Inspected 2026-11-01. This is a recommendation, not implemented or live-verified. Sources: `src/app/api/provider/marketplace/route.ts`, `src/app/api/provider/marketplace/requests/[requestId]/bid/route.ts`, `src/lib/server/hoa-api.ts`, `src/lib/server/provider-api.ts`, `src/lib/server/hoa-market.ts` (`requireProvider`, `providerCanSeeRequest`, `getProviderHoaWorkspace`, serializers), `src/lib/server/visit-views.ts`, `src/lib/hoa-types.ts`, and `src/components/provider/ProviderMarketplaceFeed.tsx`.
+
+### Read gate and visibility
+
+`GET /api/provider/marketplace` returns `{workspace}`. It uses `requireProviderUser` (authenticated provider role), then `requireProvider(userId,{allowPending:true})`. Unlike provider overview's console gate, a missing provider record throws **403**, not409. Authentication/profile failures remain shared authorization responses; wrong role403; workflow failures retain their status; generic failure500. The generic unique-conflict mapper can emit409, which should remain a neutral recoverable error rather than inventing a missing-profile explanation.
+
+Pending and suspended records can read their own workspace/history. `workspace.eligible` is false with a server reason for suspended status, non-active status, or absent license/insurance verification timestamps. Order: suspended first; other non-active next; then missing either credential. Account active alone and email `isVerified` are insufficient. Eligibility is not authorization for a mobile mutation. This endpoint does not include accountStatus itself; do not derive a new account status from free-text reasons.
+
+Feed rows additionally require normalized category within provider trades, an active service area covering a server-approved community location, an active community, request status open_for_bids, and bidding deadline null or strictly later than server now. HOA matching uses verified HOA coordinates; neighbourhood matching uses admin-owned community centre, never participant coordinates. Unknown coverage is not a match. Postal-only coverage cannot match a neighbourhood with no community postal address. No client-supplied filters/location/ID establish eligibility. An empty eligible feed may reflect trade, coverage, location, deadline or the candidate cap; do not assert a specific cause.
+
+### Exact feed projection and limits
+
+Workspace fields are eligible:boolean, ineligibleReason:string|null, serviceAreas:array, categories:string[], feed:array, bids:array, agreements:array, occurrencesByAgreement:object. The proposed mobile projection retains only eligible/reason/feed. Required feed fields:
+
+| Field | Source wire type and meaning |
+| --- | --- |
+| requestId,communityName,title,category,description | string; category normalized when recognized, otherwise raw |
+| context | hoa or neighborhood |
+| kind | compulsory_recurring or optional_group |
+| locality,region,recurrenceLabel | string|null |
+| totalOccurrences | integer; visits/occurrences per home |
+| homeCount | integer; joined participation count, no participant identities |
+| approximateDistanceMi | number|null; rounded miles to community point from nearest service-area centre, not a home location |
+| budgetMinCents,budgetMaxCents | integer|null; permitted request budget in US cents under the request validation/schema contract; no separate currency field |
+| startDate,biddingClosesAt | ISO UTC timestamp string|null |
+| myBid | caller's own BidSummary|null; exclude from first mobile projection |
+
+The service fetches at most **200 open candidate requests before eligibility filtering**, ordered by biddingClosesAt ascending. Thus feed length <=200, possibly far smaller, and it is not a complete or paginated opportunity catalogue. No cursor/total is exposed. Active service areas have no explicit take. Own bids: latest50 by updatedAt descending. Own agreements: latest25 by createdAt descending. Occurrences and nested visits for those agreements have **no explicit count cap**. Feed myBid uses the caller's matching bid (no competing bid amounts); it is not an invitation to fetch arbitrary IDs.
+
+Dates are serialized using toISOString. Mobile should keep existing year+explicit timezone labels, null-not-zero handling and safe finite/nonnegative/count integer validation; do not infer request availability from device time. `approximateDistanceMi` is nullable, not a zero-distance fallback. Existing helper actually takes the nearest centre among active areas, despite comments referring to covering areas; describe only approximate community distance, not exact travel distance.
+
+### Money, privacy and side effects
+
+Request budget fields have an explicit US-cents contract in the underlying request validation comment/schema and migration; a separate currency field is not required to preserve those request budgets as USD (including R01). Web rounds their display to zero fractional digits, which mobile should not copy for exact cents. **Omitting budgets in the first opportunities slice is a bounded-scope choice**, not a missing authoritative budget currency. This does not establish currency for a selected best-bid amount or dashboard savings: bids/agreements carry currency, USD defaults are not a database-wide invariant, and those aggregate serializers omit currency. No revenue/earnings totals or savings. Own bids/agreements do carry their own currency string, amountCents and pricingBasis, with nullable perHomeCents; legacy pricing bases and dimensions make them a separate later contract, not a safe sum or payout. Their omission is deliberate.
+
+Feed projection contains community locality/region, approximate distance, and counts, with no participant/unit/address/access-note list or competing amounts. However the same workspace payload includes the provider's won agreements and serialized occurrence visits with includeLocation=true and includeAccessNotes=true. Those sections can contain precise unit/home address snapshots and access notes, scoped by agreement providerUserId. Pending/suspended reads still retrieve their own history. A mobile opportunities parser must discard serviceAreas/bids/myBid/agreements/occurrences and never retain, log, render or cache their address/route data. This does not reduce network payload size: the existing1MiB client bound can reject a large workspace before projection. That is a concrete endpoint-size limitation; keep a recoverable error, no silent truncation or relaxed cap. A future feed-only server endpoint would reduce unnecessary sensitive transfer and payload risk, but is outside this source-only candidate.
+
+The inspected GET workflow performs database reads and serialization only: no bid/read-status/visit mutations, notification dispatch or audit writes. Shared authentication remains existing infrastructure. The request-specific bid route exports PUT and DELETE only; **there is no provider opportunity GET-by-ID detail route** in this route family. Do not repurpose homeowner/neighbourhood detail endpoints or invent direct-ID access.
+
+### Recommended split and acceptance
+
+A viable first candidate is provider-only **Opportunities list with inline expandable description/details from the current feed**, reached after matched profile/context; local child errors preserve Home/Account. Retain title/community/context/category/kind, recurrence/counts, optional approximate distance, start/deadline and description; omit money, coordinates, own bids and awarded-work sections. Show server ineligible state separately from an eligible empty feed, with read-only wording and no bid/coverage/verification action. Suggested limit text: “Available opportunities from up to200 open requests checked”; never “all nearby jobs.” A separate detail route, if desired later, must explicitly be a current-feed projection refreshed through the same GET, discard selection when missing, and never imply independent server detail authorization. Inline expansion is the smaller initial scope.
+
+Before acceptance test provider-only request isolation; pending/suspended/unverified state with empty feed; missing-record403; neutral409/500; eligible empty state; null dates/distance/recurrence; invalid enums/counts/dates; candidate cap wording; malicious descriptions as inert plain text; no retained private nested sections; oversized workspace failure; retry/refresh that replaces prior feed; no direct-ID or mutation traffic; logout/account/role/401 forced-renewal clearing and late-response fences;200% text and native back. Server coverage/privacy source inspection is not live cross-provider authorization proof. Live gates remain open; no R05 implementation is authorized by this appendix alone.
+
+
+### Currency display correction after R05 source audit
+
+Request budget fields retain their explicit US-cents source contract, so R01 continues displaying those budgets as USD. The request-list bestBidCents projection selects a numeric bid amount without its currency; the dashboard savings calculation subtracts agreement amounts without preserving currency. Defaults of USD do not establish a database-wide currency invariant for bids/agreements. Mobile therefore omits the “Lowest live bid” monetary display and Home “Recorded savings” card and discount explanation. R05 initially retained typed parsing for response-contract compatibility. R06 removed both unused fields from mobile parsing and retained DTOs; response extras are ignored, and neither field is displayed or aggregated. R05 continues to omit budgets as a bounded first-slice choice, and omits all own-bid/earnings aggregates. This is a source-review correction, not evidence of a production incident or completed live validation.
+
+## R06 discovery: read-only provider coverage summary
+
+Source-only inspection, 2026-11-01; no implementation or live calls. Sources: `src/app/api/provider/service-areas/route.ts`, `src/app/api/provider/service-areas/[areaId]/route.ts`, `src/app/api/provider/marketplace/service-areas/route.ts`, `src/lib/server/provider-coverage.ts`, `src/lib/provider-coverage.ts`, `src/lib/validation/provider-coverage.ts`, `src/components/provider/ProviderServiceAreasPanel.tsx`, and `prisma/migrations/20260823090000_provider_coverage_map/migration.sql`.
+
+### Endpoint, ownership and differences from other provider gates
+
+Canonical `GET /api/provider/service-areas` returns `{areas:[ProviderServiceAreaView...]}`. It calls requireProviderUser, so shared authentication/profile authorization applies and only the provider role is allowed. **The list function does not call requireProviderAccount or requireProviderConsole**: it directly queries providerServiceArea where providerUserId equals the authenticated user and status=active. Thus a provider-role user without a providerProfile may receive200 with an empty list; do not fabricate missing-record403/409 from other endpoints. Account activation and credential verification are not checked by this read. Pending/suspended providers can inspect saved coverage; saved coverage is not proof of marketplace eligibility.
+
+Rows are ordered primary first, then createdAt ascending. No take, cursor or total is exposed. Canonical creation enforces at most10 active areas, but this is a write-time rule, not a GET result cap or pagination contract; do not discard/reject an otherwise valid read merely because it exceeds10. GET has no workflow writes, audit, geocoding, normalization or primary-area repair. Error mapping is shared hoaErrorResponse: domain status if thrown, generic conflict409 and generic500; normal ownership filtering returns no other account's rows. There is no list eligibility/reason object; an empty array simply means no active rows returned.
+
+The legacy `/api/provider/marketplace/service-areas` route exports POST only; do not invent GET there or fetch the entire marketplace workspace to duplicate this read. Canonical `[areaId]` exports PUT/DELETE only; no detail GET is needed. A separate own-provider-profile fetch is unnecessary for a read-only coverage summary: existing matched Account/profile/context already scopes navigation, and this endpoint contains the relevant display fields. No map/geolocation/geocoder/geometry implementation is proposed.
+
+### Full wire shape and minimal retained projection
+
+Each row requires id:string, label:string, centerLatitude:number|null, centerLongitude:number|null, radiusMiles:number|null, postalCodes:string[], isPrimary:boolean, formattedAddress:string|null, locality:string|null, region:string|null, postalCode:string|null, countryCode:string|null, status:active|removed, createdAt:string and updatedAt:string (toISOString UTC). The active-only list should return status=active; unexpected removed rows should fail the minimal active-coverage contract rather than be displayed as current coverage.
+
+Recommend retaining only id,label,radiusMiles,isPrimary,locality,region,postalCodes,status and updatedAt, with strict required/null/type checks, canonical timestamps and finite radius1..100 when present. Legacy postal-only rows have null coordinates/radius and postalCodes; do not turn them into a default15-mile circle, or infer that every null radius is an eligible coverage match. New circle writes normalize radius to a tenth and require1..100; migration clamps older nonnull radii to that range and constrains geometry. A nullable radius remains “Radius not provided”; saved postal coverage may be shown as plain codes with neutral legacy wording. Do not enforce exactly one primary in the client: migration/index enforces at most one active primary, and GET does not repair missing primary state.
+
+Drop exact centre coordinates, formatted business address, singular geocoded postalCode/countryCode and createdAt if not displayed. These are the owner's private operational data, not customer-visible geography, and are not needed for this summary. Display locality/region and the saved label as plain text; user-entered labels are not guaranteed to be non-sensitive, so no analytics/logging of response fields. The server still transmits the full own-row data before projection; keep existing1MiB total response and timeout limits. No arbitrary links, navigation by area ID, network maps, permissions prompts or location processing.
+
+### Proposed scope and acceptance
+
+Provider-only Account → “Service areas” native backable summary after matched profile/context, using a separate lazy child read. Show each saved label, primary flag, optional coarse locality/region, radius or null state, postal-code coverage if supplied and updated date with year/timezone. Explain that saved coverage is one input to server opportunity matching and does not establish activation, verification or bidding access. No area edit/add/remove/promote/coverage preview controls; no current-location or distance-to-customer claims. Missing areas is a genuine empty state, not an onboarding redirect. A summary can use current Opportunities and Account independently; a coverage read failure must not blank their matched state.
+
+Independent checks: provider-only traffic/navigation; real canonicalGET only; pending/suspended read states without eligibility claims; absent providerProfile-compatible empty response; strict null/radius/status/date validation; postal-only legacy rows; no precise-address retention/rendering; no10-row truncation assumption; response-size limit; retry/refresh and stale-generation fences;401 forced-renewal global clearing; neutral403/409/5xx errors preserving Account; native back/route switching and200% text. No server change is required for this bounded source candidate, though live ownership isolation remains unverified.
+
+### Unused monetary-field removal (implemented in R06)
+
+After the preceding UI correction, `Dashboard.savedCents` and `RequestSummary.bestBidCents` had no production consumers. The following minimal plan was implemented in R06, with independent tests adjusted to prove unused response extras are ignored while request budgets remain strict. Remove Dashboard constructor parsing of total_saved_cents and its savedCents declaration in `apps/mobile/lib/features/home/models.dart`; retain activeRequests/activeBids/coldStart. Remove RequestSummary constructor parsing and declaration of bestBidCents in `apps/mobile/lib/features/requests/models.dart`; retain explicit-USD budgetMinCents/budgetMaxCents. Do not change backend payloads or serializers.
+
+Test updates included: mobile_test's savedCents assertion should instead verify used dashboard fields and that omitted/malformed unused total_saved_cents does not enter the projection. requests_test's malformed-bestBid rejection becomes acceptance/ignored-field coverage while invalid retained budget fields must still reject. Existing synthetic extras can remain in fixtures and UI-absence regressions should remain: they demonstrate the response fields do not render. No migration, dependency, widget-layout or server edit is necessary. This removes unnecessary retained data and avoids rejecting otherwise valid used projections based on unused ambiguous aggregates; it does not redefine the backend's monetary semantics.
+
+## R07 discovery: homeowner neighbourhood snapshot and request feed
+
+Source-only inspection, 2026-11-01; no implementation/live calls. Sources: `src/app/api/homeowner/neighbourhood/route.ts` (British spelling), `src/lib/server/neighborhood-market.ts` (getNeighborhoodHub/serializeRequest/visitsFor), `src/lib/server/market-auth.ts`, `src/lib/server/hoa-market.ts` (listRequestBids), `src/lib/server/visit-views.ts`, `src/lib/neighborhood-types.ts`, `src/lib/home-address.ts`, `src/lib/server/auth.ts`, and related `src/app/api/me/managed-communities/route.ts`/`src/lib/server/communities.ts`.
+
+### Gate, call graph and absence of workflow mutation
+
+`GET /api/homeowner/neighbourhood` calls requireHoaUser, which permits homeowner and hoa_staff, then getNeighborhoodHub(authenticatedUserId). A mobile homeowner-only entry is a bounded product choice, not a claim that the API rejects hoa_staff. Authentication returns401, missing Bundleen profile409, wrong role403, database/generic failures500. The auth helper looks up the existing profile; it does not provision it. No community ID/query parameter controls the selected community.
+
+Hub selects the first active membership whose community is active and type=neighborhood. No orderBy is specified for that membership query; do not implement client selection or infer guaranteed behaviour for inconsistent multiple memberships. No qualifying membership returns `{hub:null}` with200. This includes absent/pending/revoked membership, inactive community, and HOA-only membership; the response cannot distinguish these causes. Do not label null as proof of a missing address, onboarding failure, invitation requirement, or eligibility to join.
+
+The inspected GET call graph is read-only: membership lookup; manager assignment lookup; membership count; request/user selects; per-request permissions; listRequestBids authorization/select; agreement lookup; own/manager visit selects; pure serializers. It does not invoke enrollment/deadline reconciliation, membership creation/update, onboarding, geocoding, audit/notifications, participation or message/read-state changes. Reconciliation functions in the same module are separate write paths, not called by getNeighborhoodHub. hasRouteableHomeAddress is a pure validation of stored address and finite in-range coordinates, not a geocoder. This makes a bounded snapshot feasible without a hidden workflow-write blocker.
+
+### Snapshot and feed contract
+
+Envelope requires hub:null or an object:
+
+| Field | Wire type and exact scope |
+| --- | --- |
+| communityId,communityName | string; community selected by existing active membership |
+| isManager | boolean; viewer matches server-resolved assigned neighbourhood manager |
+| managerName | string|null; manager display name only, not email |
+| activeNeighbourCount | integer; active membership count in selected community, includes caller/manager where active; not a count of households or other neighbours |
+| addressReady | boolean; caller's stored address/coordinates pass routeability predicate, not a permission or verification guarantee |
+| requests | NeighborhoodRequestView[], up to50, newest createdAt first |
+
+Manager resolution requires active neighborhood_manager assignment in the active neighbourhood and an active membership for that manager; earliest assignedAt wins. Helper selects manager email internally, but hub only serializes fullName. Never expose inferred manager email/contact actions.
+
+Requests are scoped to that exact community and exclude drafts unless createdByUserId is the viewer; all other statuses are included, not just active/open work. The50 cap is before serialization, no cursor/total. Detail projection is the same NeighborhoodRequestView described in R01: required id,communityId,communityName,title,category,categoryLabel,description,status,createdByName,createdAt; nullable USD budgetMinCents/budgetMaxCents/maxHomes; integer minHomes,totalOccurrences,joinedCount,declinedCount,bidCount; nullable enrollmentClosesAt/biddingClosesAt/participantsLockedAt/awardedAt/startDate; viewerResponse joined|declined|null; isOwner boolean; permissions object. bidCount counts submitted/accepted/rejected bids, unlike owner-request list count. Status is display data, never mobile participation/award authority. Dates use toISOString UTC.
+
+Recommended first projection: communityId/name, activeNeighbourCount, optional managerName; request id/communityId/title/categoryLabel/status/createdAt and optional plain description for inline expansion. Validate each retained request communityId equals the hub communityId; no arbitrary community/request lookup. Omit budget and all monetary aggregates as scope control, not because request USD budgets lack a contract. Omit isManager/addressReady/permissions when not used, rather than turn them into management or profile-edit CTAs. If shown later, addressReady needs precise “saved address ready for routing” wording, not “verified.”
+
+### PII, nested size and related reads
+
+Full hub responses may include much more than the proposed projection. Bid details are allowed for owner/joined participant/manager and may be null even when canViewBids is true because read errors are caught. Manager-only participants contain user IDs/display names/addressReady/response, never raw addresses. Agreements include provider identity, scope, money/currency. myVisits contains the caller's own exact stop location; manager occurrences include group scheduling/status with other locations redacted by the shared manager serializer. These are not fields for the first mobile snapshot: discard bids,participants,agreement,myVisits,occurrences,createdByName and permissions from retained models; no route/address/logging/link rendering. The50 request cap does not bound nested arrays: bids/participations/visits/occurrences lack equivalent explicit per-request caps. Existing1MiB/total-time client limits may reject a large hub before projection; keep a recoverable error and do not truncate or expand limits.
+
+Related `GET /api/me/managed-communities` is homeowner-only and reads active assignments in active communities, then their communities, active member identities (up to200 per community), staff identities and active/pending counts. It is also a read-only path, but it is a distinct manager roster with broader identity data and not an alternative homeowner neighbourhood resolver. Do not call it for the snapshot, infer membership from canManageCommunity, or expose manager functionality. Existing R01 request detail GET independently reauthorizes exact membership; this candidate need not reuse it or expand Requests model ownership assumptions.
+
+### Recommended bounded candidate and acceptance
+
+Homeowner-only “Neighbourhood” snapshot/feed, lazy read after matched profile/context. Distinguish hub=null (“No active neighbourhood is available to this account”) from a real hub with zero visible requests. Label active member count truthfully and “Up to50 recent visible requests”; never claim every request or all neighbours. Inline expansion of retained current-feed description avoids duplicating owner Requests list/detail state or inventing access by ID. Native navigation/back and200% wrapping, refresh that discards previous hub/expansion, session/role/account fences,401 global clearing, and local recoverable errors preserving Account are required. No joining, voting, responding, creating, awarding, invitations, member list, map, profile edits or scheduling actions.
+
+Independent checks before acceptance: canonical British-spelledGET only; homeowner product gating and wrong-role isolation; null hub versus empty feed; missing/malformed fields and cross-community request ID binding;50 cap honest; unknown status safe display; plain malicious text inert; discarded private nested fields; oversized response/timeout; membership revocation resulting in null/error clears old snapshot; refresh/account/signout late-response suppression; manager flags do not add workflows; server membership sole authority. Source inspection supports read-only preparation, not live cross-user/community privacy validation. No implementation is authorized by this discovery appendix alone.
+
+## R08 discovery: provider published reviews
+
+Source-only inspection, 2026-11-01; no implementation/live reads. Sources: `src/app/api/provider/ratings/route.ts`, `src/lib/server/provider-api.ts`, `src/lib/server/provider-reviews.ts`, `src/lib/validation/provider-console.ts`, `src/hooks/useProviderRatings.ts`, `src/app/app/provider/reviews/page.tsx`, review creation functions in `src/lib/server/hoa-market.ts`, and Review schema/database rating constraint.
+
+`GET /api/provider/ratings` uses requireProviderConsole: authenticated provider role AND an existing providerProfile are required. Missing provider record409; wrong role403; unauthenticated401; shared profile lookup/generic failures500. Pending and suspended provider records can read their own reviews; this read does not grant bidding/response/edit rights or assert credential verification. Queries use authenticated providerUserId, never a supplied providerId. GET performs only provider-account lookup, review rating groupBy and review findMany plus relation selects; no read-status, review mutation, moderation, notifications or audit writes.
+
+Both list and summary independently filter status=published. Removed reviews are excluded from both; no internal/pending review stream is queried. Database Review defaults to published. Source creation requires a completed visit to the caller's own home with active membership, or a completed agreement and community-manager authorization; uniqueness constrains one author per visit/agreement. This provenance does not justify an invented per-row “verified” badge: the GET has no verification field. Prefer **Published reviews** to the web page's broader “verified reviews” wording. This is separate from amenity reviews/moderation APIs.
+
+### Exact response and paging
+
+Response is `{summary,reviews,page}`, without an extra envelope. Each review requires id:string, reviewerName:string (current author fullName), rating:integer1..5, comment:string, subjectLabel:string|null, createdAt:ISO UTC string. subjectLabel joins underlying request category (not necessarily a prettified label) with community name; visit agreement takes precedence over direct agreement, absent linkage yields null. There is no per-row status, anonymous flag, provider/reviewer user ID, author role, avatar, contact information, address, response, attachment or link field. Do not invent anonymity or resolve reviewer identities elsewhere. Names/comments/subject labels must remain plain text; user content may itself contain personal information or URLs, so no logging, linkification or extra identity lookup.
+
+summary: averageRating:number|null, totalCount:integer, distribution:[{rating:integer,count:integer,percent:integer}]. Average is a weighted average across **all published reviews**, rounded to one decimal, null when zero. Five distribution buckets are always5,4,3,2,1; counts include all published rows, percent is individually rounded to nearest whole percent (so total may not equal100). A first-page list must never compute a replacement average or fabricate zeros for a null average.
+
+page: limit:integer, offset:integer, total:integer (summary.totalCount), hasMore:boolean (`offset + returned rows.length < total`). Default limit20; explicit finite >=1 limit is floored/capped50, otherwise defaults20. Offset finite>=0 is floored/capped10,000, otherwise0. Rows order createdAt descending, with no ID tie-breaker. The groupBy and list run in parallel without a transactional snapshot: moderation/new reviews can race between queries, so do not enforce exact cross-array totals or derive stable pagination guarantees. Offset paging can skip/duplicate under concurrent changes; this matters if later implementing load-more.
+
+### Recommended first slice
+
+Provider Account → Published reviews, native backable lazy read of the first page only, explicit `limit=20&offset=0` (or default equivalent). Retain review id/name/rating/comment/subject/date and page.hasMore/limit/offset for honest first-page wording. Optional summary average/count can be retained as server summary; distribution is unnecessary for a minimal list and should be discarded if not shown. Display “Up to20 recent published reviews” with a clear more-available note when hasMore; no claim of complete history and no fake pagination control. A later bounded pagination task can address offset races separately.
+
+Validate retained field types, rating integer1..5, UTC dates, nullable label, finite average1..5 or null if retained, safe nonnegative counts, expected first-page offset/limit and <=20 unique returned IDs. Do not require all summary/list counts to be perfectly consistent across concurrent reads. Empty list is a truthful current-page empty state; null average remains unavailable, not0stars. Keep read-only wording, no review response/edit/delete/report controls, no moderation display, no subject navigation or arbitrary review-by-ID calls. Errors remain local preserving Home/Account;401/failed forced renewal clears global state; close/refresh/session/role changes clear prior review text and fence late results. Existing1MiB/timeout limits apply; no oversized-comment truncation disguised as a complete review.
+
+Independent acceptance: provider-only canonicalGET; missing-record409 and pending/suspended reads; published-only source filter and discarded unexpected metadata; no inferred anonymity/verification; exact first-page bounds and hasMore wording; null subject/average and unknown text inert; retained field validation; no rounded-distribution sum assumption; local403/409/500/size/timeout errors; retry/refresh removal of moderated-away prior rows;401globalclear; owner/role/route stale fences; native back and200% text. Live cross-provider ownership and moderation visibility remain external gates. No hidden GET mutation blocks this candidate; no new implementation is authorized by the appendix itself.
+
+## R09 discovery: read-only job inbox and transcript
+
+Source-only inspection, 2026-11-01; no implementation/live calls. Sources: homeowner/provider `inbox/route.ts`, `inbox/[threadId]/route.ts`, `inbox/[threadId]/messages/route.ts`, `inbox/[threadId]/read/route.ts`; `src/lib/server/conversations.ts`; provider/HOA API gates; `src/lib/validation/provider-console.ts`; `src/hooks/useConversationInbox.ts`.
+
+### Reads, roles and hidden-write check
+
+Customer endpoints: `GET /api/homeowner/inbox` and `GET /api/homeowner/inbox/{encodedThreadId}` use requireHoaUser (homeowner or hoa_staff). Provider equivalents under `/api/provider/inbox` use requireProviderConsole (provider role plus providerProfile; missing record409). Pending/suspended providers can read existing threads. Shared auth errors401/409/403/500 apply. A bounded mobile entry can support existing homeowner/provider/hoa_staff personal roles, mapping homeowner and hoa_staff to the homeowner path; never derive the path from message party role or display names.
+
+List is participant-scoped inside the database query: providerUserId=authenticatedUserId OR customerUserId=authenticatedUserId. Detail first calls requireParticipant with both requested threadId and the same participant OR inside where; absent/other-account threads both return404. Once authorized, message reads/counts use that conversationId. No current community-membership, live-bid, current-award or request-open test is applied to existing reads; stored participation intentionally preserves conversation history after a withdrawn bid. Do not use membership revocation alone to assert existing thread access must disappear or fabricate access from community management flags. Creation has separate business-relation checks, outside this scope.
+
+**Both GET workflows are read-only**: selects/counts/serialization only. No thread creation, membership/onboarding, geocoding, receipt, notification or read-state write occurs in listConversations/getConversation. `messages` routes export POST only for sending; they are not transcript GET routes. `read` routes export POST only and call markConversationRead, updating incoming unread messages after a participant check. Web useConversationInbox first GETs the transcript, then separately POSTs `/read` when unreadCount>0. Mobile must not copy that follow-up in this read-only slice: explain that viewing does not mark messages read, and do not optimistically clear unread counts. No hidden GET mutation prevents a bounded transcript preview.
+
+### Wire shapes and exact limits
+
+Inbox response `{threads:ConversationThread[],unreadTotal:integer}`. Thread requires id,requestId,requestTitle,communityName,otherPartyName strings; otherPartyRole customer|provider; lastMessagePreview:string|null; lastMessageAt:ISO UTC|null; unreadCount:integer. Other-party name is current fullName, not anonymous. List fetches at most100 threads ordered lastMessageAt descending nulls last, then createdAt descending; no cursor or total-thread count. Preview is the entire latest message body, not a bounded snippet. unreadTotal sums only those returned threads and is **not necessarily an all-account unread total**; separate countUnreadMessages has different all-thread semantics. Recommend omit unreadTotal and unread badges initially rather than suggest complete coverage.
+
+Detail response `{thread,messages,hasMore,totalMessages}`. Messages require id,conversationId,senderUserId,senderName strings, isMine:boolean (server-derived), body:string, readAt:ISO UTC|null, createdAt:ISO UTC. Recommended retained subset: id,conversationId,senderName,isMine,body,createdAt; discard senderUserId and readAt. Server-derived isMine controls You versus sender-name labelling; do not compare arbitrary names/IDs to derive a side. Each message conversationId and response thread.id must match the selected ID.
+
+Default transcript limit50, max100; limit finite>=1 floored/capped, otherwise50. Offset finite>=0 floored/capped10,000, otherwise0. First request can use `?limit=50&offset=0`. Messages are selected newest-first by createdAt descending and reversed for oldest-first presentation within that latest window. hasMore means older messages exist (`offset+returned count < totalMessages`). Do not describe first50 as the beginning or entire conversation. No stable ID tie-breaker or transactional snapshot spans total/unread/list reads, so counts can race with incoming messages; avoid exact cross-total consistency assertions. Future older-message pagination requires separate offset/duplicate/race handling.
+
+### Privacy and bounded candidate
+
+No attachment/image/contact/address field is serialized; no internal-note/moderation subtype exists in this job-chat contract. Display names, community/request labels, message previews and bodies are personal content and may include addresses/URLs typed by participants. Keep plain text, no URL launching/linkification, identity lookup, avatar fetch or logging. Drop requestId if not routing it, unread metadata and receipt metadata if not displayed. Do not navigate to requests or arbitrary parties from server strings. New sends validate up to4,000 normalized characters; do not use that write bound to reject/truncate valid legacy read content. Existing1MiB/timeout response limit remains the total safeguard, including up to100 full-body previews.
+
+Recommend Account → Inbox (up to100 recent conversations) → native backable Conversation (latest50 messages), with no send composer, start conversation, mark-read, reply, report, request link or pagination control. Use concise “Read-only preview; viewing does not mark messages read” and a hasMore note that older messages are not included. An empty transcript is valid. Selecting a listed ID triggers a fresh authorized detailGET;404/403 clears previous transcript with no cached-list fallback. Provider missing-record409 remains a local recoverable setup/error state preserving Account; customer409 can represent shared profile state, so neutral wording across roles is acceptable.
+
+Require strict retained DTO types, unique IDs, <=100 list/<=50 first-window rows, canonical timestamps, valid party enum, nonnegative safe counts if retained, thread/message binding, empty/loading/error/retry/refresh; close/refresh/account/role/logout generation fences and401globalclear. Refresh must discard previous transcript, not combine possibly stale pages. Keep native back/child-route switching and200% text. Independent tests must prove only two selected-role GET routes are used, no `/read` or `/messages` requests, foreign-thread404 and nofallback, no leaks through party/role/path swaps, bounded wording, no receipt claims, and late-response suppression. Source authorization is not live cross-participant privacy proof; external staging gates remain open. No implementation is authorized by this appendix alone.
+
+## R10 discovery: customer-visible individual quotes
+
+Source-only inspection, 2026-11-01; no implementation/live calls/backend money changes. Sources: `src/lib/server/neighborhood-market.ts` (permissionsFor/serializeRequest), `src/lib/server/hoa-market.ts` (serializeBid/listRequestBids/submitBid), `src/lib/hoa-types.ts`, `src/lib/bid-pricing.ts`, `src/components/ui/BidPrice.tsx`, `src/lib/validation/hoa.ts`, ServiceBid schema and money/currency constraints in `20260816090000_hoa_first_marketplace`, plus `20261028190000_early_award_bid_and_visit_guards`.
+
+R09 role wording clarification: homeowner **and hoa_staff** use `/api/homeowner/inbox`; provider uses `/api/provider/inbox`. This mapping comes from matched account role, never otherPartyRole.
+
+### Authorization and availability
+
+Existing R01 neighbourhood request detail GET is sufficient; no additional quote/provider-ID endpoint is required. Its membership gate and request visibility remain mandatory. `permissions.canViewBids` is true for the server-resolved manager, request creator, or joined participant. Otherwise bids=null. When allowed, serializeRequest calls listRequestBids and catches any failure to null; therefore canViewBids=true with bids=null means quotes unavailable, **not zero quotes**. An allowed empty array is a genuine returned empty state. No manager UI authority follows from viewing quotes.
+
+listRequestBids independently authorizes manager/joined participant/request creator for neighbourhood requests and filters only submitted,accepted,rejected. Draft/withdrawn quotes are not customer-visible here, though provider-own workspace serialization can include those statuses. All returned rows share the selected requestId; a minimal customer projection should require that binding and unique quote IDs, and reject an unexpected customer status/unknown pricing basis rather than display unsupported commercial semantics. If canViewBids=false but a response contains quote rows, discard or fail closed without rendering. A whole-detail denial/refresh must clear prior quote data, with no owner-list fallback. The existing HOA owner-list exception remains: do not route HOA rows into this neighbourhood detail endpoint.
+
+### Individual quote wire semantics
+
+BidSummary fields: id,requestId,providerUserId,providerName strings; providerCompany:string|null; providerVerified:boolean; status enum; amountCents:integer; currency:string; pricingBasis total|per_home|per_visit; perHomeCents:integer|null; optional homeCount/totalOccurrences integers; proposedStartDate/validUntil nullable ISO UTC; estimatedDurationLabel/exclusions/cadenceLabel nullable strings; scope:string; version:integer>=1; submittedAt:ISO UTC. Serializer uses current provider name/company and defines providerVerified as BOTH licenseVerifiedAt and insuranceVerifiedAt present. It does not include current provider account status, expiry validity, background checks, email verification, quality guarantees or award eligibility. Prefer omit this flag; if ever displayed, label only what the source proves, not a general “verified provider” badge.
+
+For pricingBasis=total, amountCents is the authoritative **whole-job total**. Current bid submission allows only total, forces perHomeCents=null, and retains currency on update (new rows defaultusd). For legacy per_home/per_visit, amountCents is the original **unit quote amount**, not a whole-job total. Web BidPrice labels it per home/per visit and explicitly warns it is not comparable to whole-job totals. Never multiply legacy prices to manufacture a total. perHomeCents is a separately stored nullable legacy field, not a universally authoritative per-home total or permission to override amountCents. Current total bids must not have nonnull perHomeCents; if encountered, treat price as unsupported/inconsistent rather than silently choosing a field.
+
+homeCount is current joined-participation count from request context; totalOccurrences is current request service rounds. These are not necessarily immutable quote snapshots. Web computes fractional-cent display-only averages from a total divided by those dimensions; mobile's narrow slice should omit all such division, averages and inferred savings. Scope/exclusions/duration/cadence and proposed start/valid-until are plain stated terms, not scheduled visits or current guarantee. Version counts revisions; submittedAt is reset when submitted/revised, not necessarily the original creation time.
+
+### Currency and precise bounded recommendation
+
+Database constrains currency to lowercase three ASCII letters, with defaultusd; it does **not** constrain toUSD or to a validated ISO registry. amountCents is a nonnegative integer and web explicitly divides by100 with two fractional digits for all currency labels. Therefore the narrowest accurate first display is **USD quotes only as USD amountCents/100 with exactly two decimal places**, with explicit whole-job/per-home/per-visit basis. For nonusd codes, preserve the code as plain metadata if useful but show “Price unavailable in this preview” instead of guessing denomination rules or treating it as USD. A future multi-currency task must establish supported codes/cent conventions; no FX conversion is implied. This limitation does not block useful quote text/basis display and is separate from R01's explicit-USD request budgets. No lowest/best sort, comparison, aggregate, savings, conversion, ranking or award control.
+
+Recommended minimal retained quote fields: id,requestId,providerName,providerCompany,customer-visible status,amountCents,currency,pricingBasis,scope,nullable exclusions/duration/cadence/proposedStartDate/validUntil,submittedAt; validate perHomeCents sufficiently to reject contradictory total-price data but do not retain it for display. Drop providerUserId/providerVerified/homeCount/totalOccurrences/version unless actually used. Exact integer arithmetic/formatting for cents avoids rounding loss; safe nonnegative integer validation is required. Names/terms are plain text without provider lookup/contact links. Unknown currency must not hide other honest quote terms or imply a free price. For legacy basis, show its original unit basis plus a neutral legacy/not-whole-job-total notice; do not instruct mutation workflows.
+
+The server sorts total quotes by currency then amount, and legacy quotes by ID. Preserve response order only as server ordering; do not label first as recommended/cheapest or make cross-currency comparisons. There is no explicit quote count cap in this read; existing1MiB/timeout limits bound the full request response. A large payload should produce the existing recoverable failure, not silent quote truncation or a relaxed transport bound.
+
+### Acceptance and explicit remaining gap
+
+A read-only quotes section within existing homeowner Requests detail is source-feasible with theUSD-only price rendering fallback above. Test permissionfalse+rows failclosed; allowednull unavailable vs allowedempty none; selected-request binding/duplicateIDs; only submitted/accepted/rejected; total+nonnullperHomeCents contradiction; all three basis labels; exactUSD cents including0 andlarge safe integers; unknowncurrency neverUSD/converted; dropped provideridentity/verification metadata; scope/terms/dates null and plain text; no computed averages/comparison/action; refresh/logout/role/denial stale-data clearing; oversized entiredetail and200% scrolling. Multi-currency accurate display remains a bounded gap until its currency convention is explicitly accepted; no server pricing fix or production incident claim is part of this appendix. Source evidence does not replace live quote visibility testing.
+
+## N04 source-only first transaction: homeowner request creation
+
+Inspected at mobile base f0272811b1c1604ae9025f149ccc81aca3bf2e55. No endpoint was called and no database/account/server file was changed. These source observations are not live acceptance.
+
+### Preconditions and transport
+
+`POST /api/homeowner/requests` uses `authorizeRequest`, per-account `guardHoaMutation`, JSON body reader and `createHomeownerRequestSchema`. Missing verified Clerk session is 401; missing Bundleen profile is 409; profile lookup outage can be 500. Read eligibility from existing `GET /api/homeowner/requests`, but POST rechecks it. Only homeowner role may create; an active HOA membership blocks individual creation. An active neighborhood membership in an active community and a saved routeable address (nonblank address plus finite in-range latitude/longitude) are required. Pending membership, no profile location, no community and HOA residence yield explicit 409 reasons; wrong role yields 403. Membership/address must not be invented by client state.
+
+Body is strict: `title`, `category`, `description`, `budgetMinCents`, `budgetMaxCents` only. Owner/community/status fields are rejected. Text normalization removes specified control characters, normalizes line endings, limits consecutive blank lines and trims. Title is 1–120 characters; description 1–4000; category normalizes into the existing service-category enum. Budgets are integers in USD cents, 0–100,000,000 inclusive, maximum >= minimum. The validator's whole-dollar error string does not alter the cents contract. JSON body limit is 32 KiB. Preserve structured validation field errors and distinguish content-type/body-size/parse errors, authorization/product refusal, rate limiting/unavailable limiter, and server failure. Do not follow returned web action paths blindly as native navigation.
+
+Successful route returns 201 `{request: ...}`. Creation sets server-owned optional_group/collecting_interest, default minimum one home, one occurrence and server enrollment deadline. The owner is automatically joined. Existing own-list and authorized neighborhood-detail GETs are the persistence/read-back path; they have separate serializers and authorization. A creation response is not permission to expose fields absent from the selected mobile projection.
+
+### Duplicate and uncertain-result contract limitations
+
+`src/lib/server/homeowner-requests.ts:306` defines a 120-second duplicate window. Lookup matches owner, normalized title/category/description; it omits budgets, community, kind and status. It runs before the write transaction, with a new UUID for each new creation. Thus it is best-effort sequential dedupe, not a unique idempotency key or concurrency-safe exactly-once operation. A changed-budget submission may return an earlier row; concurrent identical submissions can both pass the lookup. Returning an existing row still produces 201. These are source limitations, not observed production incidents.
+
+After the transaction, the code reads the created record again. A null result yields an explicit saved-but-not-displayable 500; a thrown read/serialization error may reach the generic route error saying not saved even though the transaction committed. Network loss/timeouts or malformed success can also leave an unknown outcome. A 500 is not reliable proof of noncommit.
+
+Mobile proposal: one in-flight submit, account/session-bound draft and operation generation; no automatic POST replay (including copying the GET client's forced-renewal retry behavior). Reauthenticate separately and retain an honest ambiguous-result state. Reconcile through own-list GET then fresh authorized detail, comparing normalized fields, budgets and community where present. The own-list is capped at 100; a missing match cannot prove no commit. A candidate match is not an idempotency receipt. Never use expiry of 120 seconds as a retry-safety guarantee. Require explicit reviewed user resubmission after reconciliation rather than silently issuing another mutation. Even a parsed 201 response must remain bound to the initiating matched session/operation and match returned context/community and normalized submitted fields including budgets; the creation view has no owner-ID field, so ownership comes from server-scoped creation/read rather than comparing an absent field; an old changed-budget dedupe result must not be displayed as the new intent saved. Same-field candidates cannot identify which attempt committed. Denied detail is not evidence of noncommit, and reconciliation must not broaden list/detail permissions. Clear private draft/pending/reconciliation state on identity change, prevent stale completion from applying to a new session, and show truthful pending/uncertain messaging instead of invented success or failure. Parent owns any separately assigned server idempotency/response repair.
+
+### Profile completion and side effects
+
+`POST /api/auth/profile` verifies Clerk identity and primary email, validates `onboardingProfileSchema` (4 KiB auth body limit), then upserts the profile; existing stored role wins over submitted public role. It may retry selected transient persistence failures once. Homeowner address placement is best-effort after profile persistence; profileReady does not prove neighborhood eligibility. Recheck matched profile/context and request eligibility. Profile synchronization also queues a deduplicated welcome notification. It must not be treated as a harmless read or automatically invoked during every mobile startup.
+
+New request transaction includes request, owner participation, audit and preference-aware notifications. Active neighbors other than owner are selected; in-app records and email outbox can be queued, with drain after response. A disposable requester alone does not isolate side effects. Approved fixtures must include an isolated neighborhood and controlled recipients/outbox alongside matched API/database/Clerk/limiter resources. No live fixture creation is currently authorized here.
+
+### Proposed staged acceptance after live-auth gate
+
+1. Parent approves isolated resources, controlled notification recipients/outbox, disposable identities and membership/address setup; verify actual native Bearer profile/context access first.
+2. Eligible homeowner: submit a uniquely identified request once, assert returned ID, own-list appearance, authorized detail and persistence after refresh/relaunch; check server-derived ownership/community and auto-joined participation through approved evidence.
+3. Unauthorized roles, HOA/pending/no-community/no-location states and revoked membership fail without creating records. Invalid/extra fields, budget bounds/order and malformed bodies show truthful errors.
+4. Controlled response-loss/postcommit-read failure tests verify ambiguous UI and no automatic replay. Sequential changed-budget and concurrent identical submissions must be characterized under a separately approved isolated backend test; do not claim idempotency or intentionally generate duplicate notifications outside that scope.
+5. Logout/account switch invalidates pending UI results; no draft/result crosses identity. Verify notification recipients and cleanup via parent-assigned fixture ownership. Native keyboard/form accessibility and physical-device evidence remain distinct gates.
+
+Key source references: `src/app/api/homeowner/requests/route.ts`, `src/lib/validation/homeowner-requests.ts`, `src/lib/server/homeowner-requests.ts`, `src/lib/server/auth.ts`, `src/lib/server/auth-guard.ts`, `src/lib/server/notifications.ts`, `src/app/api/auth/profile/route.ts`, `src/lib/validation/profile.ts`, and `src/lib/home-address.ts`.
