@@ -117,3 +117,17 @@ Parent accepted this priority after R09: one native prerequisite slice, with opt
 Application owner handles native/Dart/config/CI/README; independent reviewer handles compiled configuration tests, four native builds, effective metadata and fresh task-owned no-config launches; security reviewer audits pinned SDK callbacks/storage settings. CI compiles both flavors on Android/iOS and retains unconfigured debug APK/unsigned simulator artifacts for seven days. Run compiled configuration scenarios once in Linux/development CI, alongside normal full-suite checks. No distribution signing or store action.
 
 Acceptance: mismatch/missing/production cases fail before auth/HTTP; matching development/staging factories accept synthetic public values without contacting them; effective APK/plist IDs, labels, callbacks, backup/storage settings match source expectations; both flavors build on both platforms and coexist on fresh task-owned devices. Record actual no-config screenshots and clean up only created devices. Configuration guards reduce mistakes; they do not prove approved backend/Clerk/database pairing or measured SDK persistence/isolation. Real auth callbacks/storage/resume and authenticated UI remain live gates. Native fixture journeys and final artwork/fonts are separate future slices.
+
+## N02 — native fixture journeys
+
+Prerequisite N01 exact head 741b13d54368a172d1e681a613faae172f7246b2 passed all four CI/build/artifact gates in run41372909197. Parent approved this separate bounded slice. Architect owns integration_test, SDK dev dependency/lock and test tooling; independent reviewer owns native evidence and review/test results. Manager owns scope/checkpoint. No production fixture flag or main-entrypoint bypass is permitted.
+
+| Both fresh task-owned Android and iOS runtimes | Acceptance |
+| --- | --- |
+| Homeowner | Home, Requests/detail/back, Community, Account/Inbox/transcript/back, logout clears private content |
+| Provider | Home, Opportunities, Account child page, injected recoverable error/retry, back/logout |
+| Large text and semantics | Key journeys at 200% text; usable labels/controls, no overflow; record exact assertion and input methods |
+| Isolation of fixtures | Inject synthetic AuthSession and strict API transport only from integration_test; unexpected app service/channel/network calls fail; no real auth/account/server access |
+| Evidence | Exact commit, command, device/OS, clearly labelled synthetic screenshots, result and cleanup; distinguish tester input from OS input and screen-reader use |
+
+Production widgets/models are reused directly. Normal main.dart and shipping artifacts retain no fixture data or bypass. SDK integration_test is a development dependency. Branding/fonts, physical devices, VoiceOver/TalkBack, live auth and runtime secure-storage isolation remain separate unrun gates.
