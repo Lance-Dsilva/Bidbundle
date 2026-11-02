@@ -162,3 +162,12 @@ Added26 flavor/config cases. Full flutter test: **467 passed**; flutter analyze:
 After author resolved disabled Android resValues, debug builds passed: Android development11.9s/staging12.8s; iOS simulator development36.0s/staging89.4s. Effective suffix IDs/labels and Android callback/shared-session/backup metadata inspected. Both variants installed side by side and rendered no-config UI on fresh task-owned Android API36 and iOS26.4.1 devices. Six final screenshots inspected. Android initial system-process first-boot delay recovered after Wait and cold relaunch; no performance claim. Devices stopped/deleted afterward without touching existing device state.
 
 Evidence and limitations: evidence/native-isolation/README.md. No live Clerk/API credentials, callbacks, authenticated UI, secure-storage isolation or physical-device accessibility tested. No production flavor/registration/signing/backend changes. Native simulator linker ad hoc signatures are not release signing. Resulting-head CI remains outstanding, separate from prior Inbox CI.
+
+
+## N02 independent native fixture verification — 2026-11-01
+
+Exact successful harness head: **4ac16367ed04206ea76cebecb15a72423c807bdb**. Android emulator5582/API36 and iPhone17 iOS26.4.1 simulator36131BF5-98C6-4B94-813A-AFF84C07D0B3 ran serially with flutter drive development flavor/test-only target and screenshot driver. Each passed5 authored scenarios (framework counter6 includes tearDownAll), exit0; Android34s/iOS32s journey timers.28 captures retained, representative100%/200% captures independently inspected; exact commands/OS/limits and SHA256 manifest in evidence/native-fixtures.
+
+Initial5efbb418 Android run failed three journeys due test-helper lazy-finder/scroll-settlement defects; guard and homeowner100% passed. Test-only correction added settled/hit-testable/fatal-miss actions and robust restoration. Both entire platform runs repeated at4ac16367; no forced taps/skips/production changes. Guard self-checks passed on both native bindings; complete route audits and logout clearing/interactive semantics/effective scales passed.
+
+Final full flutter test **467 passed**; analyzer **No issues found**; formatter **61 files, zero changes**. Task Android/iOS devices stopped/deleted and temporary AVD removed, with existing device data preserved. No real auth/API/ownership/callback/storage/platform-back/screen-reader/physical-device evidence. Native screenshots are synthetic app-surface rendering and tester input proof only. Resulting-head CI remains separate from prior N01 CI.

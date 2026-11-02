@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: N01 nonproduction native build isolation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: N02 synthetic native fixture journeys, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -56,3 +56,5 @@ N01 independently reviewed locally: 467 full-suite tests, clean formatter/analyz
 Prior checkpoint R09 commit 8ffca3595b44ad635dddc28fef9a1745c087c3ee passed exact-head CI41371209164 (macOS125041867425, Ubuntu125041867587), including both native builds. This does not certify the new N01 configuration.
 
 N01 exact-head CI41372909197 passed all four native jobs and artifact uploads at 741b13d54368a172d1e681a613faae172f7246b2. N02 native fixture journeys are approved and in progress, with acceptance matrix in PLAN.md. They will validate synthetic native rendering/navigation only; no live or screen-reader acceptance is inferred.
+
+N02 corrected source 4ac16367ed04206ea76cebecb15a72423c807bdb passed five scenarios on each actual task-owned Android/iOS runtime, covering two roles at 100%/200% and guard self-checks. Initial failed harness source 5efbb41 is not accepted evidence. Test-only fixes addressed scrolling/lazy finders and cleanup; no production source changes. Native synthetic captures and final review are under evidence/native-fixtures. Exact pushed-head CI remains required. Tester BackButton taps and semantics assertions do not prove OS input or assistive-technology operation.
