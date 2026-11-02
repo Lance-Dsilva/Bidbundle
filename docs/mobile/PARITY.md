@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R05 and local R06 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R06 and local R07 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -9,7 +9,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | Homeowner | dashboard | homeowner/dashboard | Implemented summary read/UI with cold start/loading/errors; savings display withheld pending currency-aware aggregate contract; real authenticated runtime proof pending. |
 | Homeowner | request/new, requests/detail | homeowner/requests + id + transition + participation + award | R01: read-only own-request list and authorized neighborhood detail implemented; legacy HOA detail explicitly unsupported. Create/edit/cancel, participation and lifecycle remain PLANNED; no award authority inferred. |
 | Homeowner | bidding-room, bids | homeowner/bids; homeowner/requests/id/award; hoa/requests/id/bids | Requester/participant bid comparison; provider selection only by the server-authorized community manager; no auto-award |
-| Homeowner/resident | neighbourhood, community | homeowner/neighbourhood; HOA requests, join, surveys/vote | Coverage, membership, community requests/participation/surveys; no resident manager rights |
+| Homeowner/resident | neighbourhood, community | homeowner/neighbourhood; HOA requests, join, surveys/vote | R07 local Community snapshot/visible request feed independently reviewed with343tests; no manager rights. Membership changes, participation, surveys and full community journeys remain PLANNED |
 | Homeowner | chat | homeowner/inbox + thread/messages/read | Participant-only conversations, unread, send/retry/empty states |
 | Homeowner | profile/preferences/avatar | profile, profile/homeowner, profile/avatar | Address/coverage/preferences/upload; no mutable role or verification |
 | Provider | dashboard | provider/overview; provider/marketplace | R03 local: status/activity counts, nullable published rating and decided-bid win rate. Independent local review and exact-head native CI passed. Money/trends and inbox deferred; marketplace/eligibility remain PLANNED. |

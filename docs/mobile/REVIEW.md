@@ -188,3 +188,19 @@ Independent final evidence: **43 coverage cases and four captures added; full su
 Accepted for the bounded local read-only draft, subject to resulting-head CI/native builds. Source/mock evidence does not establish actual provider ownership isolation, live SDK session/storage/callback correctness, production font/device accessibility or screen-reader behavior. Existing live gates remain open; no server changes or external calls performed.
 
 Independent source-security audit also found no actionable R06 issue: canonical lazy provider read, no invented provider-profile/status authority, coarse-only retained projection, no10-row cap/maps/permissions/mutations, sibling-route clearing and owner/generation/global401/dispose fences. Monetary aggregate declarations are absent while fixed-USD budgets remain. This is bounded source acceptance only; live isolation is still unverified.
+
+
+## R07 independent Community snapshot review — 2026-11-01
+
+Reviewed the minimal neighbourhood snapshot against the British-spelled GET contract. Homeowner-only navigation is a product restriction, not a claim that server excludes HOA staff. The client makes one lazy /api/homeowner/neighbourhood read, without manager-roster, arbitrary community, per-request, or mutation calls. It retains only community identity/name, active member count, optional manager name and current-feed request summaries/descriptions. Permission/manager/address flags, bids, participants, agreements and exact visit data do not enter the projection or create actions. The larger authorized response still crosses the network before projection under the existing1MiB/time limits.
+
+Strict retained-field parsing enforces canonical dates, safe counts, at most50 unique requests and exact request-to-hub community binding. Unknown status remains inert display data. Null hub is distinct from a real hub with no visible requests; neither invents an onboarding or eligibility diagnosis. Refresh clears old snapshot/expansion before loading; revoked-to-null, owner/role/tab/signout transitions and late old401 cannot revive or expire the wrong scope. Local errors preserve Account and forced-renewal401 clears all session models. No blocking source finding.
+
+Independent tests cover canonical role-only lazy GET, null/empty distinction, required fields, count/date limits,50cap/duplicates/community mismatch, plain text/privacy omission, flags granting no actions,1MiB and timeout recovery,403/409/500, refresh revocation, owner/role/signout/old401 races and200% actual four-tab/inline/back navigation. Synthetic captures cover populated, unavailable, empty and large text. The initial large-text heading had a final-letter wrap; a readability refinement was requested before final capture acceptance.
+
+
+### R07 final disposition
+
+Author changed the page heading to Community, matching its tab. Re-inspected the200% capture: heading no longer splits its last letter, four navigation labels fit, and content remains scrollable. Final post-refinement **full343-test suite passed** (39 Community cases plus four captures added), analyzer clean, formatter47files/zero changes. Refreshed Home/Requests/Account/Support fixture images for the four-tab layout and copied four new Community images with provenance.
+
+Independent source-security audit also found no actionable issue: minimal privacy projection, exact hub binding/50 unique feed limit, lazy canonical homeowner read, retained-ID-only expansion and refresh/null/error/close/session generation fences. Accepted for this bounded local read-only draft, subject to resulting-head CI/native builds. No live user/community isolation, membership revocation, native SDK session/storage/callback or production-device accessibility gate is passed by source/mocked evidence.

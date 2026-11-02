@@ -1,3 +1,4 @@
+import '../community/community_screen.dart';
 import '../opportunities/opportunities_screen.dart';
 
 import 'package:flutter/material.dart';
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     listenable: Listenable.merge([
       widget.model,
       widget.model.requests,
+      widget.model.community,
       widget.model.account,
       widget.model.provider,
       widget.model.support,
@@ -54,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final dashboard = data?.dashboard;
       final opportunitiesVisible =
           model.canViewOpportunities && model.showOpportunities;
+      final communityVisible = model.canViewCommunity && model.showCommunity;
       final requestsVisible = model.canViewRequests && model.showRequests;
       final accountVisible = model.canViewAccount && model.showAccount;
       final notificationsVisible =
@@ -64,7 +67,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final supportDetailVisible =
           supportVisible && model.support.selectedId != null;
       final secondaryVisible =
-          requestsVisible || accountVisible || opportunitiesVisible;
+          requestsVisible ||
+          accountVisible ||
+          opportunitiesVisible ||
+          communityVisible;
       final serviceAreasVisible =
           accountVisible && model.account.showingServiceAreas;
       final nestedVisible =
@@ -107,15 +113,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           bottomNavigationBar: model.canViewAccount
               ? NavigationBar(
                   selectedIndex: accountVisible
-                      ? ((model.canViewRequests || model.canViewOpportunities)
+                      ? (model.canViewCommunity
+                            ? 3
+                            : model.canViewOpportunities
                             ? 2
                             : 1)
-                      : ((requestsVisible || opportunitiesVisible) ? 1 : 0),
+                      : communityVisible
+                      ? 2
+                      : (requestsVisible || opportunitiesVisible)
+                      ? 1
+                      : 0,
                   onDestinationSelected: (index) {
                     if (index == 0) {
                       model.showHome();
                     } else if (model.canViewRequests && index == 1) {
                       model.openRequests();
+                    } else if (model.canViewCommunity && index == 2) {
+                      model.openCommunity();
                     } else if (model.canViewOpportunities && index == 1) {
                       model.openOpportunities();
                     } else {
@@ -132,6 +146,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         icon: Icon(Icons.list_alt),
                         label: 'Requests',
                       ),
+                    if (model.canViewCommunity)
+                      const NavigationDestination(
+                        icon: Icon(Icons.groups_outlined),
+                        label: 'Community',
+                      ),
                     if (model.canViewOpportunities)
                       const NavigationDestination(
                         icon: Icon(Icons.work_outline),
@@ -145,7 +164,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 )
               : null,
           body: SafeArea(
-            child: opportunitiesVisible
+            child: communityVisible
+                ? CommunityScreen(model: model.community)
+                : opportunitiesVisible
                 ? OpportunitiesScreen(model: model.opportunities)
                 : requestsVisible
                 ? RequestsNavigator(model: model.requests)

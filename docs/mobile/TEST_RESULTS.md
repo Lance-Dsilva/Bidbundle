@@ -126,3 +126,12 @@ Added43 coverage tests plus4 synthetic captures; updated existing Home/Requests 
 Coverage includes lazy provider-only canonicalGET, required/null/type fields, radius boundaries/nonfinite rejection, legacy postal-only data, strict active status/date,12rows without truncation or primary invention,403/409/500 retry, empty state,1MiB rejection preserving Account, refresh/late owner/close clearing,401failed-renewal global expiry,200% actualbutton flow, privatefield absence/plaintext, platformback/iOSgesture/signout and rapid Account-child route switching. Affected105-test run and final fullsuite both passed; no application fix was needed by this reviewer.
 
 Four inspected screenshots copied to evidence/coverage with synthetic provenance. No native build/live API/provider isolation verification by reviewer; resulting-head CI is required independently of historical R05 proof. Exact address/geometry still travels in authorized network responses before projection, bounded by the existing transport limit.
+
+
+## R07 local independent verification — 2026-11-01
+
+Added39 Community cases plus4 synthetic captures. Final post-heading-refinement flutter test: **343 passed**. flutter analyze: **No issues found**. Final formatter: **47 files, zero changes**.
+
+Coverage: exact British endpoint/lazy homeowner product gating, no manager or per-ID calls, nullhub versus emptyfeed, requiredfields/canonicaldates/safecounts,50cap/duplicate/communitybinding, unknownstatus inert, privatepayload omission and managerflags without actions, plain inline text,1MiB/timeout/error recovery preservingAccount, revoked-null refresh clearing, forced-renewal401 and stale owner/role/signout/old401 fences,200% actual four-tab/Show description/back flow. No source defect found; readability refinement replaced awkward large-text Neighborhood heading with Community.
+
+Four Community captures inspected/copied; prior homeowner Home/Requests/Account/Support captures refreshed to four tabs. Fixtures use fake auth/API data and substitute fonts. No live API/nativebuild/device-isolation check performed by reviewer; resulting-head CI and established live gates remain separate from historical R06 proof.

@@ -1,3 +1,5 @@
+import '../community/models.dart';
+import '../community/community_model.dart';
 import '../service_areas/models.dart';
 import '../service_areas/service_areas_model.dart';
 import '../opportunities/models.dart';
@@ -27,6 +29,7 @@ class HomeModel extends ChangeNotifier {
     this.auth,
     this.repository, {
     RequestsRepository? requestsRepository,
+    CommunityRepository? communityRepository,
     AccountRepository? accountRepository,
     ProviderRepository? providerRepository,
     SupportRepository? supportRepository,
@@ -35,6 +38,10 @@ class HomeModel extends ChangeNotifier {
   }) {
     opportunities = OpportunitiesModel(
       opportunitiesRepository ?? OpportunitiesRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
+    community = CommunityModel(
+      communityRepository ?? CommunityRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
     requests = RequestsModel(
@@ -60,11 +67,34 @@ class HomeModel extends ChangeNotifier {
       onSessionExpired: _sessionExpired,
     );
   }
+  late final CommunityModel community;
+  bool showCommunity = false;
+  bool get canViewCommunity => canViewRequests;
+  Future<void> openCommunity() async {
+    if (!canViewCommunity) return;
+    _closeOpportunities();
+    showAccount = false;
+    account.closeNotifications();
+    account.closeSupport();
+    account.closeServiceAreas();
+    showRequests = false;
+    requests.closeDetail();
+    showCommunity = true;
+    _emit();
+    if (community.status == CommunityStatus.idle) await community.load();
+  }
+
+  void _closeCommunity() {
+    showCommunity = false;
+    community.close();
+  }
+
   late final OpportunitiesModel opportunities;
   bool showOpportunities = false;
   bool get canViewOpportunities => canViewProvider;
   Future<void> openOpportunities() async {
     if (!canViewOpportunities) return;
+    _closeCommunity();
     showAccount = false;
     account.closeNotifications();
     account.closeSupport();
@@ -102,6 +132,7 @@ class HomeModel extends ChangeNotifier {
       data!.profile.id == data!.context.userId;
   Future<void> openAccount() async {
     if (!canViewAccount) return;
+    _closeCommunity();
     _closeOpportunities();
     showRequests = false;
     requests.closeDetail();
@@ -119,6 +150,7 @@ class HomeModel extends ChangeNotifier {
       data?.profile.id == data?.context.userId;
   Future<void> openRequests() async {
     if (!canViewRequests) return;
+    _closeCommunity();
     _closeOpportunities();
     showAccount = false;
     account.closeNotifications();
@@ -130,6 +162,7 @@ class HomeModel extends ChangeNotifier {
   }
 
   void showHome() {
+    _closeCommunity();
     _closeOpportunities();
     showAccount = false;
     account.closeNotifications();
@@ -141,6 +174,8 @@ class HomeModel extends ChangeNotifier {
   }
 
   void _clearPrivateState() {
+    showCommunity = false;
+    community.clear();
     showOpportunities = false;
     opportunities.clear();
     provider.clear();
@@ -257,6 +292,9 @@ class HomeModel extends ChangeNotifier {
       requests.setOwner(
         loaded.context.role == 'homeowner' ? loaded.profile.id : null,
       );
+      community.setOwner(
+        loaded.context.role == 'homeowner' ? loaded.profile.id : null,
+      );
       account.setOwner(loaded.profile.id, loaded.context.role);
       opportunities.setOwner(
         loaded.context.role == 'provider' ? loaded.profile.id : null,
@@ -308,6 +346,7 @@ class HomeModel extends ChangeNotifier {
     _disposed = true;
     _generation++;
     requests.dispose();
+    community.dispose();
     account.dispose();
     provider.dispose();
     support.dispose();
