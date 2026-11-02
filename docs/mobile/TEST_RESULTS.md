@@ -182,3 +182,10 @@ All four normal builds passed: Android development 11.5 s / staging 7.6 s; iOS s
 Final complete unit/widget suite: **467 passed**. Analyzer: **No issues found**. Formatter: **62 files, zero changes**. Eight synthetic native app captures plus two OS launcher captures were independently inspected and indexed in `evidence/native-presentation`. Task devices were stopped/deleted and temporary AVD data removed; existing device/account data untouched.
 
 This focused N03 run does not repeat the full N02 native matrix or establish live auth/API/callback/storage, OS back gestures, screen-reader/physical-device accessibility or distribution signing. Resulting-head CI remains separate.
+
+
+### N03 generator portability addendum — 2026-11-01
+
+Independent maintenance-tool review accepted PATH discovery, task-specific executable overrides and a clean temporary output root. Seven checks passed: outside-repository invocation through PATH (including spaces), explicit overrides with empty PATH, missing rsvg, missing ImageMagick, wrong version, nonempty output and direct symlink output. Both successful runs reproduced all 22 PNGs and the manifest byte-for-byte. Failure cases were actionable and preserved existing content; missing/wrong tools created no output directory.
+
+Only the generator and its instructions changed; UI, native source, canonical SVG and derivative assets remained unchanged. No global install/settings or native rerun was needed. Generator hash and detailed results are in `evidence/native-presentation/README.md` and `generator-portability-results.json`. Existing native results retain their original source basis rather than being relabelled as a new native run.

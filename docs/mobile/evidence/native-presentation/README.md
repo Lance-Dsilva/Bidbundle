@@ -53,3 +53,15 @@ Android used a fresh task-owned `Bundleen_N03` emulator profile: Android 16 / AP
 Each native run reports counter 3 because the framework includes `tearDownAll`; there are two authored scenarios, not three. Both scales use exact service-request multisets, zero unexpected guard violations and explicit logout state clearing. No forced taps, suppressed misses or skipped scenarios were used. Source and asset review found no blocking issue; no correction was required during independent execution.
 
 Synthetic tester taps, BackButton actions and semantic/layout bounds are not OS back gestures, TalkBack/VoiceOver traversal, physical-device accessibility or authenticated native lifecycle evidence. Launchers establish installed icon/label appearance only. Normal simulator builds are not release signing or store validation. No live Clerk/API, callback registration, storage isolation, backend ownership, account, credential or server setting was changed or verified. Resulting-head CI remains separate from this local evidence.
+
+
+## Generator portability addendum — 2026-11-01
+
+The maintenance generator now discovers tools on PATH with optional `BUNDLEEN_BRAND_RSVG` / `BUNDLEEN_BRAND_MAGICK` overrides and supports a new or empty `--output-root`. Independent verification covered seven cases, recorded in `generator-portability-results.json`:
+
+- Invocation from a temporary directory outside the repository, with tools discovered only through a PATH directory containing spaces: all 22 PNGs and the manifest were byte-identical to checked-in outputs.
+- The same outside-directory invocation with an empty PATH and explicit executable overrides: all outputs and the manifest were again byte-identical.
+- Missing rsvg, missing ImageMagick and wrong renderer version: actionable nonzero failures before the requested output directory was created.
+- Nonempty output and direct symlink output: rejected, with existing sentinel content unchanged.
+
+Tested generator SHA256: `d4b75fbf2705fa54fae62b48c5ec9a9d879368c345793ccdf1cdb2882de1db7c`. Tests used the existing pinned local renderers and disposable directories; no installs, network access or global settings changes occurred. Source SVG, generated assets and UI/native code were unchanged. Accordingly, the preceding native evidence remains attached to its original tested source commit; no native rerun was claimed for this maintenance-only fix. Byte reproducibility was verified on the pinned local toolchain, not asserted across all renderer builds or operating systems.

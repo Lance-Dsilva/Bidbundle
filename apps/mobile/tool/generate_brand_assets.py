@@ -1,20 +1,41 @@
 #!/usr/bin/env python3
 """Offline, pinned renderer. No downloaded assets or font dependencies."""
-import hashlib,json,pathlib,re,subprocess,tempfile
+import argparse,hashlib,json,os,pathlib,re,shutil,subprocess,tempfile
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 MOBILE=ROOT/'apps/mobile'
 SOURCE=ROOT/'public/bundleen/brand/bundleen-company-icon.svg'
-RSVG='/opt/homebrew/bin/rsvg-convert'
-MAGICK='/opt/homebrew/bin/magick'
-rsvg_version=subprocess.check_output([RSVG,'--version'],text=True).splitlines()[0]
-magick_version=subprocess.check_output([MAGICK,'-version'],text=True).splitlines()[0]
+parser=argparse.ArgumentParser(description="Regenerate approved assets offline with pinned maintenance tools.")
+parser.add_argument('--output-root',type=pathlib.Path,help='New or empty directory for all generated outputs; default updates mobile assets in place.')
+args=parser.parse_args()
+def resolve_tool(name,override):
+    requested=os.environ.get(override,name)
+    resolved=shutil.which(requested)
+    if not resolved:
+        parser.error(f"Missing executable {requested!r}. Put pinned {name} on PATH or set {override} to its executable path. These tools are offline asset-maintenance prerequisites, not app build/runtime dependencies.")
+    return resolved
+RSVG=resolve_tool('rsvg-convert','BUNDLEEN_BRAND_RSVG')
+MAGICK=resolve_tool('magick','BUNDLEEN_BRAND_MAGICK')
+try:
+    rsvg_version=subprocess.check_output([RSVG,'--version'],text=True).splitlines()[0]
+    magick_version=subprocess.check_output([MAGICK,'-version'],text=True).splitlines()[0]
+except (OSError,subprocess.CalledProcessError,IndexError) as error:
+    parser.error(f"Could not read renderer version: {error}")
 if rsvg_version != 'rsvg-convert version 2.61.3' or not magick_version.startswith('Version: ImageMagick 7.1.2-13 '):
-    raise SystemExit('Pinned rsvg-convert 2.61.3 and ImageMagick 7.1.2-13 required')
+    parser.error('Pinned rsvg-convert 2.61.3 and ImageMagick 7.1.2-13 required; use matching local maintenance executables. No installation is performed.')
+OUTPUT=MOBILE
+if args.output_root is not None:
+    candidate=args.output_root.expanduser()
+    if candidate.is_symlink():
+        parser.error('--output-root must not be a symlink')
+    OUTPUT=candidate.resolve()
+    if OUTPUT.exists() and (not OUTPUT.is_dir() or any(OUTPUT.iterdir())):
+        parser.error('--output-root must be a new or empty directory; existing contents are never overwritten')
+    OUTPUT.mkdir(parents=True,exist_ok=True)
 source=SOURCE.read_text()
 inner=re.sub(r'^.*?<svg[^>]*>|</svg>\s*$', '', source, flags=re.S)
 outputs=[]
 def render(relative,size,margin=0,opaque=False):
-    target=MOBILE/relative;target.parent.mkdir(parents=True,exist_ok=True)
+    target=OUTPUT/relative;target.parent.mkdir(parents=True,exist_ok=True)
     extent=96+2*margin
     wrapped=f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-margin} {-margin} {extent} {extent}">{inner}</svg>'
     with tempfile.TemporaryDirectory() as tmp:
@@ -39,4 +60,4 @@ for density,size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhd
 # Adaptive foreground keeps the exact mark within the central safe area.
 render('android/app/src/main/res/drawable-nodpi/company_foreground.png',432,48)
 manifest={'source':str(SOURCE.relative_to(ROOT)),'sourceSha256':hashlib.sha256(SOURCE.read_bytes()).hexdigest(),'provenance':['docs/homepage-v5.md','src/components/brand/BundleenCompanyIcon.tsx'],'tools':{'rsvg':rsvg_version,'imagemagick':magick_version},'derivation':'Unchanged SVG child geometry/colors. Uniform rasterization; launcher padding and opaque warm-paper background. Adaptive foreground padded separately. No font or generated logo.','outputs':sorted(outputs,key=lambda x:x['path'])}
-(MOBILE/'assets/brand/manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+(OUTPUT/'assets/brand/manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
