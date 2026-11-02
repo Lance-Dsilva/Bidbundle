@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:ui' as ui;
 
 import 'package:bundleen/main.dart' as app;
 import 'package:flutter/material.dart';
@@ -22,6 +23,10 @@ void main() {
     final fixture = FixtureHarness('homeowner')..install();
     final model = base.model(fixture.auth, fixture.client);
     final semantics = tester.ensureSemantics();
+    // The pinned TestPlatformDispatcher does not forward this public method.
+    // Notify the real engine before the fixture sends its first semantics tree.
+    // This is test-entry-only and never turns user accessibility off.
+    ui.PlatformDispatcher.instance.setSemanticsTreeEnabled(true);
     final lifecycle = _ForegroundCheckpoint();
     WidgetsBinding.instance.addObserver(lifecycle);
     final isolate = developer.Service.getIsolateId(Isolate.current);

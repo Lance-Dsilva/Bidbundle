@@ -78,3 +78,20 @@ XCTest preserves predicate components, a debug tree truncated to 16,000
 characters, and a screenshot on readiness failure before asserting. This
 instrumentation distinguishes Dart readiness from native accessibility exposure;
 it does not relax readiness or establish a navigation defect.
+
+## Test dispatcher forwarding experiment
+
+The corrected visible marker run reached Dart ready with valid local semantics,
+but native XCTest still exposed only application/window/container nodes. Source
+inspection found that this pinned SDK's `TestPlatformDispatcher` does not forward
+`setSemanticsTreeEnabled`; its fallback `noSuchMethod` returns null. The real iOS
+engine creates its accessibility bridge when that notification arrives.
+
+This entry point therefore calls the public
+`ui.PlatformDispatcher.instance.setSemanticsTreeEnabled(true)` after acquiring
+its semantics handle and before its first frame. This is a source-backed
+experiment, not a confirmed runtime fix. It does not modify the SDK, native host,
+production entry point or user settings, and never calls the API with false.
+All existing native marker, identity, foreground, actual drag and independent
+Dart observation requirements remain mandatory. A successful API call or local
+semantics assertion alone is not acceptance evidence.
