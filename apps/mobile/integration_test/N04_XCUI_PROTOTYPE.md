@@ -65,3 +65,16 @@ rg 'FLUTTER_TARGET' ios/Flutter/Generated.xcconfig ios/Flutter/flutter_export_en
 Both must contain only `lib/main.dart` as the target. Normal CI builds retain the
 default main and do not use `n04-ui` or any integration-test target. This cleanup
 is not a substitute for native-build or runtime evidence.
+
+## Readiness instrumentation refinement
+
+The initial native run launched and showed Requests detail but timed out before
+finding the marker; no drag was delivered. Its cause remains unestablished. The
+next controlled prototype uses a visible 180 × 24 logical-pixel passive marker,
+16 pixels from the right and 64 below the safe top inset, away from the left-edge
+gesture start. Dart checks its local semantics identifier/label and emits only
+sanitized setup/detail/ready/observed/failure phase and lifecycle milestones.
+XCTest preserves predicate components, a debug tree truncated to 16,000
+characters, and a screenshot on readiness failure before asserting. This
+instrumentation distinguishes Dart readiness from native accessibility exposure;
+it does not relax readiness or establish a navigation defect.

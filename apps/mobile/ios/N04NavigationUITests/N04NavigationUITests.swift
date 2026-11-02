@@ -11,7 +11,21 @@ final class N04NavigationUITests: XCTestCase {
         let ready = NSPredicate { _, _ in
             app.state == .runningForeground && marker.exists && marker.label.hasSuffix("|ready")
         }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 60), .completed)
+        let readiness = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 60)
+        if readiness != .completed {
+            // Diagnostic-only, synthetic content. Never retry or relax readiness.
+            let exists = marker.exists
+            let components = "expectedPhase=ready foreground=\(app.state == .runningForeground) markerExists=\(exists) label=\(exists ? String(marker.label.prefix(256)) : "absent")"
+            let diagnostic = XCTAttachment(string: components + "\n" + String(app.debugDescription.prefix(16000)))
+            diagnostic.name = "N04_READINESS_DIAGNOSTIC"
+            diagnostic.lifetime = .keepAlways
+            add(diagnostic)
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "synthetic-n04-readiness-failure"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(readiness, .completed)
         let initial = marker.label
         let fields = initial.split(separator: "|", omittingEmptySubsequences: false)
         XCTAssertEqual(fields.count, 5)

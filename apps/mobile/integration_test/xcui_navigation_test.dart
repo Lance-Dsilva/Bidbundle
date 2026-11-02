@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:isolate';
@@ -27,6 +28,26 @@ void main() {
     expect(isolate, isNotNull);
     final identity = '${DateTime.now().microsecondsSinceEpoch}|$pid|$isolate';
     final marker = ValueNotifier<String>('N04|$identity|setup');
+    var phase = 'setup';
+    void milestone(String event) => debugPrint(
+      jsonEncode({
+        'event': event,
+        'phase': phase,
+        'identity': identity,
+        'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
+      }),
+    );
+    void assertMarker() {
+      final node = tester.getSemantics(
+        find.byKey(const ValueKey('n04-marker')),
+      );
+      expect(node.identifier, 'N04Marker');
+      expect(node.label, marker.value);
+      expect(node.rect.width, greaterThan(0));
+      expect(node.rect.height, greaterThanOrEqualTo(24));
+    }
+
+    milestone('N04_DART_SETUP');
     try {
       tester.platformDispatcher.textScaleFactorTestValue = 1;
       await tester.pumpWidget(
@@ -36,16 +57,32 @@ void main() {
             children: [
               app.BundleenApp(model: model),
               Positioned(
-                top: 1,
-                right: 1,
+                top:
+                    tester.view.padding.top / tester.view.devicePixelRatio + 64,
+                right: 16,
                 child: IgnorePointer(
                   child: ValueListenableBuilder<String>(
                     valueListenable: marker,
                     builder: (context, value, child) => Semantics(
+                      key: const ValueKey('n04-marker'),
                       identifier: 'N04Marker',
                       label: value,
                       container: true,
-                      child: const SizedBox(width: 2, height: 2),
+                      excludeSemantics: true,
+                      child: Container(
+                        width: 180,
+                        height: 24,
+                        color: const Color(0xFFEEEEEE),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'N04 fixture: ${value.split('|').last}',
+                          style: const TextStyle(
+                            color: Color(0xFF000000),
+                            fontSize: 12,
+                          ),
+                          textDirection: TextDirection.ltr,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -55,6 +92,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      assertMarker();
+      milestone('N04_DART_SETUP_SEMANTICS');
       // Setup taps are explicitly not native-navigation evidence.
       await tester.tap(find.text('Requests').last);
       await tester.pumpAndSettle();
@@ -64,6 +103,8 @@ void main() {
       expect(details.hitTestable(), findsOneWidget);
       await tester.tap(details);
       await tester.pumpAndSettle();
+      phase = 'detail-setup';
+      milestone('N04_DART_DETAIL_SETUP');
       expect(find.text('Request details'), findsOneWidget);
       expect(model.requests.selectedId, 'r1');
       expect(
@@ -76,6 +117,9 @@ void main() {
       lifecycle.armed = true;
       marker.value = 'N04|$identity|ready';
       await tester.pump();
+      assertMarker();
+      phase = 'ready';
+      milestone('N04_DART_READY');
       final deadline = DateTime.now().add(const Duration(seconds: 90));
       while (model.requests.selectedId != null &&
           DateTime.now().isBefore(deadline)) {
@@ -98,8 +142,14 @@ void main() {
       expect(WidgetsBinding.instance.lifecycleState, AppLifecycleState.resumed);
       marker.value = 'N04|$identity|observed';
       await tester.pump();
+      assertMarker();
+      phase = 'observed';
+      milestone('N04_DART_OBSERVED');
       // Leave the correlated result readable by the independent XCTest runner.
       await tester.pump(const Duration(seconds: 15));
+    } catch (_) {
+      milestone('N04_DART_FAILURE');
+      rethrow;
     } finally {
       try {
         await tester.pumpWidget(const SizedBox.shrink());
