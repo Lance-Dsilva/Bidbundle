@@ -9,27 +9,25 @@ import 'package:integration_test/integration_test.dart';
 
 import '../test/mobile_test.dart' as base;
 import 'support/fixture_harness.dart';
+import 'support/input_receipt_gate.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   WidgetController.hitTestWarningShouldBeFatal = true;
-  String? pendingIOSReceipt;
-  bool iosInputAcknowledged = false;
+  final iosReceiptGate = InputReceiptGate();
   if (Platform.isIOS) {
     // Registered only by this integration-test entry point, never by shipped main.
     developer.registerExtension('ext.bundleen.n04Input', (
       method,
       parameters,
     ) async {
-      if (pendingIOSReceipt == null ||
-          parameters['receipt'] != pendingIOSReceipt) {
+      if (!iosReceiptGate.acknowledge(parameters['receipt'])) {
         return developer.ServiceExtensionResponse.error(
           developer.ServiceExtensionResponse.invalidParams,
           'No matching pending input checkpoint',
         );
       }
-      pendingIOSReceipt = null;
-      iosInputAcknowledged = true;
+
       return developer.ServiceExtensionResponse.result(
         jsonEncode({'acknowledged': true}),
       );
@@ -149,19 +147,19 @@ void main() {
           'N04_ASSERTIONS_COMPLETE homeowner ${scale.toInt()}x routes-scale-semantics-guards-logout-cleared',
         );
         if (Platform.isIOS) {
-          iosInputAcknowledged = false;
           final receipt =
               'ios-${scale.toInt()}x-${DateTime.now().microsecondsSinceEpoch}';
-          pendingIOSReceipt = receipt;
+          iosReceiptGate.arm(receipt);
           debugPrint(
             'N04_IOS_INPUT_READY homeowner ${scale.toInt()}x signed-out-edge-swipe receipt=$receipt',
           );
           final deadline = DateTime.now().add(const Duration(seconds: 90));
-          while (!iosInputAcknowledged && DateTime.now().isBefore(deadline)) {
+          while (!iosReceiptGate.acknowledged &&
+              DateTime.now().isBefore(deadline)) {
             await tester.pump(const Duration(milliseconds: 100));
           }
           expect(
-            iosInputAcknowledged,
+            iosReceiptGate.acknowledged,
             isTrue,
             reason:
                 'Reviewer must acknowledge actual CUA swipe within 90 seconds',
@@ -200,7 +198,7 @@ void main() {
           );
         }
       } finally {
-        pendingIOSReceipt = null;
+        iosReceiptGate.invalidate();
         try {
           try {
             await tester.pumpWidget(const SizedBox.shrink());

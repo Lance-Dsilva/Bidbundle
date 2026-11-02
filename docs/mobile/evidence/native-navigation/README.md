@@ -38,3 +38,17 @@ Initial source `d9e5c18915d25bd56c4727d040c4a1067b229bf3` completed the four 100
 Android predictive gesture animation, hardware keys, other Account child routes beyond representative Inbox, physical devices, TalkBack/VoiceOver speech/focus traversal and real Clerk/API/storage/callback/logout isolation remain unproven. Guards cover the existing Dart HttpClient, MockClient route/method/origin and native-auth-channel seams; they are not an OS-wide network sandbox.
 
 Full local regression after native checks: **467 tests passed**; analyzer clean; formatter **63 files, zero changes**. No unchanged N02/N03 native matrix was repeated. The task emulator was killed, its exact temporary AVD directory removed, and adb inventory confirmed empty. No iOS runtime was created; existing device/app/account data was preserved. Resulting-head CI remains separate.
+
+
+## N04 iOS control retry addendum — 2026-11-02 UTC
+
+After the human confirmed the Mac unlocked, native CUA inventory succeeded. A fresh task-owned simulator `94184537-A9E2-4DDE-AA7B-03A4947C0020` booted successfully in 31 seconds. However, documented `cua.getApp` selection of Simulator returned no app state and blocked for 709.6 seconds before root-agent interruption. After a successful CUA kernel reset, one bundle-ID retry with explicit `timeout_ms: 20000` again returned no state and was interrupted by the root agent after 81.9 seconds. Tool output calls these interruptions “by user”; they were agent interruptions, not human input.
+
+The current blocker is **supported Simulator UI control hanging despite the unlocked host and booted simulator**, superseding the earlier lock-only explanation. No alternate input injection or host settings changes were attempted. No iOS build, test, gesture or receipt acknowledgement ran. Prepared source **7c997ee933ca598073ad402ea40a1df0fd299add** adds a test-only receipt handshake and same-engine post-swipe private-state assertions; that protocol remains unexecuted, with source/analyzer review reported separately by the author/manager. Android evidence retains its earlier source basis and was not rerun.
+
+Only the exact fresh task simulator was shut down and deleted; booted inventory was then empty. Sanitized attempt details are in `ios-control-limitation.json`. iOS actual edge swipe and signed-out post-input clearing remain open. There is no iOS application failure or gesture-pass claim.
+
+
+### Receipt protocol local verification — 2026-11-02 UTC
+
+Final local working-tree verification after the test-only receipt-gate extraction: **474 tests passed**, including seven receipt rejection/lifecycle cases; analyzer clean; formatter **66 files, zero changes** (including `tool`). The real test extension uses the tested gate. Cases cover absent/wrong receipts, replay, stale/replaced checkpoints, teardown invalidation and empty identifiers. Independent security review also ran the seven cases and found no actionable issue. These are local protocol/source checks, not actual CUA input, native receipt execution or same-engine post-gesture evidence. The iOS control blocker remains unchanged; no device rerun occurred. Tested-file hashes are preserved in `receipt-local-verification.json`; the manager's resulting commit/CI remains separate.

@@ -146,8 +146,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "efc8778f142b1615f5f92acdd48fa28dc84316381109be433cd84b907d1e8f75",
-      "bytes": 5966
+      "sha256": "1bc23b5e92eba255e409c4c7a8603f2cb9284ca6de1348eb1d1d9a4463d9942f",
+      "bytes": 8374
     },
     {
       "path": "initial-run-markers.txt",
@@ -155,9 +155,19 @@
       "bytes": 878
     },
     {
+      "path": "ios-control-limitation.json",
+      "sha256": "020322e4355107e44cb37282ed19e13285db99fcd9f0f04af939b47a020c6411",
+      "bytes": 1358
+    },
+    {
       "path": "metadata-summary.json",
       "sha256": "0d2af295466718931422516a793ecbc2502eac635aa7bb1413b3d32de349ed7c",
       "bytes": 15731
+    },
+    {
+      "path": "receipt-local-verification.json",
+      "sha256": "187f3061e76d8a3331f7a9de3454705a9541e51b62be618156b3071bdd251a7a",
+      "bytes": 921
     }
   ]
 }
