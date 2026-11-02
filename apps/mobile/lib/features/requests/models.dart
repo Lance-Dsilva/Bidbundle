@@ -1,4 +1,5 @@
 import '../../core/api.dart';
+import '../../core/json_fields.dart';
 import '../home/models.dart';
 
 String requestText(Map<String, dynamic> json, String key) {
@@ -28,19 +29,7 @@ DateTime? requestDate(
   Map<String, dynamic> json,
   String key, {
   bool nullable = true,
-}) {
-  if (!json.containsKey(key)) {
-    throw const ApiFailure(FailureKind.invalidResponse);
-  }
-  if (nullable && json[key] == null) return null;
-  final value = field<String>(json, key);
-  final parsed = DateTime.tryParse(value);
-  // Server toISOString emits canonical UTC instants. Reject normalized invalid dates.
-  if (parsed == null || !parsed.isUtc || parsed.toIso8601String() != value) {
-    throw const ApiFailure(FailureKind.invalidResponse);
-  }
-  return parsed;
-}
+}) => wireDate(json, key, nullable: nullable);
 
 /// Only the list fields rendered by this read-only slice are retained.
 class RequestSummary {

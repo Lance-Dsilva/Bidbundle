@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation and R01 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01 and local R02 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -26,7 +26,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | HOA resident | amenity bookings | id/bookings; amenities/bookings; booking/cancel/reschedule | Availability/booking/conflict and cancellation/reschedule outcomes |
 | HOA resident | amenity reviews/issues/photos/messages | id/reviews; reviews/id/photos; id/issues; issues/id/photos/messages; media/id | Upload permission/failure, ownership, reporting, review edit per API |
 | Authorized HOA manager | amenities operations | amenities/manager; id/status; id/closures; booking/decision; issues/id; reviews/id/moderate/response; amenities/broadcast | Scoped operations, closures, decisions, moderation, responses/broadcast; not public admin powers |
-| All profiled users | in-app notifications | me/notifications + notificationId | List/read and safe native route mapping; NOT device push |
+| Supported customer roles | account / in-app notifications | profile; me/notifications + notificationId | R02 local: own account details and recent notification list with server read state; independent local review passed, resulting-head CI pending. Editing, mark-read/dismissal and native destination mapping remain PLANNED; NOT device push |
 | All supported customer roles | support list/ticket/messages/reopen | support/tickets + id + messages + reopen | Own tickets only, attachments only if supported by exact contract |
 | Customer roles incl HOA manager | AI assistant surfaces (HOA assistant page and shared assistant) | ai/chat/history/memory | NDJSON streaming, cancellation/history/memory; role-restricted tools remain server-side; never hide feature omission |
 | Internal admin | dashboard, access, staff, audit, communications, communities, providers, support/AI drafts, assistant, profile | admin/* | EXPLICITLY DEFERRED from public mobile; keep existing internal web portal |

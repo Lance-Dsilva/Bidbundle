@@ -49,3 +49,13 @@ Acceptance criteria:
 - Meaningful contract/repository/widget/race tests, formatter/analyzer, independent UX/code/security review and fixture screenshots. Resulting-head Android/iOS CI builds required. Fixtures do not prove native runtime/backend authorization.
 
 First live acceptance remains sign-in → profile/context → homeowner overview → sign-out/expiry on approved isolated staging, then real request list/detail and denied membership cases. Backend/API integration, native auth/storage/callback/resume and business-write gates remain open. Other M09 actions and all other PARITY rows are unchanged backlog.
+
+## R02 — reordered read-only Account and Recent notifications
+
+Selected after reviewed R01 under parent Engineering's authorization to continue eligible independent parity preparation. R01 commit04cc2dc is being checked in CI; R02 work stays local until that exact-head result is recorded. Live auth/business-write gates remain open.
+
+Owners: Flutter application engineer owns lib; independent reviewer owns account/notification tests, captures and review; manager owns plan/parity/checkpoint; release/security specialist monitors R01 CI then reviews R02 session boundaries. Backend contract discovery is complete; no shared-server edits.
+
+Acceptance: use real GET /api/profile and GET /api/me/notifications with typed separate DTOs, matching account identity, nullable fields, email-verification terminology and latest30 cap. Account accessible to public customer roles; Requests remains homeowner-only and admin/unknown workflows remain unsupported. Account→notifications uses native backable navigation, accessible200% text, loading/empty/error/retry/refresh. Do not edit profile, auto-mark read, dismiss notifications, show an invented unread-total or imply push. Stored links remain inert. Sign-out/expiry/account or role change clear private data/routes and stale replies cannot restore them. Dates include year and timezone, including a bounded correction to R01's date formatting. Tests/captures are synthetic and cannot certify live auth or storage. Require independent review, formatter/analyzer/tests and resulting-head native CI.
+
+R02 local acceptance:106 tests pass with independent source/security/UX review; no actionable outstanding findings. Native resulting-head CI remains required after push. Fixture captures do not close live auth/runtime gates.

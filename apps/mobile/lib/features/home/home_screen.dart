@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'home_model.dart';
 import '../requests/requests_screen.dart';
+import '../account/account_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.model});
@@ -35,27 +36,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([widget.model, widget.model.requests]),
+    listenable: Listenable.merge([
+      widget.model,
+      widget.model.requests,
+      widget.model.account,
+    ]),
     builder: (context, _) {
       final model = widget.model;
       final data = model.data;
       final dashboard = data?.dashboard;
       final requestsVisible = model.canViewRequests && model.showRequests;
+      final accountVisible = model.canViewAccount && model.showAccount;
+      final notificationsVisible =
+          accountVisible && model.account.showingNotifications;
       final detailVisible =
           requestsVisible && model.requests.selectedId != null;
+      final secondaryVisible = requestsVisible || accountVisible;
+      final nestedVisible = detailVisible || notificationsVisible;
       return PopScope<void>(
-        canPop: !requestsVisible,
+        canPop: !secondaryVisible,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) return;
-          if (!detailVisible && requestsVisible) model.showHome();
+          if (!nestedVisible && secondaryVisible) model.showHome();
         },
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Bundleen'),
-            leading: detailVisible
-                ? BackButton(onPressed: model.requests.closeDetail)
+            leading: nestedVisible
+                ? BackButton(
+                    onPressed: detailVisible
+                        ? model.requests.closeDetail
+                        : model.account.closeNotifications,
+                  )
                 : null,
-            actions: requestsVisible
+            actions: secondaryVisible
                 ? [
                     TextButton(
                       onPressed: model.signOut,
@@ -65,24 +79,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 : null,
             backgroundColor: const Color(0xfff8f6ef),
           ),
-          bottomNavigationBar: model.canViewRequests
+          bottomNavigationBar: model.canViewAccount
               ? NavigationBar(
-                  selectedIndex: requestsVisible ? 1 : 0,
+                  selectedIndex: accountVisible
+                      ? (model.canViewRequests ? 2 : 1)
+                      : (requestsVisible ? 1 : 0),
                   onDestinationSelected: (index) {
                     if (index == 0) {
                       model.showHome();
-                    } else {
+                    } else if (model.canViewRequests && index == 1) {
                       model.openRequests();
+                    } else {
+                      model.openAccount();
                     }
                   },
-                  destinations: const [
-                    NavigationDestination(
+                  destinations: [
+                    const NavigationDestination(
                       icon: Icon(Icons.home_outlined),
                       label: 'Home',
                     ),
-                    NavigationDestination(
-                      icon: Icon(Icons.list_alt),
-                      label: 'Requests',
+                    if (model.canViewRequests)
+                      const NavigationDestination(
+                        icon: Icon(Icons.list_alt),
+                        label: 'Requests',
+                      ),
+                    const NavigationDestination(
+                      icon: Icon(Icons.person_outline),
+                      label: 'Account',
                     ),
                   ],
                 )
@@ -90,6 +113,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           body: SafeArea(
             child: requestsVisible
                 ? RequestsNavigator(model: model.requests)
+                : accountVisible
+                ? AccountNavigator(model: model.account)
                 : ListView(
                     padding: const EdgeInsets.all(24),
                     children: [
@@ -176,8 +201,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             'Based on your recorded requests and agreements. Discounts are not guaranteed.',
                           ),
                         ] else
-                          const Text(
-                            'This mobile preview currently supports the homeowner overview. Your account’s other workflows are not yet available here.',
+                          Text(
+                            model.canViewAccount
+                                ? 'This preview provides your account and recent notifications. Other workflows are not yet available here.'
+                                : 'This account type has no public mobile workflows in this preview.',
                           ),
                       ],
                       if (model.signedIn && !model.busy) ...[

@@ -115,3 +115,16 @@ Generated and inspected apps/mobile/build/evidence/request-fixtures/{requests-li
 ### Final compact-list UX refinement
 
 Author compacted list metadata into wrapping inline label/value rows, preserving every field, nullable labels and48px actions; detail layout unchanged. Regenerated all four captures and visually re-inspected list and200% text: normal-size rows are easier to scan, with no horizontal truncation or overlap at200%. Independent affected32 tests passed, followed by the **complete73-test suite** on final source. Analyzer: no issues; formatter:15 files,0 changes. Evidence copied to docs/mobile/evidence/requests with a fixture-only README. Acceptance above remains limited to this draft read-only slice; no live gate advances.
+
+
+## R02 independent Account and recent notifications review — 2026-11-01
+
+Reviewed the read-only Account DTO/repository/model/navigation and notification surfaces against the appended server contract. Account requires the expected profile ID and public customer role; admin/unknown roles cannot open Account or initiate its requests. Email verification is labeled precisely and makes no provider-vetting claim. Nullable profile fields remain explicit. Notifications preserve server readAt, show plain text and safe kind labels, retain linkPath inertly, and expose no write action, unread total, pagination claim, or push enrollment. The author resolved the missing notification kind display with known labels and a generic unknown-kind fallback. No remaining blocking source finding in this bounded slice.
+
+Independent tests exercise exact GET paths, identity/role mismatch, malformed/null data, 303/401/403 and server failures, retry and old-data clearing, late profile/notification results after owner or navigation changes, public-role navigation, native-style back/edge gesture in widgets, signout/forced-renewal expiry clearing, literal body/link behavior, and 200% text scrolling. Shared Account/Requests dates now include year and explicit UTC offset. Final local suite: **106 tests passed**, analyzer clean, formatter 22 files with zero changes on the final check.
+
+Visually inspected four Account fixtures and regenerated Requests list/large-text fixtures: clear email verification/null labels, readable read/unread states, year/offset dates, denial with Retry, and no blocking overlap. At 200% content scrolls beneath persistent navigation; widget tests reach notifications and return through both levels. Screenshots use fake auth/API data and substituted Roboto fonts, not actual device screenshots. Account and updated Requests evidence are checked in under evidence/.
+
+**Accepted as an independently reviewed local read-only draft slice**, subject to resulting-head CI/native build checks. Live authenticated iOS/Android behavior, native SDK session/storage/callback-after-logout handling, cross-user isolation, VoiceOver/TalkBack, and complete production font/device accessibility remain unrun. This review does not pass the live staging or release gates.
+
+Independent security reviewer also found no actionable R02 source issue: matched ID/role, generation fences, global clearing, GET-only transport, inert paths/plain Text, no avatar/coordinate fetch, and email-only verification. This security acceptance is source-scoped; native session/storage and live isolation gates remain open.

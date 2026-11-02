@@ -7,6 +7,8 @@ import '../../core/config.dart';
 import 'models.dart';
 import '../requests/models.dart';
 import '../requests/requests_model.dart';
+import '../account/models.dart';
+import '../account/account_model.dart';
 
 enum HomeStatus { starting, signedOut, loading, ready, failed }
 
@@ -16,13 +18,36 @@ class HomeModel extends ChangeNotifier {
     this.auth,
     this.repository, {
     RequestsRepository? requestsRepository,
+    AccountRepository? accountRepository,
   }) {
     requests = RequestsModel(
       requestsRepository ?? RequestsRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
+    account = AccountModel(
+      accountRepository ?? AccountRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
   }
   late final RequestsModel requests;
+  late final AccountModel account;
+  bool showAccount = false;
+  bool get canViewAccount =>
+      signedIn &&
+      data != null &&
+      personalAccountRoles.contains(data!.context.role) &&
+      data!.profile.id == data!.context.userId;
+  Future<void> openAccount() async {
+    if (!canViewAccount) return;
+    showRequests = false;
+    requests.closeDetail();
+    showAccount = true;
+    _emit();
+    if (account.profileStatus == AccountStatus.idle) {
+      await account.loadProfile();
+    }
+  }
+
   bool showRequests = false;
   bool get canViewRequests =>
       signedIn &&
@@ -30,18 +55,24 @@ class HomeModel extends ChangeNotifier {
       data?.profile.id == data?.context.userId;
   Future<void> openRequests() async {
     if (!canViewRequests) return;
+    showAccount = false;
+    account.closeNotifications();
     showRequests = true;
     _emit();
     if (requests.listStatus == RequestStatus.idle) await requests.loadList();
   }
 
   void showHome() {
+    showAccount = false;
+    account.closeNotifications();
     showRequests = false;
     requests.closeDetail();
     _emit();
   }
 
-  void _clearRequests() {
+  void _clearPrivateState() {
+    showAccount = false;
+    account.clear();
     showRequests = false;
     requests.clear();
   }
@@ -53,7 +84,7 @@ class HomeModel extends ChangeNotifier {
     data = null;
     status = HomeStatus.signedOut;
     message = const ApiFailure(FailureKind.unauthenticated).message;
-    _clearRequests();
+    _clearPrivateState();
     _emit();
   }
 
@@ -81,7 +112,7 @@ class HomeModel extends ChangeNotifier {
     initialized = false;
     signedIn = false;
     data = null;
-    _clearRequests();
+    _clearPrivateState();
     message = null;
     _emit();
     final generation = ++_generation;
@@ -110,7 +141,7 @@ class HomeModel extends ChangeNotifier {
     status = HomeStatus.loading;
     message = null;
     data = null;
-    _clearRequests();
+    _clearPrivateState();
     _emit();
     try {
       if (createAccount) {
@@ -143,7 +174,7 @@ class HomeModel extends ChangeNotifier {
     final generation = ++_generation;
     status = HomeStatus.loading;
     data = null;
-    _clearRequests();
+    _clearPrivateState();
     message = null;
     _emit();
     try {
@@ -153,6 +184,7 @@ class HomeModel extends ChangeNotifier {
       requests.setOwner(
         loaded.context.role == 'homeowner' ? loaded.profile.id : null,
       );
+      account.setOwner(loaded.profile.id, loaded.context.role);
       status = HomeStatus.ready;
       _emit();
     } on ApiFailure catch (error) {
@@ -174,7 +206,7 @@ class HomeModel extends ChangeNotifier {
     signedIn = false;
     logoutPending = true;
     data = null;
-    _clearRequests();
+    _clearPrivateState();
     message = null;
     status = HomeStatus.loading;
     _emit();
@@ -195,6 +227,7 @@ class HomeModel extends ChangeNotifier {
     _disposed = true;
     _generation++;
     requests.dispose();
+    account.dispose();
     super.dispose();
   }
 }

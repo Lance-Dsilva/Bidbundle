@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 
 import 'requests_model.dart';
+import '../../core/ui/date_label.dart';
 
 String usdCents(int cents) =>
     '\$${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')} USD';
@@ -14,16 +15,8 @@ String requestBudget(int? minimum, int? maximum) {
       : '${usdCents(minimum)} – ${usdCents(maximum)}';
 }
 
-String requestDateLabel(BuildContext context, DateTime? instant) {
-  if (instant == null) return 'Not specified';
-  final local = instant.toLocal();
-  final labels = MaterialLocalizations.of(context);
-  final offset = local.timeZoneOffset;
-  final minutes = offset.inMinutes.abs();
-  final zone =
-      'UTC${offset.isNegative ? '-' : '+'}${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
-  return '${labels.formatMediumDate(local)}, ${labels.formatTimeOfDay(TimeOfDay.fromDateTime(local), alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context))} ($zone)';
-}
+String requestDateLabel(BuildContext context, DateTime? instant) =>
+    localInstantLabel(context, instant);
 
 /// Read-only content. All details come from the separately authorized GET.
 class RequestsScreen extends StatelessWidget {
