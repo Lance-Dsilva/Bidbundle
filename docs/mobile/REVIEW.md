@@ -295,3 +295,12 @@ Only the exact fresh task simulator was shut down and deleted; booted inventory 
 ### Receipt protocol local verification — 2026-11-02 UTC
 
 Final local working-tree verification after the test-only receipt-gate extraction: **474 tests passed**, including seven receipt rejection/lifecycle cases; analyzer clean; formatter **66 files, zero changes** (including `tool`). The real test extension uses the tested gate. Cases cover absent/wrong receipts, replay, stale/replaced checkpoints, teardown invalidation and empty identifiers. Independent security review also ran the seven cases and found no actionable issue. These are local protocol/source checks, not actual CUA input, native receipt execution or same-engine post-gesture evidence. The iOS control blocker remains unchanged; no device rerun occurred. Tested-file hashes are preserved in `receipt-local-verification.json`; the manager's resulting commit/CI remains separate.
+
+
+## N04 minimum XCTest prototype review — 2026-11-02
+
+Source **1f84897c31f663af27445423533d0d2c6458bd17**, command-only checkpoint **6a55f892f8b504dda86abf0bfea167ec8514580b**: test build passed without signing credentials; the separate UI runner launched the synthetic development app once on a fresh iPhone 17 / iOS 26.4.1 simulator. The one 100% Requests prototype then **failed the ready-marker predicate** at Swift line 14 after 64.9748 seconds (command exit 65). No drag call, delivery marker or independent observed destination was reached. Native gesture count is zero. The visible Requests-detail screenshot establishes setup only; available logs do not distinguish an absent marker from an unexpected label/state.
+
+Two earlier exit-64 command validations (unsupported iteration count, then existing result path) occurred before app launch and are documented separately. No runtime retry/recovery or production fix occurred. Source review corrected model disposal/fatal missed setup taps before compilation. Compact structured evidence is in `evidence/native-xcui-prototype`; the raw result bundle and automatic screen recording remain at the documented task-local paths.
+
+Both development/staging generated configs and export scripts were explicitly restored to `lib/main.dart`; exact task simulator deleted, booted inventory empty. Local regression **474 passed**, analyzer clean, formatter **67 files / zero changes**. Prototype acceptance is **not passed**: iOS edge gesture and same-engine post-input gates remain open. No other native matrices, host settings, credentials or live services were touched.
