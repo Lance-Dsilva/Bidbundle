@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:bundleen/main.dart' as app;
 import 'package:flutter/material.dart';
@@ -11,6 +13,28 @@ import 'support/fixture_harness.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   WidgetController.hitTestWarningShouldBeFatal = true;
+  String? pendingIOSReceipt;
+  bool iosInputAcknowledged = false;
+  if (Platform.isIOS) {
+    // Registered only by this integration-test entry point, never by shipped main.
+    developer.registerExtension('ext.bundleen.n04Input', (
+      method,
+      parameters,
+    ) async {
+      if (pendingIOSReceipt == null ||
+          parameters['receipt'] != pendingIOSReceipt) {
+        return developer.ServiceExtensionResponse.error(
+          developer.ServiceExtensionResponse.invalidParams,
+          'No matching pending input checkpoint',
+        );
+      }
+      pendingIOSReceipt = null;
+      iosInputAcknowledged = true;
+      return developer.ServiceExtensionResponse.result(
+        jsonEncode({'acknowledged': true}),
+      );
+    });
+  }
   const selectedScale = int.fromEnvironment('N04_TEXT_SCALE', defaultValue: 1);
   if (selectedScale != 1 && selectedScale != 2) {
     throw StateError('N04_TEXT_SCALE must be 1 or 2');
@@ -124,19 +148,59 @@ void main() {
         debugPrint(
           'N04_ASSERTIONS_COMPLETE homeowner ${scale.toInt()}x routes-scale-semantics-guards-logout-cleared',
         );
-        debugPrint(
-          'N04_TERMINAL_READY homeowner ${scale.toInt()}x signed-out-back ${Platform.isAndroid ? 'ANDROID_KEYCODE_BACK' : 'IOS_EDGE_SWIPE_NO_ROUTE'}; OS outcome recorded independently',
-        );
-        // Normal Android Activity finish can terminate this Dart engine/driver.
-        // No assertion after this marker is evidence of post-termination state.
-        final until = DateTime.now().add(const Duration(seconds: 90));
-        while (DateTime.now().isBefore(until)) {
-          await tester.pump(const Duration(milliseconds: 100));
+        if (Platform.isIOS) {
+          iosInputAcknowledged = false;
+          final receipt =
+              'ios-${scale.toInt()}x-${DateTime.now().microsecondsSinceEpoch}';
+          pendingIOSReceipt = receipt;
+          debugPrint(
+            'N04_IOS_INPUT_READY homeowner ${scale.toInt()}x signed-out-edge-swipe receipt=$receipt',
+          );
+          final deadline = DateTime.now().add(const Duration(seconds: 90));
+          while (!iosInputAcknowledged && DateTime.now().isBefore(deadline)) {
+            await tester.pump(const Duration(milliseconds: 100));
+          }
+          expect(
+            iosInputAcknowledged,
+            isTrue,
+            reason:
+                'Reviewer must acknowledge actual CUA swipe within 90 seconds',
+          );
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pumpAndSettle();
+          expect(model.data, isNull);
+          expect(model.signedIn, isFalse);
+          expect(model.inbox.items, isEmpty);
+          expect(model.inbox.detail, isNull);
+          expect(model.requests.items, isEmpty);
+          expect(model.requests.detail, isNull);
+          expect(model.account.profile, isNull);
+          expect(fixture.auth.active, isFalse);
+          expect(find.text('Sign in'), findsOneWidget);
+          expect(fixture.violations, isEmpty);
+          expect(tester.takeException(), isNull);
+          await binding.takeScreenshot(
+            'synthetic-navigation-${scale.toInt()}x-ios-after-swipe',
+          );
+          debugPrint(
+            'N04_IOS_POST_INPUT_OBSERVED homeowner ${scale.toInt()}x same-engine-private-state-cleared',
+          );
+        } else {
+          debugPrint(
+            'N04_TERMINAL_READY homeowner ${scale.toInt()}x signed-out-back ${Platform.isAndroid ? 'ANDROID_KEYCODE_BACK' : 'IOS_EDGE_SWIPE_NO_ROUTE'}; OS outcome recorded independently',
+          );
+          // Normal Android Activity finish can terminate this Dart engine/driver.
+          // No assertion after this marker is evidence of post-termination state.
+          final until = DateTime.now().add(const Duration(seconds: 90));
+          while (DateTime.now().isBefore(until)) {
+            await tester.pump(const Duration(milliseconds: 100));
+          }
+          debugPrint(
+            'N04_TERMINAL_WINDOW_ENDED; no external delivery or OS outcome inferred',
+          );
         }
-        debugPrint(
-          'N04_TERMINAL_WINDOW_ENDED; no external delivery or OS outcome inferred',
-        );
       } finally {
+        pendingIOSReceipt = null;
         try {
           try {
             await tester.pumpWidget(const SizedBox.shrink());

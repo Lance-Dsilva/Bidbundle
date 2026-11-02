@@ -9,3 +9,17 @@ Android: installed adb supports `adb -s EXACT_SERIAL shell input keyevent KEYCOD
 iOS: installed simctl io/ui help provides screenshots/video/settings but no generic swipe injection. Existing RunnerTests is a unit-test target, not an XCTest UI runner. Only run gesture claims if the reviewer confirms and uses a documented native Simulator UI drag/gesture API through available computer-use tooling. No guessed simctl/private API. For the three nested-route checkpoints use a real left-edge-to-right swipe; root Home tab selection is explicitly tester setup, since a top-level tab has no iOS pop route. Signed-out swipe has no route to restore and must retain cleared state. If native input is unavailable, mark iOS OS-gesture evidence open; do not report tester gestures as equivalent.
 
 Capture device ID, OS, scale, exact source SHA, delivered input and observed route/state. Optional OS screenshots/video complement synthetic driver screenshots. Existing semantic label checks and effective text scale are retained; this suite does not establish spoken screen-reader output, focus traversal/order under TalkBack/VoiceOver, switch control, physical device gestures or hardware-key reliability. No host/user accessibility settings are changed. Any production change requires a reproduced defect and manager review.
+
+## iOS signed-out post-input acknowledgement
+
+The iOS test entrypoint alone registers `ext.bundleen.n04Input` using Dart's documented `dart:developer.registerExtension` API (https://api.dart.dev/dart-developer/registerExtension.html). Production main and Android execution do not register it. The extension cannot navigate, sign in, mutate models or send device input; it only consumes the exact one-use pending checkpoint receipt. Wrong/stale/no-pending receipts fail. Required Flutter/debug VM traffic is host test tooling, not app-service traffic.
+
+For each iOS scale, the reviewer must deliver actual CUA Simulator edge drags at the normal route-ready checkpoints. At `N04_IOS_INPUT_READY ... receipt=...`, record the signed-out screen, deliver the actual edge drag through documented CUA App.drag, and only then acknowledge that delivery:
+
+```
+dart tool/ack_native_navigation.dart LOOPBACK_VM_WEBSOCKET_URI RECEIPT
+```
+
+Use the current test process's VM-service WebSocket URI from Flutter tooling; if shown as an HTTP service base, use the same loopback host/port/path with ws scheme and its /ws endpoint. Do not use another process/device or a remote host. The helper checks for exactly one isolate exposing the integration-test extension and sends its isolateId as required by the documented service-extension protocol. Do not include the debug service URI in published evidence. The helper sends acknowledgement only, never an input gesture; actual CUA delivery and timestamps remain independent evidence.
+
+The app waits at most 90 seconds for the matching acknowledgement, then pumps two seconds and asserts signed-out view plus cleared Home, Requests, Account and Inbox model data in the same engine. It captures a synthetic post-swipe screenshot and prints N04_IOS_POST_INPUT_OBSERVED only after these assertions pass. Acknowledgement without a recorded real gesture is not acceptable evidence. Do not restart/reinstall the app between delivery and observation. Missing acknowledgement fails; no pre-gesture assertion or new-engine fixture is counted as post-input/persistence proof. Accepted Android terminal-Back behavior is unchanged and is not rerun for this iOS-only protocol refinement.
