@@ -12,6 +12,7 @@ import 'support/fixture_harness.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  WidgetController.hitTestWarningShouldBeFatal = true;
   testWidgets('synthetic guard self-checks', (tester) async {
     final fixture = FixtureHarness('homeowner')..install();
     try {
@@ -52,17 +53,24 @@ void main() {
         }
 
         Future<void> tap(String text) async {
-          final finder = find.text(text).last;
-          if (finder.evaluate().isEmpty) {
+          final rawFinder = find.text(text);
+          if (rawFinder.evaluate().isEmpty) {
             await tester.scrollUntilVisible(
-              finder,
+              rawFinder,
               220,
               scrollable: find.byType(Scrollable).last,
               maxScrolls: 35,
             );
-          } else {
-            await tester.ensureVisible(finder);
           }
+          await tester.pumpAndSettle();
+          final finder = rawFinder.last;
+          await tester.ensureVisible(finder);
+          await tester.pumpAndSettle();
+          expect(
+            finder.hitTestable(),
+            findsOneWidget,
+            reason: '$text must be visibly tappable',
+          );
           if ({'Account', 'Retry', 'Sign out'}.contains(text)) {
             checkControl(finder, text);
           }
@@ -160,13 +168,22 @@ void main() {
           await capture('signed-out');
           expect(fixture.violations, isEmpty);
         } finally {
-          await tester.pumpWidget(const SizedBox.shrink());
-          model.dispose();
-          await tester.pumpAndSettle();
+          try {
+            await tester.pumpWidget(const SizedBox.shrink());
+            await tester.pumpAndSettle();
+          } finally {
+            try {
+              model.dispose();
+            } finally {
+              try {
+                semantics.dispose();
+              } finally {
+                tester.platformDispatcher.clearTextScaleFactorTestValue();
+                fixture.dispose();
+              }
+            }
+          }
           expect(fixture.violations, isEmpty);
-          semantics.dispose();
-          tester.platformDispatcher.clearTextScaleFactorTestValue();
-          fixture.dispose();
         }
       });
     }
