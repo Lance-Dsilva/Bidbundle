@@ -1,0 +1,65 @@
+{
+  "sourceCommit": "15a88ee5075f7eb47f78b7c72f4a26c00334e2d2",
+  "files": [
+    {
+      "path": "android/synthetic-presentation-1x-error.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "3d6f2040aa1a1c86693b1976a5f986c838ad36729bf09b2b1bfdee0b1118c0d3",
+      "bytes": 108415
+    },
+    {
+      "path": "android/synthetic-presentation-1x-ready.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "5affc484f3d5edba2609953c459ca69f9a5132d3c1f1499f45368678d38fbd2d",
+      "bytes": 166220
+    },
+    {
+      "path": "android/synthetic-presentation-2x-error.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "68b2f9ae7b519acdc1daa316c2df05d35555115959f30a1293558bfa60f80ea5",
+      "bytes": 189445
+    },
+    {
+      "path": "android/synthetic-presentation-2x-ready.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "2d7f9ca10f0ef30c2f55bc627efeaa42fa71fde5fb0aae21aedd7dec0071bd1d",
+      "bytes": 232977
+    },
+    {
+      "path": "android-os-launcher.png",
+      "kind": "OS launcher screenshot",
+      "sha256": "b7cac9b01c120512f91d6f4868bc965975ca83aee004e8b63a824b35912b9620",
+      "bytes": 305544
+    },
+    {
+      "path": "ios/synthetic-presentation-1x-error.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "821c1fb9ed7fad4830618dc8691bd0d587efa4e3f865952c78844d8f1a32ddaf",
+      "bytes": 274687
+    },
+    {
+      "path": "ios/synthetic-presentation-1x-ready.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "b874409eb7fabf0750c2cdaaa3f21309de8c97147acd74646278dbce05f94753",
+      "bytes": 361715
+    },
+    {
+      "path": "ios/synthetic-presentation-2x-error.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "211e87c28c2f554a764667f4179a869337c5adc3acfb4c807773b1bab2e3825a",
+      "bytes": 395623
+    },
+    {
+      "path": "ios/synthetic-presentation-2x-ready.png",
+      "kind": "synthetic native Flutter app-surface screenshot",
+      "sha256": "918c7fd72500eeecde49aed1f472bd1c24de92ee06b42241e8f624a0d776359a",
+      "bytes": 420416
+    },
+    {
+      "path": "ios-os-launcher.png",
+      "kind": "OS launcher screenshot",
+      "sha256": "973c07ccf6dc61ee112ef3732d7dccee2b35d2f11b4a5eaf8dba3fffda6cd713",
+      "bytes": 3138283
+    }
+  ]
+}

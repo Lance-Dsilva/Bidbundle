@@ -171,3 +171,14 @@ Exact successful harness head: **4ac16367ed04206ea76cebecb15a72423c807bdb**. And
 Initial5efbb418 Android run failed three journeys due test-helper lazy-finder/scroll-settlement defects; guard and homeowner100% passed. Test-only correction added settled/hit-testable/fatal-miss actions and robust restoration. Both entire platform runs repeated at4ac16367; no forced taps/skips/production changes. Guard self-checks passed on both native bindings; complete route audits and logout clearing/interactive semantics/effective scales passed.
 
 Final full flutter test **467 passed**; analyzer **No issues found**; formatter **61 files, zero changes**. Task Android/iOS devices stopped/deleted and temporary AVD removed, with existing device data preserved. No real auth/API/ownership/callback/storage/platform-back/screen-reader/physical-device evidence. Native screenshots are synthetic app-surface rendering and tester input proof only. Resulting-head CI remains separate from prior N01 CI.
+
+
+## N03 independent presentation verification — 2026-11-01
+
+Tested source **15a88ee5075f7eb47f78b7c72f4a26c00334e2d2**. Two focused authored scenarios per platform passed on fresh Android 16 / API 36 and iPhone 17 / iOS 26.4.1 runtimes, driver exit 0. Framework counter 3 includes teardown. Retry was initially visible/hit-testable without route scrolling at 100% / 200%; title/mark/Back/Sign out bounds, exact request counts, guard violations and logout clearing passed. No runtime fix or skipped scenario was needed.
+
+All four normal builds passed: Android development 11.5 s / staging 7.6 s; iOS simulator development 52.9 s / staging 42.9 s. Both-flavor packaged icon/label metadata and real OS launcher screenshots verified. All 22 asset hashes/dimensions/byte lengths passed, all iOS icon files opaque, and independent temporary generation exactly reproduced the manifest/output bytes with pinned tools.
+
+Final complete unit/widget suite: **467 passed**. Analyzer: **No issues found**. Formatter: **62 files, zero changes**. Eight synthetic native app captures plus two OS launcher captures were independently inspected and indexed in `evidence/native-presentation`. Task devices were stopped/deleted and temporary AVD data removed; existing device/account data untouched.
+
+This focused N03 run does not repeat the full N02 native matrix or establish live auth/API/callback/storage, OS back gestures, screen-reader/physical-device accessibility or distribution signing. Resulting-head CI remains separate.

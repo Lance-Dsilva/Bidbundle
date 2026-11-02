@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: N02 synthetic native fixture journeys, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: N03 canonical native presentation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -58,3 +58,5 @@ Prior checkpoint R09 commit 8ffca3595b44ad635dddc28fef9a1745c087c3ee passed exac
 N01 exact-head CI41372909197 passed all four native jobs and artifact uploads at 741b13d54368a172d1e681a613faae172f7246b2. N02 native fixture journeys are approved and in progress, with acceptance matrix in PLAN.md. They will validate synthetic native rendering/navigation only; no live or screen-reader acceptance is inferred.
 
 N02 corrected source 4ac16367ed04206ea76cebecb15a72423c807bdb passed five scenarios on each actual task-owned Android/iOS runtime, covering two roles at 100%/200% and guard self-checks. Initial failed harness source 5efbb41 is not accepted evidence. Test-only fixes addressed scrolling/lazy finders and cleanup; no production source changes. Native synthetic captures and final review are under evidence/native-fixtures. Exact pushed-head CI remains required. Tester BackButton taps and semantics assertions do not prove OS input or assistive-technology operation.
+
+N03 adds the approved canonical company mark to native headers and deterministic launcher assets, retaining platform fonts and provisional flavor identities. Service areas now places errors/Retry above compact read-only/no-eligibility disclosures. Source 15a88ee5075f7eb47f78b7c72f4a26c00334e2d2 passed two affected scenarios on each native platform at 100%/200%, all four normal builds and both OS launcher reviews; independent source/asset reproduction passed. Independent evidence review and 467 regression tests passed, analyzer clean and 62 formatted files unchanged. Resulting-head CI remains pending. No live, screen-reader or release acceptance is implied.
