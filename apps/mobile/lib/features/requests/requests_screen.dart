@@ -77,12 +77,6 @@ class RequestsScreen extends StatelessWidget {
                   ),
                   _CompactValue('Recorded bids', '${item.bidCount}'),
                   _CompactValue(
-                    'Lowest live bid',
-                    item.bestBidCents == null
-                        ? 'No live bid'
-                        : usdCents(item.bestBidCents!),
-                  ),
-                  _CompactValue(
                     'Created',
                     requestDateLabel(context, item.createdAt),
                   ),

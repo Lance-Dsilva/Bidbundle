@@ -669,4 +669,38 @@ void main() {
       expect(vm.requests.detail?.id, 'r1');
     },
   );
+  testWidgets(
+    'currency-ambiguous savings and lowest bid stay hidden while USD budget remains',
+    (tester) async {
+      final vm = home(
+        base.FakeAuth()..active = true,
+        MockClient(
+          (r) async => r.url.path == '/api/homeowner/requests'
+              ? base.jsonResponse(
+                  listBody(
+                    rows: [
+                      {...summary(), 'bestBidCents': 987654},
+                    ],
+                  ),
+                )
+              : requestsRoute(r),
+        ),
+      );
+      await render(tester, vm);
+      expect(find.textContaining('Recorded savings'), findsNothing);
+      expect(find.textContaining('12.50'), findsNothing);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -1000));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Recorded savings'), findsNothing);
+      await tapAndLoad(tester, find.text('Requests'));
+      await tester.scrollUntilVisible(find.textContaining('123.45 USD'), 200);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('123.45 USD'), findsOneWidget);
+      expect(find.textContaining('Lowest live bid'), findsNothing);
+      expect(find.textContaining('9,876.54'), findsNothing);
+      expect(find.textContaining('9876.54'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      vm.dispose();
+    },
+  );
 }

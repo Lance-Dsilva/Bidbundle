@@ -1,3 +1,5 @@
+import '../opportunities/opportunities_screen.dart';
+
 import 'package:flutter/material.dart';
 
 import 'home_model.dart';
@@ -43,11 +45,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       widget.model.account,
       widget.model.provider,
       widget.model.support,
+      widget.model.opportunities,
     ]),
     builder: (context, _) {
       final model = widget.model;
       final data = model.data;
       final dashboard = data?.dashboard;
+      final opportunitiesVisible =
+          model.canViewOpportunities && model.showOpportunities;
       final requestsVisible = model.canViewRequests && model.showRequests;
       final accountVisible = model.canViewAccount && model.showAccount;
       final notificationsVisible =
@@ -57,7 +62,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final supportVisible = accountVisible && model.account.showingSupport;
       final supportDetailVisible =
           supportVisible && model.support.selectedId != null;
-      final secondaryVisible = requestsVisible || accountVisible;
+      final secondaryVisible =
+          requestsVisible || accountVisible || opportunitiesVisible;
       final nestedVisible =
           detailVisible || notificationsVisible || supportVisible;
       return PopScope<void>(
@@ -93,13 +99,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           bottomNavigationBar: model.canViewAccount
               ? NavigationBar(
                   selectedIndex: accountVisible
-                      ? (model.canViewRequests ? 2 : 1)
-                      : (requestsVisible ? 1 : 0),
+                      ? ((model.canViewRequests || model.canViewOpportunities)
+                            ? 2
+                            : 1)
+                      : ((requestsVisible || opportunitiesVisible) ? 1 : 0),
                   onDestinationSelected: (index) {
                     if (index == 0) {
                       model.showHome();
                     } else if (model.canViewRequests && index == 1) {
                       model.openRequests();
+                    } else if (model.canViewOpportunities && index == 1) {
+                      model.openOpportunities();
                     } else {
                       model.openAccount();
                     }
@@ -114,6 +124,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         icon: Icon(Icons.list_alt),
                         label: 'Requests',
                       ),
+                    if (model.canViewOpportunities)
+                      const NavigationDestination(
+                        icon: Icon(Icons.work_outline),
+                        label: 'Opportunities',
+                      ),
                     const NavigationDestination(
                       icon: Icon(Icons.person_outline),
                       label: 'Account',
@@ -122,7 +137,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 )
               : null,
           body: SafeArea(
-            child: requestsVisible
+            child: opportunitiesVisible
+                ? OpportunitiesScreen(model: model.opportunities)
+                : requestsVisible
                 ? RequestsNavigator(model: model.requests)
                 : accountVisible
                 ? AccountNavigator(model: model.account)
@@ -205,13 +222,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             '${dashboard.activeRequests}',
                           ),
                           _summary('Active bids', '${dashboard.activeBids}'),
-                          _summary(
-                            'Recorded savings',
-                            '\$${(dashboard.savedCents / 100).toStringAsFixed(2)}',
-                          ),
-                          const Text(
-                            'Based on your recorded requests and agreements. Discounts are not guaranteed.',
-                          ),
                         ] else if (model.canViewProvider)
                           ProviderScreen(
                             model: model.provider,

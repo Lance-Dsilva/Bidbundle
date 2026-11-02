@@ -1,3 +1,6 @@
+import '../opportunities/models.dart';
+import '../opportunities/opportunities_model.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -25,7 +28,12 @@ class HomeModel extends ChangeNotifier {
     AccountRepository? accountRepository,
     ProviderRepository? providerRepository,
     SupportRepository? supportRepository,
+    OpportunitiesRepository? opportunitiesRepository,
   }) {
+    opportunities = OpportunitiesModel(
+      opportunitiesRepository ?? OpportunitiesRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
     requests = RequestsModel(
       requestsRepository ?? RequestsRepository(repository.api),
       onSessionExpired: _sessionExpired,
@@ -44,6 +52,28 @@ class HomeModel extends ChangeNotifier {
       onSessionExpired: _sessionExpired,
     );
   }
+  late final OpportunitiesModel opportunities;
+  bool showOpportunities = false;
+  bool get canViewOpportunities => canViewProvider;
+  Future<void> openOpportunities() async {
+    if (!canViewOpportunities) return;
+    showAccount = false;
+    account.closeNotifications();
+    account.closeSupport();
+    showRequests = false;
+    requests.closeDetail();
+    showOpportunities = true;
+    _emit();
+    if (opportunities.status == OpportunitiesStatus.idle) {
+      await opportunities.load();
+    }
+  }
+
+  void _closeOpportunities() {
+    showOpportunities = false;
+    opportunities.close();
+  }
+
   late final SupportModel support;
   bool get canViewSupport => canViewAccount;
   late final ProviderModel provider;
@@ -61,6 +91,7 @@ class HomeModel extends ChangeNotifier {
       data!.profile.id == data!.context.userId;
   Future<void> openAccount() async {
     if (!canViewAccount) return;
+    _closeOpportunities();
     showRequests = false;
     requests.closeDetail();
     showAccount = true;
@@ -77,6 +108,7 @@ class HomeModel extends ChangeNotifier {
       data?.profile.id == data?.context.userId;
   Future<void> openRequests() async {
     if (!canViewRequests) return;
+    _closeOpportunities();
     showAccount = false;
     account.closeNotifications();
     account.closeSupport();
@@ -86,6 +118,7 @@ class HomeModel extends ChangeNotifier {
   }
 
   void showHome() {
+    _closeOpportunities();
     showAccount = false;
     account.closeNotifications();
     account.closeSupport();
@@ -95,6 +128,8 @@ class HomeModel extends ChangeNotifier {
   }
 
   void _clearPrivateState() {
+    showOpportunities = false;
+    opportunities.clear();
     provider.clear();
     showAccount = false;
     account.clear();
@@ -210,6 +245,9 @@ class HomeModel extends ChangeNotifier {
         loaded.context.role == 'homeowner' ? loaded.profile.id : null,
       );
       account.setOwner(loaded.profile.id, loaded.context.role);
+      opportunities.setOwner(
+        loaded.context.role == 'provider' ? loaded.profile.id : null,
+      );
       provider.setOwner(
         loaded.context.role == 'provider' ? loaded.profile.id : null,
       );
@@ -260,6 +298,7 @@ class HomeModel extends ChangeNotifier {
     account.dispose();
     provider.dispose();
     support.dispose();
+    opportunities.dispose();
     super.dispose();
   }
 }

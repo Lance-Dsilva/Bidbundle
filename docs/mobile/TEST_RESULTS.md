@@ -104,3 +104,16 @@ Added43 cases in support_test.dart plus4 synthetic captures. Final complete flut
 Coverage: required rendered fields/null community,100-row GET-only list and encoded detail ID/match, all lifecycle statuses, empty visible conversation, strict internal_note/unknown/fromAi rejection, plain multiline bodies,403/404/409/500 no-fallback retry,1MiB oversized response rejection, list loading/empty/failure, public-role gate, forced-renewal401 global clearing, stale owner/list/detail/old401 results,200% actual list-button navigation/scroll reset/message reachability, platform back/iOS edge swipe/logout, and rapid route switching/reopen. Constructor compile failure was corrected by author; final test-only lint fixed before clean full run.
 
 Four captures copied to evidence/support with synthetic provenance. No live API, native build, device accessibility or actual managed-community isolation check performed by this reviewer. Existing R03 exact-head CI proof is unchanged; R04 requires resulting-head CI and the same live runtime gates.
+
+
+## R05 local independent verification — 2026-11-01
+
+Added48 Opportunities regression cases and4 synthetic capture scenarios. Final complete flutter test: **253 passed**. flutter analyze: **No issues found**. Final formatter: **37 files, zero changes**.
+
+Coverage includes all required rendered fields, null values, enums/numeric/date validation, eligibility contradiction, empty feed, exact GET/envelope/200rows, duplicate/over-cap rejection, role isolation,403/409/500 retries preserving Account,1MiB workspace rejection, refresh replacement/expansion clearing, late clear/owner/tab-close/signout responses, late old401, global forced-renewal expiry,200% actual inline expansion/plain text and back, private text omission and no mutation/per-ID calls. Test-only brace lint corrected before final clean full run; no app defect observed.
+
+Four inspected screenshots copied to evidence/opportunities with synthetic provenance. Native builds/live API/provider isolation were not run by this reviewer; resulting-head CI must verify R05 separately from historical R04 proof. Workspace network-payload/privacy and1MiB limitations remain explicit.
+
+R05 final checkpoint also includes one additional Home→Requests monetary-display regression after source review found missing currency authority for savings/lowest bid. Both displays were removed; explicitUSD request budgets remain visible. Final post-correction total **253 passed**, analyzer clean, formatter37files/zero changes. Home and Requests screenshots regenerated, inspected and refreshed. This records a contract-gap correction, not a production-data incident; no server change was made.
+
+R05 final capture maintenance: refreshed provider fixtures for the new Opportunities navigation tab. Legacy Home capture harness now loads SDK MaterialIcons, replacing missing-glyph boxes; this is a fixture correction only. Post-fix full253tests, analyzer and formatting remain clean.

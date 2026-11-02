@@ -30,6 +30,16 @@ void main() {
     if (font == null) {
       throw StateError('Flutter SDK Roboto fixture font not found');
     }
+    final icons = FontLoader('MaterialIcons');
+    icons.addFont(
+      Future.value(
+        ByteData.sublistView(
+          await File('${font.parent.path}/MaterialIcons-Regular.otf')
+              .readAsBytes(),
+        ),
+      ),
+    );
+    await icons.load();
     for (final family in ['Ahem', 'Roboto', 'serif']) {
       final loader = FontLoader(family);
       loader.addFont(

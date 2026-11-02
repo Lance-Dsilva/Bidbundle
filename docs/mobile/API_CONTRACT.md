@@ -177,12 +177,13 @@ HomeownerRequestView required keys:
 |---|---|
 | id,title,category,categoryLabel,description,status,communityId,communityName | string |
 | context | `neighborhood` or `hoa` |
-| budgetMinCents,budgetMaxCents,bestBidCents | integer or null; whole US cents; legacy budgets may be null |
+| budgetMinCents,budgetMaxCents | integer or null; whole US cents under the request budget contract; legacy budgets may be null |
+| bestBidCents | integer or null; selected bid amount in cents, but bid currency is omitted from this projection; not safe to label USD |
 | bidCount | integer, count of ALL related bids, unlike detail count |
 | enrollmentClosesAt | ISO timestamp string or null |
 | createdAt,updatedAt | ISO timestamp strings |
 
-BestBidCents is cheapest submitted/accepted bid only; null means none. Do not compute a discount or treat it as an awarded amount. categoryLabel falls back to raw category if not recognized. Status vocabulary currently draft,collecting_interest,open_for_bids,bidding_closed,awarded,scheduled,in_progress,completed,cancelled,failed; keep unknown status display safe without granting actions.
+BestBidCents selects the lowest numeric amount among submitted/accepted bids; null means none. Because the projection omits bid currency, this is not a supported cross-currency price comparison. Do not label it USD, compute a discount or treat it as an awarded amount. categoryLabel falls back to raw category if not recognized. Status vocabulary currently draft,collecting_interest,open_for_bids,bidding_closed,awarded,scheduled,in_progress,completed,cancelled,failed; keep unknown status display safe without granting actions.
 
 Eligibility is a discriminated union: `{canCreate:true,communityId:string,communityName:string}` OR `{canCreate:false,reason:string,message:string,actionLabel:string,actionPath:string}`. Reasons: wrong_role,hoa_resident,membership_pending,no_profile_location,no_community. Eligibility refusal is still HTTP 200, not a list failure. The message is server-owned. Action paths currently homeowner community/profile, provider dashboard or admin dashboard; whitelist native destinations, never blindly launch a server string or expose public admin navigation. For hoa_staff wrong_role currently uses admin dashboard fallback, so do not infer role from actionPath.
 
@@ -408,3 +409,55 @@ There is **no attachment URL, attachment collection, upload endpoint or media fi
 Use a separately scoped Support child model reached from Account, with native Account→list→detail back navigation and platform gestures. Retain only ticket id/number/subject/category/status/communityName/createdAt/lastActivityAt for list and the same plus customer-visible message projection for detail. Hide unnecessary requester/admin identity metadata and unfiltered counts. Each detail GET must reauthorize and response-id-match; no list-backed conversation fallback. Empty tickets and empty visible-message arrays are genuine empty states. Preserve year+explicit timezone in timestamps, wrapping long text and200% scaling,48px actions, loading/error/retry/refresh and immediate sensitive-state clearing on logout/identity/role refresh. A list read does not establish individual ownership or unrestricted community management authority.
 
 Tests should prove GET-only traffic, encoded ids, response id match, unknown/wrong role no navigation, authorized community ticket wording, own vs community authorSide presentation, null community,100-result limit honesty, all statuses/categories (neutral waiting-on-requester), internal_note/unknown message kind rejection, fromAi contract handling, ignored internal-note count/admin metadata/related ids, text-only malicious URLs/HTML, detail403/404 after a previously visible list, generic500/409/401, forced-renewal expiry, unbounded-server/1MiB-client failure behavior, late list/detail after sign-out or role switch, list→detail scroll reset, Android back/iOS swipe and200% screenshots. Existing source test `tests/support-ai-safety.test.ts` checks customer filter use and exclusion of AI draft tables, but source assertions are not live role-isolation proof. No hidden GET mutation blocks this bounded plan; live staging authorization and the long-thread API limitation remain explicit gates/limitations.
+
+## R05 discovery: provider opportunities, source-only candidate
+
+Inspected 2026-11-01. This is a recommendation, not implemented or live-verified. Sources: `src/app/api/provider/marketplace/route.ts`, `src/app/api/provider/marketplace/requests/[requestId]/bid/route.ts`, `src/lib/server/hoa-api.ts`, `src/lib/server/provider-api.ts`, `src/lib/server/hoa-market.ts` (`requireProvider`, `providerCanSeeRequest`, `getProviderHoaWorkspace`, serializers), `src/lib/server/visit-views.ts`, `src/lib/hoa-types.ts`, and `src/components/provider/ProviderMarketplaceFeed.tsx`.
+
+### Read gate and visibility
+
+`GET /api/provider/marketplace` returns `{workspace}`. It uses `requireProviderUser` (authenticated provider role), then `requireProvider(userId,{allowPending:true})`. Unlike provider overview's console gate, a missing provider record throws **403**, not409. Authentication/profile failures remain shared authorization responses; wrong role403; workflow failures retain their status; generic failure500. The generic unique-conflict mapper can emit409, which should remain a neutral recoverable error rather than inventing a missing-profile explanation.
+
+Pending and suspended records can read their own workspace/history. `workspace.eligible` is false with a server reason for suspended status, non-active status, or absent license/insurance verification timestamps. Order: suspended first; other non-active next; then missing either credential. Account active alone and email `isVerified` are insufficient. Eligibility is not authorization for a mobile mutation. This endpoint does not include accountStatus itself; do not derive a new account status from free-text reasons.
+
+Feed rows additionally require normalized category within provider trades, an active service area covering a server-approved community location, an active community, request status open_for_bids, and bidding deadline null or strictly later than server now. HOA matching uses verified HOA coordinates; neighbourhood matching uses admin-owned community centre, never participant coordinates. Unknown coverage is not a match. Postal-only coverage cannot match a neighbourhood with no community postal address. No client-supplied filters/location/ID establish eligibility. An empty eligible feed may reflect trade, coverage, location, deadline or the candidate cap; do not assert a specific cause.
+
+### Exact feed projection and limits
+
+Workspace fields are eligible:boolean, ineligibleReason:string|null, serviceAreas:array, categories:string[], feed:array, bids:array, agreements:array, occurrencesByAgreement:object. The proposed mobile projection retains only eligible/reason/feed. Required feed fields:
+
+| Field | Source wire type and meaning |
+| --- | --- |
+| requestId,communityName,title,category,description | string; category normalized when recognized, otherwise raw |
+| context | hoa or neighborhood |
+| kind | compulsory_recurring or optional_group |
+| locality,region,recurrenceLabel | string|null |
+| totalOccurrences | integer; visits/occurrences per home |
+| homeCount | integer; joined participation count, no participant identities |
+| approximateDistanceMi | number|null; rounded miles to community point from nearest service-area centre, not a home location |
+| budgetMinCents,budgetMaxCents | integer|null; permitted request budget in US cents under the request validation/schema contract; no separate currency field |
+| startDate,biddingClosesAt | ISO UTC timestamp string|null |
+| myBid | caller's own BidSummary|null; exclude from first mobile projection |
+
+The service fetches at most **200 open candidate requests before eligibility filtering**, ordered by biddingClosesAt ascending. Thus feed length <=200, possibly far smaller, and it is not a complete or paginated opportunity catalogue. No cursor/total is exposed. Active service areas have no explicit take. Own bids: latest50 by updatedAt descending. Own agreements: latest25 by createdAt descending. Occurrences and nested visits for those agreements have **no explicit count cap**. Feed myBid uses the caller's matching bid (no competing bid amounts); it is not an invitation to fetch arbitrary IDs.
+
+Dates are serialized using toISOString. Mobile should keep existing year+explicit timezone labels, null-not-zero handling and safe finite/nonnegative/count integer validation; do not infer request availability from device time. `approximateDistanceMi` is nullable, not a zero-distance fallback. Existing helper actually takes the nearest centre among active areas, despite comments referring to covering areas; describe only approximate community distance, not exact travel distance.
+
+### Money, privacy and side effects
+
+Request budget fields have an explicit US-cents contract in the underlying request validation comment/schema and migration; a separate currency field is not required to preserve those request budgets as USD (including R01). Web rounds their display to zero fractional digits, which mobile should not copy for exact cents. **Omitting budgets in the first opportunities slice is a bounded-scope choice**, not a missing authoritative budget currency. This does not establish currency for a selected best-bid amount or dashboard savings: bids/agreements carry currency, USD defaults are not a database-wide invariant, and those aggregate serializers omit currency. No revenue/earnings totals or savings. Own bids/agreements do carry their own currency string, amountCents and pricingBasis, with nullable perHomeCents; legacy pricing bases and dimensions make them a separate later contract, not a safe sum or payout. Their omission is deliberate.
+
+Feed projection contains community locality/region, approximate distance, and counts, with no participant/unit/address/access-note list or competing amounts. However the same workspace payload includes the provider's won agreements and serialized occurrence visits with includeLocation=true and includeAccessNotes=true. Those sections can contain precise unit/home address snapshots and access notes, scoped by agreement providerUserId. Pending/suspended reads still retrieve their own history. A mobile opportunities parser must discard serviceAreas/bids/myBid/agreements/occurrences and never retain, log, render or cache their address/route data. This does not reduce network payload size: the existing1MiB client bound can reject a large workspace before projection. That is a concrete endpoint-size limitation; keep a recoverable error, no silent truncation or relaxed cap. A future feed-only server endpoint would reduce unnecessary sensitive transfer and payload risk, but is outside this source-only candidate.
+
+The inspected GET workflow performs database reads and serialization only: no bid/read-status/visit mutations, notification dispatch or audit writes. Shared authentication remains existing infrastructure. The request-specific bid route exports PUT and DELETE only; **there is no provider opportunity GET-by-ID detail route** in this route family. Do not repurpose homeowner/neighbourhood detail endpoints or invent direct-ID access.
+
+### Recommended split and acceptance
+
+A viable first candidate is provider-only **Opportunities list with inline expandable description/details from the current feed**, reached after matched profile/context; local child errors preserve Home/Account. Retain title/community/context/category/kind, recurrence/counts, optional approximate distance, start/deadline and description; omit money, coordinates, own bids and awarded-work sections. Show server ineligible state separately from an eligible empty feed, with read-only wording and no bid/coverage/verification action. Suggested limit text: “Available opportunities from up to200 open requests checked”; never “all nearby jobs.” A separate detail route, if desired later, must explicitly be a current-feed projection refreshed through the same GET, discard selection when missing, and never imply independent server detail authorization. Inline expansion is the smaller initial scope.
+
+Before acceptance test provider-only request isolation; pending/suspended/unverified state with empty feed; missing-record403; neutral409/500; eligible empty state; null dates/distance/recurrence; invalid enums/counts/dates; candidate cap wording; malicious descriptions as inert plain text; no retained private nested sections; oversized workspace failure; retry/refresh that replaces prior feed; no direct-ID or mutation traffic; logout/account/role/401 forced-renewal clearing and late-response fences;200% text and native back. Server coverage/privacy source inspection is not live cross-provider authorization proof. Live gates remain open; no R05 implementation is authorized by this appendix alone.
+
+
+### Currency display correction after R05 source audit
+
+Request budget fields retain their explicit US-cents source contract, so R01 continues displaying those budgets as USD. The request-list bestBidCents projection selects a numeric bid amount without its currency; the dashboard savings calculation subtracts agreement amounts without preserving currency. Defaults of USD do not establish a database-wide currency invariant for bids/agreements. Mobile therefore omits the “Lowest live bid” monetary display and Home “Recorded savings” card and discount explanation. Existing typed parsing may retain these fields for response-contract compatibility; it does not authorize displaying or aggregating them. R05 continues to omit budgets as a bounded first-slice choice, and omits all own-bid/earnings aggregates. This is a source-review correction, not evidence of a production incident or completed live validation.
