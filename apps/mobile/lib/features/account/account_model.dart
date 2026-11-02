@@ -1,3 +1,4 @@
+import '../inbox/inbox_model.dart';
 import '../reviews/reviews_model.dart';
 import '../service_areas/service_areas_model.dart';
 
@@ -16,7 +17,35 @@ class AccountModel extends ChangeNotifier {
     this.support,
     this.serviceAreas,
     this.reviews,
+    this.inbox,
   });
+  final InboxModel? inbox;
+  bool showingInbox = false;
+  bool get inboxAvailable =>
+      inbox != null && personalAccountRoles.contains(_role);
+  Future<void> openInbox() async {
+    if (!inboxAvailable ||
+        _owner == null ||
+        profile == null ||
+        profileStatus != AccountStatus.ready ||
+        _disposed) {
+      return;
+    }
+    closeNotifications();
+    closeSupport();
+    closeServiceAreas();
+    closeReviews();
+    showingInbox = true;
+    _emit();
+    if (inbox!.listStatus == InboxStatus.idle) await inbox!.loadList();
+  }
+
+  void closeInbox() {
+    showingInbox = false;
+    inbox?.close();
+    _emit();
+  }
+
   final ReviewsModel? reviews;
   bool showingReviews = false;
   bool get reviewsAvailable => reviews != null && _role == 'provider';
@@ -31,6 +60,7 @@ class AccountModel extends ChangeNotifier {
     closeNotifications();
     closeSupport();
     closeServiceAreas();
+    closeInbox();
     showingReviews = true;
     _emit();
     if (reviews!.status == ReviewsStatus.idle) await reviews!.load();
@@ -56,6 +86,7 @@ class AccountModel extends ChangeNotifier {
     closeNotifications();
     closeSupport();
     closeReviews();
+    closeInbox();
     showingServiceAreas = true;
     _emit();
     if (serviceAreas!.status == ServiceAreasStatus.idle) {
@@ -83,6 +114,7 @@ class AccountModel extends ChangeNotifier {
     closeNotifications();
     closeServiceAreas();
     closeReviews();
+    closeInbox();
     showingSupport = true;
     _emit();
     if (support!.listStatus == SupportStatus.idle) await support!.loadList();
@@ -116,12 +148,15 @@ class AccountModel extends ChangeNotifier {
       _owner = id;
       _role = role;
       support?.setOwner(id);
+      inbox?.setOwner(id, role);
       serviceAreas?.setOwner(role == 'provider' ? id : null);
       reviews?.setOwner(role == 'provider' ? id : null);
     }
   }
 
   void clear() {
+    showingInbox = false;
+    inbox?.clear();
     showingReviews = false;
     reviews?.clear();
     showingServiceAreas = false;
@@ -162,6 +197,7 @@ class AccountModel extends ChangeNotifier {
       return;
     }
     final generation = ++_profileGeneration;
+    closeInbox();
     closeReviews();
     closeServiceAreas();
     closeNotifications();
@@ -201,6 +237,7 @@ class AccountModel extends ChangeNotifier {
     closeSupport();
     closeServiceAreas();
     closeReviews();
+    closeInbox();
     showingNotifications = true;
     _emit();
     if (notificationsStatus == AccountStatus.idle) await loadNotifications();

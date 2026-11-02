@@ -1,3 +1,4 @@
+import '../inbox/inbox_screen.dart';
 import '../reviews/reviews_screen.dart';
 import '../service_areas/service_areas_screen.dart';
 
@@ -78,6 +79,13 @@ class AccountScreen extends StatelessWidget {
                 child: const Text('Recent notifications'),
               ),
               const SizedBox(height: 12),
+              if (model.inboxAvailable) ...[
+                OutlinedButton(
+                  onPressed: model.openInbox,
+                  child: const Text('Inbox'),
+                ),
+                const SizedBox(height: 12),
+              ],
               if (model.reviewsAvailable) ...[
                 OutlinedButton(
                   onPressed: model.openReviews,
@@ -209,8 +217,17 @@ class AccountNavigator extends StatelessWidget {
           model.showingNotifications ||
           model.showingSupport ||
           model.showingServiceAreas ||
-          model.showingReviews,
+          model.showingReviews ||
+          model.showingInbox,
       onPopWithResult: (_) {
+        if (model.showingInbox) {
+          if (model.inbox?.selectedId != null) {
+            model.inbox!.closeDetail();
+          } else {
+            model.closeInbox();
+          }
+          return;
+        }
         if (model.showingReviews) {
           model.closeReviews();
           return;
@@ -256,6 +273,17 @@ class AccountNavigator extends StatelessWidget {
               key: const ValueKey('published-reviews'),
               child: ReviewsScreen(model: model.reviews!),
             ),
+          if (model.showingInbox && model.inbox != null) ...[
+            page(
+              key: const ValueKey('inbox-list'),
+              child: InboxScreen(model: model.inbox!),
+            ),
+            if (model.inbox!.selectedId != null)
+              page(
+                key: ValueKey('inbox-detail-${model.inbox!.selectedId}'),
+                child: InboxScreen(model: model.inbox!, detailView: true),
+              ),
+          ],
           if (model.showingNotifications)
             page(
               key: const ValueKey('notifications'),
@@ -263,6 +291,15 @@ class AccountNavigator extends StatelessWidget {
             ),
         ],
         onDidRemovePage: (removed) {
+          if (model.showingInbox) {
+            if (removed.key == const ValueKey('inbox-list')) {
+              model.closeInbox();
+            } else if (model.inbox?.selectedId != null &&
+                removed.key ==
+                    ValueKey('inbox-detail-${model.inbox!.selectedId}')) {
+              model.inbox!.closeDetail();
+            }
+          }
           if (model.showingReviews &&
               removed.key == const ValueKey('published-reviews')) {
             model.closeReviews();

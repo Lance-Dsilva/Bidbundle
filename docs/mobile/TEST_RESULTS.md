@@ -144,3 +144,12 @@ Added44 reviews tests plus4 synthetic captures. Final complete flutter test: **3
 Coverage: required/null fields, rowrating and serveraverage/count bounds, canonicaldate, exact20/0 GET and20unique cap, no summary/list consistency assumption, providerlazy role isolation, pending/suspendedread,403/409/500 retry preservingAccount, oversized/timeoutfailure, refreshmoderation removal, owner/close/role/old401 fences and globalexpiry, actual200% navigation/plaincomments/privateomission/back, iOSedge and rapidAccountchild switching/signout. Four screenshots inspected/copied to evidence/reviews with synthetic provenance; no application fix needed.
 
 No live API/moderation/provider-isolation/nativebuild check by reviewer. Resulting-head CI and established SDK/device/live gates remain separate from historical R07 proof.
+
+
+## R09 local independent verification — 2026-11-01
+
+Added45 Inbox cases plus5 synthetic captures. Final complete flutter test: **441 passed**. flutter analyze: **No issues found**. Final formatter: **57 files, zero changes**.
+
+Coverage includes exact role mapping/lazyGET, encodedlistedID/detailquery50/0,100list/50message uniqueness bounds, requiredfields/canonicaldates/nullpreview, thread/message binding, untrustedrole rejection, onlyGET/no read/send calls,403/404/409/500 nofallback retry,1MiB/timeout errors preservingAccount, refreshreplacement and stale owner/role/close/old401/globalexpiry, actual200%button/scrollreset/back, iOSedge/reopen and allAccountchild clearing. Five captures inspected/copied to evidence/inbox. No appsource correction needed.
+
+Mock tests do not establish live cross-participant privacy or actual receipt nonmutation; those require staging evidence. No server/live/nativebuild performed by reviewer; resulting-head CI remains separate from historical R08 proof.

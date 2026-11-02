@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: R08 read-only provider Published reviews preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: R09 read-only Inbox preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -14,6 +14,7 @@ Snapshot: R08 read-only provider Published reviews preparation, 2026-11-01. No p
 | Provider Service areas | Saved active coverage labels, primary flag, coarse locality, radius/postal coverage and dates; no maps/edits/eligibility inference | R06 independent review/300tests passed; resulting-head CI pending |
 | Provider Opportunities | Server-eligible feed with inline description/details; limited candidate catalogue, no bid actions or private awarded-work fields | R05 local review/253tests passed; resulting-head native CI pending |
 | Provider Home | Server account status, active bids, active/completed agreements, nullable published rating and decided-bid win rate | R03 independent review,153 tests and exact-head native CI passed; money/trends and inbox deferred |
+| Inbox | Up to100 recent participant conversations and latest50-message transcript, fresh authorized reads; no send/read receipts | R09 independent review/441 tests passed; combined-head native CI pending |
 | Support | Server-authorized recent tickets and customer-visible conversations, native list/detail routes | R04 local review/200tests and exact-head Android/iOS CI passed; long unpaginated threads may exceed1MiB; no writes/attachments/links |
 | Account | Own profile, email verification, nullable contact fields and membership date for homeowner/provider/HOA staff | Independent fixture/source review passed; live data unverified |
 | Recent notifications | Latest30 server records with read/unread state, text, refresh and native back; links inert | R02 source implementation; no mark-read, dismissal, push or complete-history claim |
@@ -45,3 +46,7 @@ R06 reviewed locally:300 full-suite tests, formatter/analyzer and independent co
 R07 reviewed locally:343 tests, clean formatter/analyzer and independent source/security/fixtureUX acceptance. Community/null/empty states stay distinct, requests are bound to returned community, private nested data dropped. Large-text heading refined and all affected homeowner captures refreshed for4-tab navigation. Live membership revocation/privacy and resulting-head CI remain separate.
 
 R08 reviewed locally:391 full-suite tests, clean formatter/analyzer and independent code/security/fixtureUX acceptance. Published reviews are first-page only with server summary; no derived page averages or invented verification/anonymity. Next native verification will target the combined pushed R07/R08 head, not falsely certify intermediate commits.
+
+R09 reviewed locally:441 full-suite tests, clean formatter/analyzer and independent code/security/fixture UX acceptance. Inbox uses trusted role-specific customer/provider reads and strict thread/message binding. No send, mark-read, identity lookup or links. Five captures reviewed; current Account captures refreshed. Live participant isolation and combined-head native CI remain separate.
+
+Next priority after the Inbox checkpoint: usable native test-build prerequisites, per parent Engineering. Assess environment-specific identities/callback binding, local assets/fonts and native fixture UI/navigation/accessibility evidence without live accounts; choose one bounded implementation slice. R10 quote source discovery is backlog only, not an implementation commitment. Provisional identifiers remain unconfirmed and no external registration/settings change is authorized.

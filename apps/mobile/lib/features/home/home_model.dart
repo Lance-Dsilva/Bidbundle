@@ -1,3 +1,5 @@
+import '../inbox/models.dart';
+import '../inbox/inbox_model.dart';
 import '../reviews/models.dart';
 import '../reviews/reviews_model.dart';
 import '../community/models.dart';
@@ -31,6 +33,7 @@ class HomeModel extends ChangeNotifier {
     this.auth,
     this.repository, {
     RequestsRepository? requestsRepository,
+    InboxRepository? inboxRepository,
     ReviewsRepository? reviewsRepository,
     CommunityRepository? communityRepository,
     AccountRepository? accountRepository,
@@ -63,12 +66,17 @@ class HomeModel extends ChangeNotifier {
       reviewsRepository ?? ReviewsRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
+    inbox = InboxModel(
+      inboxRepository ?? InboxRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
     account = AccountModel(
       accountRepository ?? AccountRepository(repository.api),
       onSessionExpired: _sessionExpired,
       support: support,
       serviceAreas: serviceAreas,
       reviews: reviews,
+      inbox: inbox,
     );
     provider = ProviderModel(
       providerRepository ?? ProviderRepository(repository.api),
@@ -86,6 +94,7 @@ class HomeModel extends ChangeNotifier {
     account.closeSupport();
     account.closeServiceAreas();
     account.closeReviews();
+    account.closeInbox();
     showRequests = false;
     requests.closeDetail();
     showCommunity = true;
@@ -109,6 +118,7 @@ class HomeModel extends ChangeNotifier {
     account.closeSupport();
     account.closeServiceAreas();
     account.closeReviews();
+    account.closeInbox();
     showRequests = false;
     requests.closeDetail();
     showOpportunities = true;
@@ -123,6 +133,8 @@ class HomeModel extends ChangeNotifier {
     opportunities.close();
   }
 
+  late final InboxModel inbox;
+  bool get canViewInbox => canViewAccount;
   late final ReviewsModel reviews;
   bool get canViewReviews => canViewProvider;
   late final ServiceAreasModel serviceAreas;
@@ -169,6 +181,7 @@ class HomeModel extends ChangeNotifier {
     account.closeSupport();
     account.closeServiceAreas();
     account.closeReviews();
+    account.closeInbox();
     showRequests = true;
     _emit();
     if (requests.listStatus == RequestStatus.idle) await requests.loadList();
@@ -182,6 +195,7 @@ class HomeModel extends ChangeNotifier {
     account.closeSupport();
     account.closeServiceAreas();
     account.closeReviews();
+    account.closeInbox();
     showRequests = false;
     requests.closeDetail();
     _emit();
@@ -366,6 +380,7 @@ class HomeModel extends ChangeNotifier {
     support.dispose();
     serviceAreas.dispose();
     reviews.dispose();
+    inbox.dispose();
     opportunities.dispose();
     super.dispose();
   }

@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R07 and local R08 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R08 and local R09 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -10,13 +10,13 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | Homeowner | request/new, requests/detail | homeowner/requests + id + transition + participation + award | R01: read-only own-request list and authorized neighborhood detail implemented; legacy HOA detail explicitly unsupported. Create/edit/cancel, participation and lifecycle remain PLANNED; no award authority inferred. |
 | Homeowner | bidding-room, bids | homeowner/bids; homeowner/requests/id/award; hoa/requests/id/bids | Requester/participant bid comparison; provider selection only by the server-authorized community manager; no auto-award |
 | Homeowner/resident | neighbourhood, community | homeowner/neighbourhood; HOA requests, join, surveys/vote | R07 local Community snapshot/visible request feed independently reviewed with343tests; no manager rights. Membership changes, participation, surveys and full community journeys remain PLANNED |
-| Homeowner | chat | homeowner/inbox + thread/messages/read | Participant-only conversations, unread, send/retry/empty states |
+| Homeowner | chat | homeowner/inbox + thread/messages/read | R09 local participant inbox/latest transcript reviewed with441 tests; no read receipts or send. Full pagination, unread and messaging writes remain PLANNED |
 | Homeowner | profile/preferences/avatar | profile, profile/homeowner, profile/avatar | Address/coverage/preferences/upload; no mutable role or verification |
 | Provider | dashboard | provider/overview; provider/marketplace | R03 local: status/activity counts, nullable published rating and decided-bid win rate. Independent local review and exact-head native CI passed. Money/trends and inbox deferred; marketplace/eligibility remain PLANNED. |
 | Provider | job-feed, bids, hoa | provider/marketplace; requests/id/bid | R05 local: server-eligible feed with inline details, bounded candidate semantics and no private awarded-work projection; independent review/253tests passed, resulting-head CI pending. Bid submit/update and full workflow remain PLANNED. |
 | Provider | schedule | provider/marketplace; occurrences/id/plan; visits/id/status | Assigned agreements/visits/day plans and valid lifecycle updates |
 | Provider | earnings | provider/marketplace/earnings | Real recorded data only; do not imply payment processing beyond backend |
-| Provider | messages | provider/inbox + thread/messages/read | Same participant rows as customer; isolation tests |
+| Provider | messages | provider/inbox + thread/messages/read | R09 local participant inbox/latest transcript with provider gate, reviewed with441 tests; native combined-head CI pending. Sends/read receipts/full pagination remain PLANNED |
 | Provider | reviews | provider/ratings | R08 local first-page published reviews/server summary reviewed with391tests; combined-head CI pending. Full pagination and remaining review workflows remain PLANNED |
 | Provider | profile/business/verification/service areas | profile/provider; provider/service-areas and marketplace/service-areas; profile/avatar | R06 local saved Service areas summary independently reviewed/300tests; no maps/edits. Onboarding, business/verification and coverage editing remain PLANNED, with document/status and permission handling |
 | Authorized HOA manager | dashboard/community management | me/managed-communities; hoa/communities/id/units/invitations/requests/surveys | Scoped manager assignments, units/invitations, requests/surveys; delegated roles checked server-side |
