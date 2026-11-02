@@ -17,6 +17,7 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		B10000000000000000000001 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000002 /* ClerkKit */; };
+D04000000000000000000001 = {isa = PBXBuildFile; fileRef = D04000000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,6 +61,8 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+D04000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N04NavigationUITests/N04NavigationUITests.swift; sourceTree = "<group>"; };
+D04000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = N04NavigationUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +101,7 @@
 		97C146E51CF9000F007C117D = {
 			isa = PBXGroup;
 			children = (
+				D04000000000000000000002,
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
@@ -110,6 +114,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
+				D04000000000000000000003,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -174,6 +179,7 @@
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
 		};
+D04000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = D04000000000000000000006; buildPhases = (D04000000000000000000004,); buildRules = (); dependencies = (331C8086294A63A400263BE5,); name = N04NavigationUITests; productName = N04NavigationUITests; productReference = D04000000000000000000003; productType = "com.apple.product-type.bundle.ui-testing"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -211,6 +217,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				D04000000000000000000005,
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
 			);
@@ -291,6 +298,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+D04000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D04000000000000000000001,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1161,6 +1169,7 @@
 			};
 			name = "Release-staging";
 		};
+D04000000000000000000007 = {isa = XCBuildConfiguration; buildSettings = { GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.bundleen.bundleen.n04uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Runner; SKIP_INSTALL = YES; }; name = "Debug-development"; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1212,6 +1221,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+D04000000000000000000006 = {isa = XCConfigurationList; buildConfigurations = (D04000000000000000000007,); defaultConfigurationIsVisible = 0; defaultConfigurationName = "Debug-development"; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
