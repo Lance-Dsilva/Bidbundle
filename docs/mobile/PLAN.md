@@ -131,3 +131,13 @@ Prerequisite N01 exact head 741b13d54368a172d1e681a613faae172f7246b2 passed all 
 | Evidence | Exact commit, command, device/OS, clearly labelled synthetic screenshots, result and cleanup; distinguish tester input from OS input and screen-reader use |
 
 Production widgets/models are reused directly. Normal main.dart and shipping artifacts retain no fixture data or bypass. SDK integration_test is a development dependency. Branding/fonts, physical devices, VoiceOver/TalkBack, live auth and runtime secure-storage isolation remain separate unrun gates.
+
+## N03 — canonical native identity and Service areas presentation
+
+Parent accepted N02 at e8b21f65cb023c0fdc48c8cb98412e06acf7aa16 after all four CI41374602416 jobs and normal artifact uploads passed. N03 is a separate approved presentation slice, not additional API scope.
+
+Architect owns mobile UI, deterministic local icon generation/assets and affected tests. Independent reviewer owns source/asset review and fresh native evidence; manager owns checkpoints and CI. Reuse only public/bundleen/brand/bundleen-company-icon.svg geometry/colors, whose shared component is identified as approved in docs/homepage-v5.md. Record source/output hashes, dimensions, generator/version and platform padding. No new logo, font acquisition, runtime network asset, external registration or production setting change. Native platform fonts remain.
+
+Service areas error and Retry move directly below its heading. Compact app-authored disclosures while retaining read-only and no-account-eligibility meanings. At selected 100%/200% native viewports Retry must be initially visible and hit-testable without scroll. A modest header mark and reproducible native launcher derivatives must preserve usable back/title/sign-out at large text, without overlap or forced inputs. Distinct Dev/Staging names and provisional IDs remain.
+
+Acceptance: targeted UI/semantics/regression checks; independent canonical geometry/color/provenance review; both development/staging packaged icon/label inspection; fresh task-owned Android/iOS launcher and affected header/error/navigation captures at 100%/200%, exact source provenance and cleanup; resulting-head four-job normal CI/artifacts. Repeat only affected N02 coverage. Synthetic content is not app copy; tester/semantics evidence is not OS gesture, screen-reader, physical-device, live auth or release acceptance.

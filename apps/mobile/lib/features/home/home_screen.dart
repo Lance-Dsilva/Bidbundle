@@ -92,7 +92,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Bundleen'),
+            title: MediaQuery.textScalerOf(context).scale(16) > 24
+                ? Image.asset(
+                    'assets/brand/company-mark.png',
+                    width: 28,
+                    height: 28,
+                    semanticLabel: 'Bundleen',
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/brand/company-mark.png',
+                        width: 24,
+                        height: 24,
+                        excludeFromSemantics: true,
+                      ),
+                      const SizedBox(width: 8),
+                      const Flexible(
+                        child: Text(
+                          'Bundleen',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
             leading: nestedVisible
                 ? BackButton(
                     onPressed: inboxVisible

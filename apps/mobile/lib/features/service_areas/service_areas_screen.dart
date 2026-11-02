@@ -20,14 +20,6 @@ class ServiceAreasScreen extends StatelessWidget {
             'Service areas',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Saved coverage is one input to opportunity matching. It does not confirm account activation, verified credentials or bidding access.',
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Read-only summary. Coverage changes are not available in this preview.',
-          ),
           if (model.status == ServiceAreasStatus.loading)
             const Padding(
               padding: EdgeInsets.all(32),
@@ -42,6 +34,12 @@ class ServiceAreasScreen extends StatelessWidget {
             Semantics(liveRegion: true, child: Text(model.message!)),
             OutlinedButton(onPressed: model.load, child: const Text('Retry')),
           ],
+          const SizedBox(height: 12),
+          const Text('Read-only coverage. Changes are unavailable here.'),
+          const SizedBox(height: 8),
+          const Text(
+            'Saved areas do not confirm activation, credentials or bidding access.',
+          ),
           if (model.status == ServiceAreasStatus.ready) ...[
             if (model.items.isEmpty)
               const Padding(
