@@ -135,3 +135,12 @@ Added39 Community cases plus4 synthetic captures. Final post-heading-refinement 
 Coverage: exact British endpoint/lazy homeowner product gating, no manager or per-ID calls, nullhub versus emptyfeed, requiredfields/canonicaldates/safecounts,50cap/duplicate/communitybinding, unknownstatus inert, privatepayload omission and managerflags without actions, plain inline text,1MiB/timeout/error recovery preservingAccount, revoked-null refresh clearing, forced-renewal401 and stale owner/role/signout/old401 fences,200% actual four-tab/Show description/back flow. No source defect found; readability refinement replaced awkward large-text Neighborhood heading with Community.
 
 Four Community captures inspected/copied; prior homeowner Home/Requests/Account/Support captures refreshed to four tabs. Fixtures use fake auth/API data and substitute fonts. No live API/nativebuild/device-isolation check performed by reviewer; resulting-head CI and established live gates remain separate from historical R06 proof.
+
+
+## R08 local independent verification — 2026-11-01
+
+Added44 reviews tests plus4 synthetic captures. Final complete flutter test: **391 passed**. flutter analyze: **No issues found**. Final formatter: **52 files, zero changes**.
+
+Coverage: required/null fields, rowrating and serveraverage/count bounds, canonicaldate, exact20/0 GET and20unique cap, no summary/list consistency assumption, providerlazy role isolation, pending/suspendedread,403/409/500 retry preservingAccount, oversized/timeoutfailure, refreshmoderation removal, owner/close/role/old401 fences and globalexpiry, actual200% navigation/plaincomments/privateomission/back, iOSedge and rapidAccountchild switching/signout. Four screenshots inspected/copied to evidence/reviews with synthetic provenance; no application fix needed.
+
+No live API/moderation/provider-isolation/nativebuild check by reviewer. Resulting-head CI and established SDK/device/live gates remain separate from historical R07 proof.

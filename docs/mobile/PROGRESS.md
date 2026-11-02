@@ -1,6 +1,6 @@
 # Mobile product progress
 
-Snapshot: R07 read-only homeowner Community preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
+Snapshot: R08 read-only provider Published reviews preparation, 2026-11-01. No percentage is assigned: API routes and web pages are an inventory, not equal-sized completed features.
 
 | Screen / flow | Implemented behavior | Verification limit |
 | --- | --- | --- |
@@ -10,6 +10,7 @@ Snapshot: R07 read-only homeowner Community preparation, 2026-11-01. No percenta
 | Homeowner Requests | Own-request list, source status/category/budget/bid/date fields, empty/error/retry/refresh; up to100 server rows | Synthetic contract/widget/screenshots only until staging |
 | Neighborhood request detail | Separate authorized GET, description/counts/deadlines; platform routes/back; denial never uses list fallback | iOS gesture/scroll/session-race simulations, not native authenticated proof |
 | Homeowner Community | Active-membership snapshot, active member count and up to50 current visible request summaries with inline descriptions | R07 independent review/343tests passed; no participation/manager actions; resulting-head CI pending |
+| Provider Published reviews | First20 published reviews and server-wide summary, explicit more-available state; plain reviewer text | R08 independent review/391tests passed; no response/moderation or verified badge; combined-head CI pending |
 | Provider Service areas | Saved active coverage labels, primary flag, coarse locality, radius/postal coverage and dates; no maps/edits/eligibility inference | R06 independent review/300tests passed; resulting-head CI pending |
 | Provider Opportunities | Server-eligible feed with inline description/details; limited candidate catalogue, no bid actions or private awarded-work fields | R05 local review/253tests passed; resulting-head native CI pending |
 | Provider Home | Server account status, active bids, active/completed agreements, nullable published rating and decided-bid win rate | R03 independent review,153 tests and exact-head native CI passed; money/trends and inbox deferred |
@@ -42,3 +43,5 @@ R05 reviewed local implementation: provider Opportunities uses the server-eligib
 R06 reviewed locally:300 full-suite tests, formatter/analyzer and independent code/security/fixtureUX review passed. Service areas use the dedicated owner-scoped GET and drop exact coordinates/addresses. Unused savings/best-bid fields are removed from mobile DTOs; retained USD budgets remain validated. Native resulting-head CI remains required.
 
 R07 reviewed locally:343 tests, clean formatter/analyzer and independent source/security/fixtureUX acceptance. Community/null/empty states stay distinct, requests are bound to returned community, private nested data dropped. Large-text heading refined and all affected homeowner captures refreshed for4-tab navigation. Live membership revocation/privacy and resulting-head CI remain separate.
+
+R08 reviewed locally:391 full-suite tests, clean formatter/analyzer and independent code/security/fixtureUX acceptance. Published reviews are first-page only with server summary; no derived page averages or invented verification/anonymity. Next native verification will target the combined pushed R07/R08 head, not falsely certify intermediate commits.

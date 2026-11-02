@@ -1,6 +1,6 @@
 # Mobile parity matrix
 
-Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R06 and local R07 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
+Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers; current web behavior remains source of truth. Foundation, R01–R07 and local R08 read-only implementation are identified below; other rows remain PLANNED. No authenticated mobile feature is live verified yet. Detailed route/method inventory: API_CONTRACT.md. Sequence preserves dependency order; each slice needs exact payload fixtures, independent authorization/test/UX/code evidence before completion.
 
 | Role | Web screens / features | Existing API families | Mobile slice / acceptance |
 |---|---|---|---|
@@ -17,7 +17,7 @@ Baseline fb4a245 (2026-11-01). Source: src/app/app/**/page.tsx and API handlers;
 | Provider | schedule | provider/marketplace; occurrences/id/plan; visits/id/status | Assigned agreements/visits/day plans and valid lifecycle updates |
 | Provider | earnings | provider/marketplace/earnings | Real recorded data only; do not imply payment processing beyond backend |
 | Provider | messages | provider/inbox + thread/messages/read | Same participant rows as customer; isolation tests |
-| Provider | reviews | provider/ratings | Server-backed ratings/reviews, honest empty state |
+| Provider | reviews | provider/ratings | R08 local first-page published reviews/server summary reviewed with391tests; combined-head CI pending. Full pagination and remaining review workflows remain PLANNED |
 | Provider | profile/business/verification/service areas | profile/provider; provider/service-areas and marketplace/service-areas; profile/avatar | R06 local saved Service areas summary independently reviewed/300tests; no maps/edits. Onboarding, business/verification and coverage editing remain PLANNED, with document/status and permission handling |
 | Authorized HOA manager | dashboard/community management | me/managed-communities; hoa/communities/id/units/invitations/requests/surveys | Scoped manager assignments, units/invitations, requests/surveys; delegated roles checked server-side |
 | Authorized HOA manager | requests/bids/awards/close | hoa/requests/id, bids, award; hoa/occurrences/id/close | Preserve live service lifecycle and manager/provider authority; missing participant address errors |

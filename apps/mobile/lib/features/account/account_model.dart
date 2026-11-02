@@ -1,3 +1,4 @@
+import '../reviews/reviews_model.dart';
 import '../service_areas/service_areas_model.dart';
 
 import 'package:flutter/foundation.dart';
@@ -14,7 +15,33 @@ class AccountModel extends ChangeNotifier {
     required this.onSessionExpired,
     this.support,
     this.serviceAreas,
+    this.reviews,
   });
+  final ReviewsModel? reviews;
+  bool showingReviews = false;
+  bool get reviewsAvailable => reviews != null && _role == 'provider';
+  Future<void> openReviews() async {
+    if (!reviewsAvailable ||
+        _owner == null ||
+        profile == null ||
+        profileStatus != AccountStatus.ready ||
+        _disposed) {
+      return;
+    }
+    closeNotifications();
+    closeSupport();
+    closeServiceAreas();
+    showingReviews = true;
+    _emit();
+    if (reviews!.status == ReviewsStatus.idle) await reviews!.load();
+  }
+
+  void closeReviews() {
+    showingReviews = false;
+    reviews?.close();
+    _emit();
+  }
+
   final ServiceAreasModel? serviceAreas;
   bool showingServiceAreas = false;
   bool get serviceAreasAvailable => serviceAreas != null && _role == 'provider';
@@ -28,6 +55,7 @@ class AccountModel extends ChangeNotifier {
     }
     closeNotifications();
     closeSupport();
+    closeReviews();
     showingServiceAreas = true;
     _emit();
     if (serviceAreas!.status == ServiceAreasStatus.idle) {
@@ -54,6 +82,7 @@ class AccountModel extends ChangeNotifier {
     }
     closeNotifications();
     closeServiceAreas();
+    closeReviews();
     showingSupport = true;
     _emit();
     if (support!.listStatus == SupportStatus.idle) await support!.loadList();
@@ -88,10 +117,13 @@ class AccountModel extends ChangeNotifier {
       _role = role;
       support?.setOwner(id);
       serviceAreas?.setOwner(role == 'provider' ? id : null);
+      reviews?.setOwner(role == 'provider' ? id : null);
     }
   }
 
   void clear() {
+    showingReviews = false;
+    reviews?.clear();
     showingServiceAreas = false;
     serviceAreas?.clear();
     showingSupport = false;
@@ -130,6 +162,7 @@ class AccountModel extends ChangeNotifier {
       return;
     }
     final generation = ++_profileGeneration;
+    closeReviews();
     closeServiceAreas();
     closeNotifications();
     closeSupport();
@@ -167,6 +200,7 @@ class AccountModel extends ChangeNotifier {
     }
     closeSupport();
     closeServiceAreas();
+    closeReviews();
     showingNotifications = true;
     _emit();
     if (notificationsStatus == AccountStatus.idle) await loadNotifications();

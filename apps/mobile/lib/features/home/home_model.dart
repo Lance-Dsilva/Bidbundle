@@ -1,3 +1,5 @@
+import '../reviews/models.dart';
+import '../reviews/reviews_model.dart';
 import '../community/models.dart';
 import '../community/community_model.dart';
 import '../service_areas/models.dart';
@@ -29,6 +31,7 @@ class HomeModel extends ChangeNotifier {
     this.auth,
     this.repository, {
     RequestsRepository? requestsRepository,
+    ReviewsRepository? reviewsRepository,
     CommunityRepository? communityRepository,
     AccountRepository? accountRepository,
     ProviderRepository? providerRepository,
@@ -56,11 +59,16 @@ class HomeModel extends ChangeNotifier {
       serviceAreasRepository ?? ServiceAreasRepository(repository.api),
       onSessionExpired: _sessionExpired,
     );
+    reviews = ReviewsModel(
+      reviewsRepository ?? ReviewsRepository(repository.api),
+      onSessionExpired: _sessionExpired,
+    );
     account = AccountModel(
       accountRepository ?? AccountRepository(repository.api),
       onSessionExpired: _sessionExpired,
       support: support,
       serviceAreas: serviceAreas,
+      reviews: reviews,
     );
     provider = ProviderModel(
       providerRepository ?? ProviderRepository(repository.api),
@@ -77,6 +85,7 @@ class HomeModel extends ChangeNotifier {
     account.closeNotifications();
     account.closeSupport();
     account.closeServiceAreas();
+    account.closeReviews();
     showRequests = false;
     requests.closeDetail();
     showCommunity = true;
@@ -99,6 +108,7 @@ class HomeModel extends ChangeNotifier {
     account.closeNotifications();
     account.closeSupport();
     account.closeServiceAreas();
+    account.closeReviews();
     showRequests = false;
     requests.closeDetail();
     showOpportunities = true;
@@ -113,6 +123,8 @@ class HomeModel extends ChangeNotifier {
     opportunities.close();
   }
 
+  late final ReviewsModel reviews;
+  bool get canViewReviews => canViewProvider;
   late final ServiceAreasModel serviceAreas;
   bool get canViewServiceAreas => canViewProvider;
   late final SupportModel support;
@@ -156,6 +168,7 @@ class HomeModel extends ChangeNotifier {
     account.closeNotifications();
     account.closeSupport();
     account.closeServiceAreas();
+    account.closeReviews();
     showRequests = true;
     _emit();
     if (requests.listStatus == RequestStatus.idle) await requests.loadList();
@@ -168,6 +181,7 @@ class HomeModel extends ChangeNotifier {
     account.closeNotifications();
     account.closeSupport();
     account.closeServiceAreas();
+    account.closeReviews();
     showRequests = false;
     requests.closeDetail();
     _emit();
@@ -351,6 +365,7 @@ class HomeModel extends ChangeNotifier {
     provider.dispose();
     support.dispose();
     serviceAreas.dispose();
+    reviews.dispose();
     opportunities.dispose();
     super.dispose();
   }

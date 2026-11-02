@@ -1,3 +1,4 @@
+import '../reviews/reviews_screen.dart';
 import '../service_areas/service_areas_screen.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -77,6 +78,13 @@ class AccountScreen extends StatelessWidget {
                 child: const Text('Recent notifications'),
               ),
               const SizedBox(height: 12),
+              if (model.reviewsAvailable) ...[
+                OutlinedButton(
+                  onPressed: model.openReviews,
+                  child: const Text('Published reviews'),
+                ),
+                const SizedBox(height: 12),
+              ],
               if (model.serviceAreasAvailable) ...[
                 OutlinedButton(
                   onPressed: model.openServiceAreas,
@@ -200,8 +208,13 @@ class AccountNavigator extends StatelessWidget {
       enabled:
           model.showingNotifications ||
           model.showingSupport ||
-          model.showingServiceAreas,
+          model.showingServiceAreas ||
+          model.showingReviews,
       onPopWithResult: (_) {
+        if (model.showingReviews) {
+          model.closeReviews();
+          return;
+        }
         if (model.showingServiceAreas) {
           model.closeServiceAreas();
           return;
@@ -238,6 +251,11 @@ class AccountNavigator extends StatelessWidget {
               key: const ValueKey('service-areas'),
               child: ServiceAreasScreen(model: model.serviceAreas!),
             ),
+          if (model.showingReviews && model.reviews != null)
+            page(
+              key: const ValueKey('published-reviews'),
+              child: ReviewsScreen(model: model.reviews!),
+            ),
           if (model.showingNotifications)
             page(
               key: const ValueKey('notifications'),
@@ -245,6 +263,10 @@ class AccountNavigator extends StatelessWidget {
             ),
         ],
         onDidRemovePage: (removed) {
+          if (model.showingReviews &&
+              removed.key == const ValueKey('published-reviews')) {
+            model.closeReviews();
+          }
           if (model.showingServiceAreas &&
               removed.key == const ValueKey('service-areas')) {
             model.closeServiceAreas();

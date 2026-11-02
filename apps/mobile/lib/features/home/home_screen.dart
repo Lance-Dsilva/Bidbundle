@@ -48,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       widget.model.provider,
       widget.model.support,
       widget.model.serviceAreas,
+      widget.model.reviews,
       widget.model.opportunities,
     ]),
     builder: (context, _) {
@@ -73,11 +74,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           communityVisible;
       final serviceAreasVisible =
           accountVisible && model.account.showingServiceAreas;
+      final reviewsVisible = accountVisible && model.account.showingReviews;
       final nestedVisible =
           detailVisible ||
           notificationsVisible ||
           supportVisible ||
-          serviceAreasVisible;
+          serviceAreasVisible ||
+          reviewsVisible;
       return PopScope<void>(
         canPop: !secondaryVisible,
         onPopInvokedWithResult: (didPop, result) {
@@ -89,7 +92,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             title: const Text('Bundleen'),
             leading: nestedVisible
                 ? BackButton(
-                    onPressed: serviceAreasVisible
+                    onPressed: reviewsVisible
+                        ? model.account.closeReviews
+                        : serviceAreasVisible
                         ? model.account.closeServiceAreas
                         : detailVisible
                         ? model.requests.closeDetail
