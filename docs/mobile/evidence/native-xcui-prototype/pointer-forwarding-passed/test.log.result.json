@@ -1,0 +1,33 @@
+{
+  "command": [
+    "xcodebuild",
+    "test-without-building",
+    "-workspace",
+    "ios/Runner.xcworkspace",
+    "-scheme",
+    "n04-ui",
+    "-configuration",
+    "Debug-development",
+    "-destination",
+    "platform=iOS Simulator,id=7346B9BE-510B-440B-8142-1309F0D973BF",
+    "-destination-timeout",
+    "30",
+    "-derivedDataPath",
+    "/private/tmp/bundleen-n04-xcui-pointer/DerivedData",
+    "-resultBundlePath",
+    "/private/tmp/bundleen-n04-xcui-pointer/Result.xcresult",
+    "-parallel-testing-enabled",
+    "NO",
+    "-test-timeouts-enabled",
+    "YES",
+    "-default-test-execution-time-allowance",
+    "150",
+    "-maximum-test-execution-time-allowance",
+    "180",
+    "CODE_SIGNING_ALLOWED=NO"
+  ],
+  "exitCode": 0,
+  "timedOut": false,
+  "wallElapsedSeconds": 314.17,
+  "monotonicElapsedSeconds": 37.48
+}

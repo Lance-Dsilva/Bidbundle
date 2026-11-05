@@ -1,0 +1,24 @@
+{
+  "command": [
+    "xcodebuild",
+    "build-for-testing",
+    "-workspace",
+    "ios/Runner.xcworkspace",
+    "-scheme",
+    "n04-ui",
+    "-configuration",
+    "Debug-development",
+    "-destination",
+    "platform=iOS Simulator,id=7346B9BE-510B-440B-8142-1309F0D973BF",
+    "-destination-timeout",
+    "30",
+    "-derivedDataPath",
+    "/private/tmp/bundleen-n04-xcui-pointer/DerivedData",
+    "CODE_SIGNING_ALLOWED=NO",
+    "FLUTTER_TARGET=integration_test/xcui_navigation_test.dart"
+  ],
+  "exitCode": 0,
+  "timedOut": false,
+  "wallElapsedSeconds": 776.15,
+  "monotonicElapsedSeconds": 213.57
+}

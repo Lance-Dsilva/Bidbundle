@@ -254,3 +254,10 @@ Evidence: `evidence/native-xcui-prototype/semantics-forwarding`.
 ## Pointer forwarding checkpoint — blocked before runtime
 
 Source `447783746f809d4b1363ee78a57e5b97d6488da6` independently accepted for scoped testing. Automatic approval service disconnected before configuration execution; no app build/launch/input occurred. Execution stopped without retry. Fresh simulator A03C2862-A90C-40E3-9931-CDD29A2108ED shutdown/delete exited 0; current generated config/export still lib/main.dart. See `evidence/native-xcui-prototype/pointer-forwarding-blocked/README.md` for exact service error and scope. Native acceptance remains open.
+
+
+## N04 one-route native prototype passed — 2026-11-05
+
+At `933a153` (mobile source identical to reviewed `4477837`), the single fresh iOS 26.4.1 / iPhone 17 XCTest run passed: actual public edge drag returned Requests detail to list at 100%, with exact unchanged nonce/PID/isolate native marker and independent Dart destination/foreground/guard assertions. Case 17.271 s; test command 37.48 monotonic s, exit 0. Ready/observed screenshots independently inspected. Standalone Dart console unavailable; no completed teardown transcript claimed.
+
+Exact task simulator deleted and absence verified; both normal flavor entrypoints explicitly restored and checked. Wall/monotonic clock divergence preserved without inferred cause. Only this synthetic one-route prototype is accepted; broader iOS navigation, 200%, logout, live authentication and screen-reader gates remain open. See `evidence/native-xcui-prototype/pointer-forwarding-passed` for exact commands, identity, artifacts, cleanup and limitations. Prior failures remain unchanged.
