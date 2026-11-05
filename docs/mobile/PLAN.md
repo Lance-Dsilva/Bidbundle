@@ -166,3 +166,10 @@ Previous source `08f3b245c4afee62df5a9f18e3e1a6ca4c7d2820` exposed the genuine F
 The approved next correction changes only the integration-test entrypoint: save the binding's device-pointer propagation value, enable it inside the protected body, log/assert it at ready, and restore it first in unconditional cleanup. Independent review accepted the source; no product, SDK or native-host change. One fresh 100% Requests detail-to-list XCTest run is authorized after exact source checkpoint, with one initial launch, bounded watchdogs and no retry. Native input and same-engine Dart destination are both required. Full matrix/signed-out, isolated staging/live auth, business writes and release remain gated.
 
 The return message to the Engineering chat remains blocked by automatic approval review pending direct human confirmation in this chat. Do not retry or relay around that restriction; ordinary repository/test work continues.
+
+
+### N04 bounded resume stopped before runtime — 2026-11-05
+
+Reviewed source checkpoint `447783746f809d4b1363ee78a57e5b97d6488da6` passed analyzer, formatting/diff checks and 29 focused Requests tests. The one fresh attempt stopped before configuration/build/launch: automatic approval review encountered a stream-disconnected transport/response-decoding error and explicitly reported the configuration action was not executed. This is a service failure, not an unsafe-action determination or a native test failure. Per the bounded-resume instruction, no retry occurred.
+
+The newly created task simulator `A03C2862-A90C-40E3-9931-CDD29A2108ED` was shut down and deleted; boot/cleanup sessions completed. Read-only verification confirms Generated.xcconfig and flutter_export_environment.sh still target `lib/main.dart`; neither was changed by the refused command. There is no app launch, native input or destination evidence for `4477837`. The pointer correction is source-reviewed but runtime-unverified. Resume requires a new explicit bounded assignment after service availability; full matrix and live gates remain open.

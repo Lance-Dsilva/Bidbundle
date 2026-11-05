@@ -332,3 +332,8 @@ Cleanup reconciled: task simulator absent, remaining devices shutdown, no matchi
 Source-only follow-up: the pinned live test binding defaults shouldPropagateDevicePointerEvents to false and gates real device input; tester-generated events take a different path. This is a next hypothesis, not an established cause or successful fix. Further execution requires a separate exact checkpoint and authorization.
 
 Evidence: `evidence/native-xcui-prototype/semantics-forwarding`.
+
+
+## Pointer forwarding checkpoint — blocked before runtime
+
+Source `447783746f809d4b1363ee78a57e5b97d6488da6` independently accepted for scoped testing. Automatic approval service disconnected before configuration execution; no app build/launch/input occurred. Execution stopped without retry. Fresh simulator A03C2862-A90C-40E3-9931-CDD29A2108ED shutdown/delete exited 0; current generated config/export still lib/main.dart. See `evidence/native-xcui-prototype/pointer-forwarding-blocked/README.md` for exact service error and scope. Native acceptance remains open.
