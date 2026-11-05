@@ -95,3 +95,14 @@ production entry point or user settings, and never calls the API with false.
 All existing native marker, identity, foreground, actual drag and independent
 Dart observation requirements remain mandatory. A successful API call or local
 semantics assertion alone is not acceptance evidence.
+
+## Real device pointer forwarding experiment
+
+The semantics-forwarding run exposed the genuine native marker and delivered one
+XCTest drag, but did not observe the Dart destination. The pinned live test
+binding defaults `shouldPropagateDevicePointerEvents` to false and gates actual
+device pointers on it. This test entry point saves the prior value, enables it
+inside the protected test body, asserts and logs its effective value at ready,
+and restores it first in unconditional cleanup. Tester setup and actual XCTest
+input remain distinct. This source-supported correction is not navigation
+acceptance until the single fresh native run meets every existing assertion.

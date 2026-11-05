@@ -1,0 +1,59 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "E94EA66C-11DC-4705-92B4-59E6502C78A5",
+      "deviceName" : "Bundleen-N04-XCUI-Forwarding",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23E254a",
+      "osVersion" : "26.4.1",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "N04NavigationUITests.swift:74: XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "27s",
+                  "durationInSeconds" : 27.68935000896454,
+                  "name" : "testRequestsNativeEdgeDrag()",
+                  "nodeIdentifier" : "N04NavigationUITests/testRequestsNativeEdgeDrag()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests/testRequestsNativeEdgeDrag",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "N04NavigationUITests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "N04NavigationUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "n04-ui",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

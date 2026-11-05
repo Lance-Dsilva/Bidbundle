@@ -66,3 +66,12 @@ N04 Android system Back is independently exercised at 100%/200% on source b2b6ae
 N04 iOS actual-input remains open after unlock: inventory worked and the fresh simulator booted, but documented Simulator control hung twice and was stopped. The task runtime was removed; no iOS app run or input occurred. Prepared test-only receipt/post-input assertions do not close this gate. Parent owns any next concrete tooling/access prerequisite; no more optional preparation phase or live work is started.
 
 N04 public XCTest prototype compiled/launched without credentials, but both original and one corrected controlled attempt failed readiness before any gesture. Corrected source01bacee proves Dart READY/local semantics and matching native PID, while XCTest sees no Flutter accessibility descendants. This establishes a native accessibility-discovery gap, not a product navigation defect or successful iOS input. Full matrix/signed-out and live gates remain open; no more retry started.
+
+
+## N04 pointer forwarding checkpoint — 2026-11-05
+
+Previous source `08f3b245c4afee62df5a9f18e3e1a6ca4c7d2820` exposed the genuine Flutter accessibility marker and delivered one public XCTest edge drag, but no Dart destination was observed. It remains failed/partial; separate evidence is preserved under `evidence/native-xcui-prototype/semantics-forwarding`. The old task simulator and processes are gone and both normal flavor configurations were verified as `lib/main.dart`. The anomalous reported build elapsed time is retained without claiming a bounded wall duration.
+
+The approved next correction changes only the integration-test entrypoint: save the binding's device-pointer propagation value, enable it inside the protected body, log/assert it at ready, and restore it first in unconditional cleanup. Independent review accepted the source; no product, SDK or native-host change. One fresh 100% Requests detail-to-list XCTest run is authorized after exact source checkpoint, with one initial launch, bounded watchdogs and no retry. Native input and same-engine Dart destination are both required. Full matrix/signed-out, isolated staging/live auth, business writes and release remain gated.
+
+The return message to the Engineering chat remains blocked by automatic approval review pending direct human confirmation in this chat. Do not retry or relay around that restriction; ordinary repository/test work continues.

@@ -1,0 +1,6 @@
+{
+  "BlueprintName": "N04NavigationUITests",
+  "IsUITestBundle": true,
+  "TestHostPath": "__TESTROOT__/Debug-development-iphonesimulator/N04NavigationUITests-Runner.app",
+  "UITargetAppPath": "__TESTROOT__/Debug-development-iphonesimulator/Runner.app"
+}

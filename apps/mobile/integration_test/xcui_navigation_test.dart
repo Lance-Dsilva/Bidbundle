@@ -15,7 +15,7 @@ import 'support/fixture_harness.dart';
 // Only this test entry point exposes a passive accessibility observation marker.
 // There is no command channel, fixture branch, or marker in production main.
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   WidgetController.hitTestWarningShouldBeFatal = true;
   testWidgets('XCTest native Requests edge drag, homeowner 100%', (
     tester,
@@ -39,6 +39,7 @@ void main() {
         'event': event,
         'phase': phase,
         'identity': identity,
+        'devicePointerPropagation': binding.shouldPropagateDevicePointerEvents,
         'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
       }),
     );
@@ -52,8 +53,12 @@ void main() {
       expect(node.rect.height, greaterThanOrEqualTo(24));
     }
 
+    final previousPointerPropagation =
+        binding.shouldPropagateDevicePointerEvents;
     milestone('N04_DART_SETUP');
     try {
+      // Let actual XCTest device input reach the live test binding.
+      binding.shouldPropagateDevicePointerEvents = true;
       tester.platformDispatcher.textScaleFactorTestValue = 1;
       await tester.pumpWidget(
         Directionality(
@@ -123,6 +128,7 @@ void main() {
       marker.value = 'N04|$identity|ready';
       await tester.pump();
       assertMarker();
+      expect(binding.shouldPropagateDevicePointerEvents, isTrue);
       phase = 'ready';
       milestone('N04_DART_READY');
       final deadline = DateTime.now().add(const Duration(seconds: 90));
@@ -156,6 +162,8 @@ void main() {
       milestone('N04_DART_FAILURE');
       rethrow;
     } finally {
+      // Restore first, so even a failing teardown cannot leak this setting.
+      binding.shouldPropagateDevicePointerEvents = previousPointerPropagation;
       try {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
