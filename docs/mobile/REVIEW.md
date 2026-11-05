@@ -344,3 +344,8 @@ Source `447783746f809d4b1363ee78a57e5b97d6488da6` independently accepted for sco
 At `933a153` (mobile source identical to reviewed `4477837`), the single fresh iOS 26.4.1 / iPhone 17 XCTest run passed: actual public edge drag returned Requests detail to list at 100%, with exact unchanged nonce/PID/isolate native marker and independent Dart destination/foreground/guard assertions. Case 17.271 s; test command 37.48 monotonic s, exit 0. Ready/observed screenshots independently inspected. Standalone Dart console unavailable; no completed teardown transcript claimed.
 
 Exact task simulator deleted and absence verified; both normal flavor entrypoints explicitly restored and checked. Wall/monotonic clock divergence preserved without inferred cause. Only this synthetic one-route prototype is accepted; broader iOS navigation, 200%, logout, live authentication and screen-reader gates remain open. See `evidence/native-xcui-prototype/pointer-forwarding-passed` for exact commands, identity, artifacts, cleanup and limitations. Prior failures remain unchanged.
+
+
+## N04 full matrix first run — failed / partial
+
+At source 39c0dd3, one controlled iOS run delivered three 100% native drags. Requests detail→list and Inbox conversation→list passed their correlated observed checkpoints; Inbox list→Account failed an exact helper-text finder at Dart line 366 after a complete DEVICE sequence. Native marker disappeared after Dart failed/teardown. No signed-out/200%/final complete evidence. Case 46.577 s, command exit 65 at 72.83 s; no retry. Exact task simulator deleted, both normal main configs restored/verified. See `evidence/native-xcui-matrix/first-run` for sanitized discriminated failure, native facts and screenshots. Matrix acceptance remains open.
