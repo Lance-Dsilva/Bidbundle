@@ -76,3 +76,10 @@ Exact runtime source933a153 already passed normal four-job CI42023666940. This a
 ### Proposed full iOS matrix — source-only
 
 See `N04_IOS_MATRIX_PLAN.md`: eight native edge drags across100%/200% Requests and Inbox nested routes plus signed-out same-engine private-state observation, with a passive DEVICE-source pointer observer, per-step identity markers, finite watchdogs and exact cleanup. Independent design review refinements are incorporated. No implementation or execution is authorized until manager review and CI resolution or explicit capacity parking. Parent owns current344ec89 CI recovery; do not duplicate reruns or push a superseding head while it is active. Cross-chat return handoff remains separately blocked.
+
+
+### Full iOS matrix implementation authorized — 2026-11-05
+
+Manager approved N04_IOS_MATRIX_PLAN.md for bounded test-only implementation, independent source review, exact checkpoint and ONE controlled eight-drag native matrix. Use monotonic Stopwatch deadlines for every Dart acceptance/input wait; DateTime is provenance only. Source writer: Flutter architect; independent reviewer owns runtime/evidence; security reviewer audits private-state assertions. No runtime before reviewed source checkpoint. One fresh simulator/initial launch/engine across both scales; stop on failure with no retries.
+
+Parent verified recovered exact344ec89 CI42081425043 completed success: jobs127537885367,127537974660,127537886735,127537888467 and matching nonexpired artifacts13454432571,13451092319,13441951930,13441686454. No further rerun is needed for that head. Design-only commit830298f remains local until included with implementation/evidence. Existing cross-chat return block and live/backend/write/release gates remain unchanged.

@@ -1,29 +1,35 @@
-# N04 XCTest prototype (synthetic, 100% only)
+# N04 XCTest synthetic navigation matrix
 
-This test-only prototype covers one native left-edge drag from Requests detail to
-its list. It does not establish the full iOS matrix, logout behavior, live auth,
-physical-device behavior, or screen-reader usability. No production entry point
-imports the fixture. The normal development/staging schemes do not include the
-UI-test bundle, and the `n04-ui` scheme has no archive action.
+The current source implements the approved eight-drag matrix in
+`docs/mobile/N04_IOS_MATRIX_PLAN.md`: Requests detail, Inbox detail, Inbox list,
+and a signed-out edge drag at 100% and 200%. One XCTest launch and one engine span
+both groups. Fresh synthetic auth/models between groups are explicitly setup,
+not persistence evidence. Native runtime acceptance of this matrix is pending.
+Earlier one-route attempts/results below remain historical evidence only.
 
-`N04NavigationUITests` owns exactly one initial `XCUIApplication.launch()`. There
-is no Flutter drive launch, activate, recovery launch, or mid-checkpoint install.
-Dart performs labeled setup taps, then exposes `N04Marker` with
-`N04|engineNonce|processId|isolateId|ready`. XCTest records that identity, checks
-foreground state and the unchanged marker, then calls the public iOS
-`coordinate(withNormalizedOffset:).press(forDuration:thenDragTo:)` API. Dart
-independently observes the production Requests model, checks detail removal and
-list visibility, unchanged isolate and uninterrupted foreground lifecycle, and
-publishes the same identity with `observed`. XCTest requires that exact result.
-The marker is passive: it accepts no commands or receipts. No VM attach is needed
-for this minimum prototype; process/isolate values are fixture-reported and
-correlated across the same engine nonce, not an external process inspection.
+`NativeInputBinding` is instantiated first and asserted as the installed binding.
+It captures DEVICE provenance synchronously inside dispatchEvent, records only
+immutable facts, and always delegates unchanged to super. The pure accumulator
+rejects wrong origin/source/pointer/view, cancellation, incomplete or duplicate
+sequences. It never drives navigation. Device forwarding is restored before any
+fallible teardown; semantics are never programmatically disabled.
 
-A background transition or changed marker invalidates the checkpoint. Startup
-has a 60-second marker deadline; Dart has a 90-second input deadline and XCTest a
-20-second result deadline. The result remains visible for 15 seconds. XCTest UI
-quiescence is an unproven runtime prerequisite: a timeout fails this prototype;
-it must not be worked around by tester navigation or disabled idleness.
+The real Flutter `N04Marker` stays mounted across model replacement. Its schema
+is `N04|nonce|pid|isolate|scale|step|name|phase|sequenceCount`; XCTest requires exact
+steps 1–8 and unchanged identity, plus the final complete marker. The passive
+`N04PointerFacts` semantics label contains correlated bounded JSON with actual
+DEVICE down/move/up counts, pointer/view and normalized start/end positions.
+XCTest validates and attaches each summary after observed. These are observations,
+not an acknowledgment/command surface. Each signed-out step requires completed
+DEVICE input, two seconds of settling and all public private-state-clear checks.
+
+All Dart input/hold/layout deadlines use Stopwatch. Bounds: ready 60 seconds,
+input 90 seconds, native observed 20 seconds, observed hold 15 seconds and final
+complete 30 seconds. Setup taps are labeled setup; only XCTest's public coordinate
+press/drag supplies the eight acceptance inputs. Failure stops the run without
+retries or recovery. No production entry point imports these helpers, and no
+normal scheme includes the UI-test target. Native quiescence remains a prerequisite;
+a timeout is failure and cannot be bypassed by tester navigation.
 
 ## Reviewer execution after source checkpoint
 
@@ -37,15 +43,15 @@ reviewer's explicit fresh device, and `N04_OUTPUT` a new task-local directory:
 ```sh
 "$FLUTTER" build ios --config-only --simulator --debug --flavor development --target integration_test/xcui_navigation_test.dart
 xcodebuild build-for-testing -workspace ios/Runner.xcworkspace -scheme n04-ui -configuration Debug-development -destination "platform=iOS Simulator,id=$N04_UDID" -destination-timeout 30 -derivedDataPath "$N04_OUTPUT/DerivedData" CODE_SIGNING_ALLOWED=NO FLUTTER_TARGET=integration_test/xcui_navigation_test.dart
-xcodebuild test-without-building -workspace ios/Runner.xcworkspace -scheme n04-ui -configuration Debug-development -destination "platform=iOS Simulator,id=$N04_UDID" -destination-timeout 30 -derivedDataPath "$N04_OUTPUT/DerivedData" -resultBundlePath "$N04_OUTPUT/Result.xcresult" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 150 -maximum-test-execution-time-allowance 180 CODE_SIGNING_ALLOWED=NO
+xcodebuild test-without-building -workspace ios/Runner.xcworkspace -scheme n04-ui -configuration Debug-development -destination "platform=iOS Simulator,id=$N04_UDID" -destination-timeout 30 -derivedDataPath "$N04_OUTPUT/DerivedData" -resultBundlePath "$N04_OUTPUT/Result.xcresult" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 900 -maximum-test-execution-time-allowance 960 CODE_SIGNING_ALLOWED=NO
 ```
 
 Before execution inspect the generated `.xctestrun` for the intended UI-test
 bundle and fixture Runner.app. The test runner is the only launch owner. Omitting iteration/retry options uses the default single execution. Repetition, retry, relaunch and recovery are prohibited; stop on first failure. Installed Xcode rejects `-test-iterations 1`, so do not add that option. Use a
-host-owned bounded process deadline (build 10 minutes, test 4 minutes); terminate
+host-owned bounded process deadline (build 10 minutes, test 1020 seconds); terminate
 only that owned subprocess on timeout and fail, without recovery. Preserve the
-result bundle's `synthetic-n04-100-ready` and `synthetic-n04-100-observed`
-attachments. No actual native-input claim is warranted until the independent run
+result bundle's eight delivery records, eight DEVICE fact summaries, sixteen
+ready/observed screenshots and final-complete screenshot. No actual native-input claim is warranted until the independent run
 passes; a build alone is not evidence. Stop/delete only the task-owned simulator
 after the result or failure is recorded.
 
