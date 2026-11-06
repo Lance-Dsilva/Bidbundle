@@ -14,6 +14,7 @@ import 'support/fixture_harness.dart';
 
 import 'support/device_sequence.dart';
 import 'support/account_destination.dart';
+import 'support/list_destinations.dart';
 import 'support/native_input_binding.dart';
 
 void main() {
@@ -341,10 +342,7 @@ void main() {
         expect(model.requests.selectedId, 'r1');
         expect(find.text('Request details'), findsOneWidget);
         await external('requests', () => model.requests.selectedId == null, () {
-          expect(model.requests.detail, isNull);
-          expect(model.showRequests, isTrue);
-          expect(find.text('Your requests'), findsOneWidget);
-          expect(find.text('Request details'), findsNothing);
+          expectRequestsListDestination(tester, model);
         });
         await setupTap('Account');
         await setupTap('Inbox');
@@ -355,10 +353,7 @@ void main() {
           'inbox-detail',
           () => model.inbox.selectedId == null,
           () {
-            expect(model.inbox.detail, isNull);
-            expect(model.account.showingInbox, isTrue);
-            expect(find.text('Inbox'), findsOneWidget);
-            expect(find.text('Conversation'), findsNothing);
+            expectInboxListDestination(tester, model);
           },
         );
         await external('inbox-list', () => !model.account.showingInbox, () {
