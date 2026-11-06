@@ -97,3 +97,12 @@ Evidence is preserved in evidence/native-xcui-matrix/first-run, including3native
 ### Narrow Account destination correction authorized — 2026-11-06
 
 Manager accepted01cec01 evidence and four-jobCI42127809165, retaining failed/partialmatrix classification. Authorized one test-only replacement of the lazy/offscreen Account helper finder with current visible Account route/page/render assertions plus cleared/absent Inbox state. Two-scale retained-scroll regression and independent review/checks precede an exact checkpoint and ONE fresh fullmatrix run. All input/identity/foreground/private-state/finalcomplete gates and finite budgets stay unchanged. Prior first-run evidence remains separate; stop/preserve at first failure. Temporary SDK restored at the same pinned revision as recorded in TOOLCHAIN.md. No product/backend/live/account/settings/release changes or blocked return message.
+
+
+### Account correction matrix result — 2026-11-06, failed/partial
+
+Reviewed source b0c815baf5e0518333dd29bf0943a20ac526c527 passed two independently executed retained-scroll widget regressions at100%/200%, analyzer and formatting. The old Account helper omission was reproduced in widget tests and replaced with current visible Account route/page/render plus cleared Inbox assertions. The native run accepted all four100%checkpoints, including Account return and actual signed-out DEVICE input followed by two-second settling and explicit same-engine cleared private state. This remains synthetic auth/API evidence, not Clerk persistence.
+
+Step5 at200% completed actual native input and DEVICE sequence but failed the exact Your requests text finder. Five deliveries, four accepted destinations/native DEVICE summaries, ten captures; no accepted200%destination or finalcomplete. Prior first-run evidence preserved separately; new evidence at evidence/native-xcui-matrix/account-correction-run. Source inspection suggests Requests retained scroll/lazy header is a similar assertion issue, not a proven product failure. Proposed future review: visible Requests route/page checks with retained-scroll regression, plus audit analogous Inbox header assertion. No further fix/retry performed.
+
+Task simulator5216ED9D-02CD-4DD8-AA4E-F98B7A6507CB and owned processes removed; both normalflavor config/export targets restored to lib/main.dart using the restored identical pinned SDK. Resulting-head normal CI remains required. Fullmatrix/live/business-write/release gates and separate cross-chat return authorization block remain open.

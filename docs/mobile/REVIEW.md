@@ -349,3 +349,8 @@ Exact task simulator deleted and absence verified; both normal flavor entrypoint
 ## N04 full matrix first run — failed / partial
 
 At source 39c0dd3, one controlled iOS run delivered three 100% native drags. Requests detail→list and Inbox conversation→list passed their correlated observed checkpoints; Inbox list→Account failed an exact helper-text finder at Dart line 366 after a complete DEVICE sequence. Native marker disappeared after Dart failed/teardown. No signed-out/200%/final complete evidence. Case 46.577 s, command exit 65 at 72.83 s; no retry. Exact task simulator deleted, both normal main configs restored/verified. See `evidence/native-xcui-matrix/first-run` for sanitized discriminated failure, native facts and screenshots. Matrix acceptance remains open.
+
+
+## N04 Account correction run — failed / partial, 2026-11-06
+
+At exact b0c815b, all four 100% native checkpoints passed, including current visible Account destination and signed-out actual DEVICE input followed by two-second settling/private-state-clear assertions in the same engine. The first 200% step then failed its exact “Your requests” text finder after a completed DEVICE sequence. Five native deliveries, four accepted checkpoints; no final complete. Case 90.246 s, command exit 65 at 120.06 s; no retry. Exact task simulator deleted, both normal flavor main configs restored/verified using restored pinned SDK. See `evidence/native-xcui-matrix/account-correction-run`. Full matrix remains unaccepted; live auth and broader accessibility claims remain excluded.
