@@ -1,0 +1,280 @@
+{
+  "identity": "1793977431714843|16037|isolates/227204681218603",
+  "facts": [
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 100,
+      "step": 1,
+      "name": "requests",
+      "pointer": 1,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 37,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 100,
+      "step": 2,
+      "name": "inbox-detail",
+      "pointer": 2,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 41,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 100,
+      "step": 3,
+      "name": "inbox-list",
+      "pointer": 3,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 32,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 100,
+      "step": 4,
+      "name": "signed-out",
+      "pointer": 4,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 34,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 200,
+      "step": 5,
+      "name": "requests",
+      "pointer": 5,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 33,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 200,
+      "step": 6,
+      "name": "inbox-detail",
+      "pointer": 6,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 41,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 200,
+      "step": 7,
+      "name": "inbox-list",
+      "pointer": 7,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 32,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    },
+    {
+      "identity": "1793977431714843|16037|isolates/227204681218603",
+      "scale": 200,
+      "step": 8,
+      "name": "signed-out",
+      "pointer": 8,
+      "startX": 0.009950248756218905,
+      "startY": 0.5,
+      "downCount": 1,
+      "moveCount": 41,
+      "upCount": 1,
+      "view": 0,
+      "endX": 0.8499170812603649,
+      "endY": 0.5,
+      "source": "DEVICE",
+      "completed": 1
+    }
+  ],
+  "nativeDeliveries": [
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|100|1|requests|ready|0",
+      "scale": 100,
+      "sequenceBaseline": 0,
+      "step": 1,
+      "timestamp": "2026-11-06T15:03:56Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|100|2|inbox-detail|ready|0",
+      "scale": 100,
+      "sequenceBaseline": 0,
+      "step": 2,
+      "timestamp": "2026-11-06T15:04:16Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|100|3|inbox-list|ready|0",
+      "scale": 100,
+      "sequenceBaseline": 0,
+      "step": 3,
+      "timestamp": "2026-11-06T15:04:34Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|100|4|signed-out|ready|0",
+      "scale": 100,
+      "sequenceBaseline": 0,
+      "step": 4,
+      "timestamp": "2026-11-06T15:04:55Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|200|5|requests|ready|0",
+      "scale": 200,
+      "sequenceBaseline": 0,
+      "step": 5,
+      "timestamp": "2026-11-06T15:05:16Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|200|6|inbox-detail|ready|0",
+      "scale": 200,
+      "sequenceBaseline": 0,
+      "step": 6,
+      "timestamp": "2026-11-06T15:05:37Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|200|7|inbox-list|ready|0",
+      "scale": 200,
+      "sequenceBaseline": 0,
+      "step": 7,
+      "timestamp": "2026-11-06T15:05:54Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    },
+    {
+      "event": "N04_XCUI_DRAG_DELIVERED",
+      "fromNormalized": [
+        0.01,
+        0.5
+      ],
+      "pressSeconds": 0.1,
+      "readyMarker": "N04|1793977431714843|16037|isolates/227204681218603|200|8|signed-out|ready|0",
+      "scale": 200,
+      "sequenceBaseline": 0,
+      "step": 8,
+      "timestamp": "2026-11-06T15:06:16Z",
+      "toNormalized": [
+        0.85,
+        0.5
+      ]
+    }
+  ],
+  "screenshots": 17
+}

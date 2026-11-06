@@ -271,3 +271,8 @@ At source 39c0dd3, one controlled iOS run delivered three 100% native drags. Req
 ## N04 Account correction run — failed / partial, 2026-11-06
 
 At exact b0c815b, all four 100% native checkpoints passed, including current visible Account destination and signed-out actual DEVICE input followed by two-second settling/private-state-clear assertions in the same engine. The first 200% step then failed its exact “Your requests” text finder after a completed DEVICE sequence. Five native deliveries, four accepted checkpoints; no final complete. Case 90.246 s, command exit 65 at 120.06 s; no retry. Exact task simulator deleted, both normal flavor main configs restored/verified using restored pinned SDK. See `evidence/native-xcui-matrix/account-correction-run`. Full matrix remains unaccepted; live auth and broader accessibility claims remain excluded.
+
+
+## N04 iOS native matrix passed — 2026-11-06
+
+Exact facb780 completed all eight actual XCTest drags at 100% / 200%, one launch/engine, with eight correlated DEVICE summaries and exact final complete. Signed-out actions include completed input then two-second settling and all private-state-clear assertions. Case 164.575 s; command exit 0 at 181.91 s, no retries/timeouts. All 17 screenshots inspected; passive overlays limit visual-design claims. Exact task simulator deleted; both normal flavor main configs restored/verified. Evidence: `evidence/native-xcui-matrix/list-correction-run`. Approved synthetic navigation matrix accepted; live Clerk/API/storage revocation, physical-device, screen-reader and resulting-head normal CI gates remain separate. Subsequent Dart teardown completion is not inferred.
