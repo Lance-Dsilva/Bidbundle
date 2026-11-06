@@ -1,0 +1,1 @@
+{"identity":"1793977431714843|16037|isolates/227204681218603","scale":100,"step":2,"name":"inbox-detail","pointer":2,"startX":0.009950248756218905,"startY":0.5,"downCount":1,"moveCount":41,"upCount":1,"view":0,"endX":0.8499170812603649,"endY":0.5,"source":"DEVICE","completed":1}

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "xcrun",
+    "simctl",
+    "bootstatus",
+    "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+    "-b"
+  ],
+  "exitCode": 0,
+  "timedOut": false,
+  "wallElapsedSeconds": 35.19,
+  "monotonicElapsedSeconds": 35.19
+}

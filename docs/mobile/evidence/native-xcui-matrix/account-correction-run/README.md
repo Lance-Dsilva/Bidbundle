@@ -1,0 +1,15 @@
+# N04 Account correction run — failed / partial
+
+Exact source `b0c815baf5e0518333dd29bf0943a20ac526c527`. Restored official pinned Flutter 3.47.9 SDK at `/private/tmp/bundleen-flutter-restored-20261106` used throughout; no SDK patches. Configuration approved and completed before creation of one fresh iPhone 17 / iOS 26.4.1 task simulator `5216ED9D-02CD-4DD8-AA4E-F98B7A6507CB`. One XCTest launch/engine, no retries/recovery.
+
+All four 100% steps reached accepted native observed checkpoints: Requests detail→list; Inbox conversation→list; Inbox list→current visible Account route; signed-out edge gesture→still signed out. The fourth checkpoint required a completed DEVICE sequence, two seconds of post-input settling, all private model/route state cleared, inactive synthetic auth, Sign in visible, unchanged identity and foreground/guard checks. This is same-engine synthetic logout evidence, not real Clerk persistence/revocation proof.
+
+The run stopped at step 5, Requests at 200%. Actual native drag and completed DEVICE sequence were recorded, then the Dart destination assertion failed because the exact text “Your requests” had zero matches. No step-5 observed acceptance, later 200% steps, or final complete. Native marker-disappeared followed Dart failed/teardown; it does not establish a production black-screen defect. No cause beyond the discriminated failing assertion is claimed.
+
+Unchanged identity throughout reached steps: nonce `1793948861566010`, PID `1027`, isolate `isolates/2092048844077479`. Five native delivery attachments, four native DEVICE summaries, ten screenshots (five ready/four observed/one failure). Step-5 complete DEVICE facts are retained in the Dart failed milestone only. Step-3 Account and step-4 signed-out observed screenshots were independently inspected; fixture audit overlays obscure part of headings, so these are navigation/protocol evidence rather than unobstructed visual-design acceptance. All source assertion failures and sanitized Dart milestones are preserved.
+
+XCTest case failed in 90.246 seconds; command exit 65 at 120.06 seconds, no timeout. Config 20.57 s, boot 31.85 s monotonic, build 87.76 s all exited 0 within approved bounds. No wait was inflated. The sole intended UI target/fixture paths were inspected before launch.
+
+Cleanup completed: exact task simulator shutdown/deleted and absence verified; no booted simulators or owned native processes remained. Development and staging normal entrypoints explicitly regenerated (8.16 s / 5.48 s) and both Generated.xcconfig/export targets verified lib/main.dart. Generated Flutter root now correctly points to the restored exact-version SDK. No normal binary rebuild claimed.
+
+Raw result/video remain in `/private/tmp/bundleen-n04-xcui-matrix-corrected/Result.xcresult` and attachments. Selected attachments and structured command/results are hashed here; raw app logs may include ephemeral service details and are not committed. Prior first-run failure remains unchanged. No product/source edits were made by the runtime reviewer. Full matrix acceptance remains open; no further native run authorized by this result.

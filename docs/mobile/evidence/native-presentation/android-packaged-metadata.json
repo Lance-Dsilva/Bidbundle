@@ -1,0 +1,50 @@
+{
+  "development": {
+    "badging": [
+      "package: name='com.bundleen.bundleen.development' versionCode='1' versionName='0.1.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+      "application-label:'Bundleen Dev'",
+      "application-icon-120:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-160:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-240:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-320:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-480:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-640:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-65534:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-65535:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "launchable-activity: name='com.bundleen.bundleen.MainActivity'  label='' icon=''"
+    ],
+    "iconResources": [
+      "res/drawable-nodpi-v4/company_foreground.png",
+      "res/mipmap-anydpi-v26/ic_launcher.xml",
+      "res/mipmap-hdpi-v4/ic_launcher.png",
+      "res/mipmap-mdpi-v4/ic_launcher.png",
+      "res/mipmap-xhdpi-v4/ic_launcher.png",
+      "res/mipmap-xxhdpi-v4/ic_launcher.png",
+      "res/mipmap-xxxhdpi-v4/ic_launcher.png"
+    ]
+  },
+  "staging": {
+    "badging": [
+      "package: name='com.bundleen.bundleen.staging' versionCode='1' versionName='0.1.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+      "application-label:'Bundleen Staging'",
+      "application-icon-120:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-160:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-240:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-320:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-480:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-640:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-65534:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "application-icon-65535:'res/mipmap-anydpi-v26/ic_launcher.xml'",
+      "launchable-activity: name='com.bundleen.bundleen.MainActivity'  label='' icon=''"
+    ],
+    "iconResources": [
+      "res/drawable-nodpi-v4/company_foreground.png",
+      "res/mipmap-anydpi-v26/ic_launcher.xml",
+      "res/mipmap-hdpi-v4/ic_launcher.png",
+      "res/mipmap-mdpi-v4/ic_launcher.png",
+      "res/mipmap-xhdpi-v4/ic_launcher.png",
+      "res/mipmap-xxhdpi-v4/ic_launcher.png",
+      "res/mipmap-xxxhdpi-v4/ic_launcher.png"
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+I/flutter ( 3410): 00:00 +0: external native navigation homeowner 1.0x
+I/flutter ( 3410): N04_READY homeowner 1x request-detail-back ANDROID_KEYCODE_BACK
+I/flutter ( 3410): N04_OBSERVED homeowner 1x request-detail-back
+I/flutter ( 3410): N04_READY homeowner 1x inbox-detail-back ANDROID_KEYCODE_BACK
+I/flutter ( 3410): N04_OBSERVED homeowner 1x inbox-detail-back
+I/flutter ( 3410): N04_READY homeowner 1x inbox-list-back ANDROID_KEYCODE_BACK
+I/flutter ( 3410): N04_OBSERVED homeowner 1x inbox-list-back
+I/flutter ( 3410): N04_READY homeowner 1x account-top-back ANDROID_KEYCODE_BACK
+I/flutter ( 3410): N04_OBSERVED homeowner 1x account-top-back
+I/flutter ( 3410): N04_READY homeowner 1x signed-out-back ANDROID_KEYCODE_BACK
+I/flutter ( 3410): 00:00 +0: external native navigation homeowner 1.0x
+I/flutter ( 3410): N04_READY homeowner 1x request-detail-back ANDROID_KEYCODE_BACK

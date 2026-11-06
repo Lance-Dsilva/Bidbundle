@@ -1,0 +1,15 @@
+{
+  "productionLibFixtureReferences": [],
+  "normalSchemeTestTargets": {
+    "development": [
+      "RunnerTests"
+    ],
+    "staging": [
+      "RunnerTests"
+    ]
+  },
+  "generatedConfigTarget": "lib/main.dart",
+  "exportScriptTarget": "lib/main.dart",
+  "normalArtifactRebuildPerformed": false,
+  "limit": "Source/config exclusion verified; normal resulting-head CI artifacts are separate proof."
+}
