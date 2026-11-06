@@ -13,6 +13,7 @@ import '../test/mobile_test.dart' as base;
 import 'support/fixture_harness.dart';
 
 import 'support/device_sequence.dart';
+import 'support/account_destination.dart';
 import 'support/native_input_binding.dart';
 
 void main() {
@@ -361,16 +362,7 @@ void main() {
           },
         );
         await external('inbox-list', () => !model.account.showingInbox, () {
-          expect(model.showAccount, isTrue);
-          expect(find.text('Inbox'), findsOneWidget);
-          expect(
-            find.text(
-              'Your account details. Editing is not available in this preview.',
-            ),
-            findsOneWidget,
-          );
-          // Account contains an Inbox button, but no Inbox route remains.
-          expect(model.inbox.items, isEmpty);
+          expectCurrentAccountDestination(tester, model);
         });
         await setupTap('Home');
         await setupTap('Account');
