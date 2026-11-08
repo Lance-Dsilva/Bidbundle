@@ -17,6 +17,13 @@ const homeownerCta = "/get-started?role=homeowner";
 const providerCta = "/get-started?role=provider";
 const managerCta = "/community-onboarding";
 
+const pricingExample = {
+  service: "Pool cleaning",
+  soloMonthlyPrice: "$180",
+  groupMonthlyPrice: "$150",
+  participatingHomes: 20,
+};
+
 const navigation = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#services", label: "Services" },
@@ -66,7 +73,7 @@ const questions = [
   {
     question: "Is Bundleen available at my address?",
     answer:
-      "Add your address during onboarding to check neighborhood eligibility. Creating an account does not guarantee coverage or provider bids.",
+      "Add your address during onboarding to check whether your home is in an active Bundleen neighborhood and explore available requests.",
   },
   {
     question: "Who chooses the service provider?",
@@ -76,7 +83,7 @@ const questions = [
   {
     question: "Will I get a lower price?",
     answer:
-      "Grouped work creates an opportunity for better pricing. Actual bids depend on the work, participating homes and service availability. A lower price or discount is not guaranteed.",
+      "Competing provider bids set the price for your group’s service needs. The number of participating homes helps shape those bids. Residents see the final price before they are charged.",
   },
 ];
 
@@ -158,9 +165,23 @@ export default function HomePage() {
             <p className="eyebrow"><span className="little-line" aria-hidden="true" /> A neighborhood approach</p>
             <h1 id="hero-title">Home services, <em>with your neighbors.</em></h1>
             <p className="hero-description">
-              Bring nearby homes into one service request. Local providers bid on the grouped work,
-              creating an opportunity for better pricing.
+              Bring nearby homes into one service request. Compare local provider bids on the
+              grouped work.
             </p>
+            <div className="hero-example" aria-labelledby="pricing-example-title">
+              <p className="example-label" id="pricing-example-title">Example · {pricingExample.service}</p>
+              <dl className="example-prices">
+                <div>
+                  <dt>On your own</dt>
+                  <dd><strong>{pricingExample.soloMonthlyPrice}</strong><span> /month per home</span></dd>
+                </div>
+                <div>
+                  <dt>With {pricingExample.participatingHomes} homes</dt>
+                  <dd><strong>{pricingExample.groupMonthlyPrice}</strong><span> /month per home</span></dd>
+                </div>
+              </dl>
+              <p className="example-note">Example pricing. Your community’s price is set by real provider bids.</p>
+            </div>
             <div className="hero-actions">
               <Link className="button primary" href="#start">Get started <Arrow /></Link>
               <Link className="quiet-link" href="#how-it-works">See how it works <Arrow diagonal /></Link>
@@ -218,8 +239,8 @@ export default function HomePage() {
             <h2 id="shared-title">More homes.<br />{" "}<em>One shared request.</em></h2>
             <p>When nearby homes need the same service, they can join one request.</p>
             <p>
-              More work in one place can mean less travel for providers and simpler planning for the
-              group. That creates an opportunity for better pricing. Discounts are not guaranteed.
+              One shared request lets providers plan nearby visits together and compete for the
+              group’s business. Neighbors can compare those bids together.
             </p>
             <Link className="quiet-link" href="#how-it-works">See how it works <Arrow /></Link>
           </div>

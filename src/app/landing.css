@@ -236,6 +236,41 @@
   color: var(--muted);
   margin-top: 26px;
 }
+.landing-shell .hero-example {
+  max-width: 440px;
+  margin-top: 22px;
+}
+.landing-shell .example-label {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+.landing-shell .example-prices {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 16px;
+  margin: 10px 0;
+}
+.landing-shell .example-prices dt {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.landing-shell .example-prices dd {
+  margin: 3px 0 0;
+  line-height: 1.4;
+}
+.landing-shell .example-prices strong {
+  display: block;
+  font-size: 30px;
+  letter-spacing: -1px;
+  font-weight: 600;
+}
+.landing-shell .example-prices span,.landing-shell .example-note {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .landing-shell .hero-actions {
   display: flex;
   flex-wrap: wrap;
