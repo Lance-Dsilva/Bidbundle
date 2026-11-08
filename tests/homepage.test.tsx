@@ -55,6 +55,8 @@ describe("V5 homepage copy and product boundaries", () => {
     for (const price of [solo, group]) {
       expect(within(price).getByText("/month per home")).toBeInTheDocument();
     }
+    expect(example).toHaveTextContent("Save $30/month per home — about 17% in this example.");
+    expect(example).toHaveTextContent("Illustrative request: 20 homes joined · 4 competing provider bids.");
     expect(example).toHaveTextContent("Example pricing. Your community’s price is set by real provider bids.");
     expect(screen.getAllByText("Example pricing. Your community’s price is set by real provider bids.")).toHaveLength(1);
     expect(document.body).not.toHaveTextContent(/not guaranteed|opportunity for better pricing/i);

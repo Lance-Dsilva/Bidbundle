@@ -1,0 +1,8 @@
+{
+  "service": "Pool cleaning",
+  "currency": "USD",
+  "soloMonthlyCents": 18000,
+  "groupMonthlyCents": 15000,
+  "participatingHomes": 20,
+  "providerBids": 4
+}
