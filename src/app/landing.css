@@ -1,4 +1,4 @@
-/* Approved homepage V5. Keep all landing styles scoped to .landing-shell. */
+/* Shared public audience pages. Keep landing styles scoped to .landing-shell. */
 .landing-shell {
   --paper: #f8f6ef;
   --ink: #193e34;
@@ -170,7 +170,8 @@
   font-size: 14px;
   min-height: 48px;
   padding: 13px 18px;
-  gap: 22px;
+  gap: 16px;
+  max-width: 350px;
 }
 .landing-shell .header-cta svg {
   width: 18px;
@@ -202,7 +203,7 @@
 .landing-shell .hero {
   position: relative;
   min-height: 727px;
-  padding-top: 65px;
+  padding-top: 40px;
   padding-bottom: 88px;
   isolation: isolate;
 }
@@ -225,6 +226,10 @@
   line-height: 1.02;
   letter-spacing: -3.2px;
 }
+.landing-shell.audience-hoa h1,.landing-shell.audience-residents h1 {
+  font-size: 58px;
+  letter-spacing: -2.2px;
+}
 .landing-shell h1 em,.landing-shell h2 em {
   font-weight: 400;
   color: var(--teal);
@@ -235,6 +240,9 @@
   line-height: 1.75;
   color: var(--muted);
   margin-top: 26px;
+}
+.landing-shell.audience-hoa .hero-description,.landing-shell.audience-residents .hero-description {
+  max-width: 490px;
 }
 .landing-shell .hero-example {
   max-width: 440px;
@@ -257,6 +265,10 @@
   color: var(--muted);
 }
 .landing-shell .example-prices dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4px;
   margin: 3px 0 0;
   line-height: 1.4;
 }
@@ -290,6 +302,10 @@
   align-items: center;
   margin-top: 28px;
 }
+.landing-shell .hero-actions .primary {
+  max-width: 100%;
+  text-align: left;
+}
 .landing-shell .quiet-link {
   display: inline-flex;
   align-items: center;
@@ -310,10 +326,30 @@
   flex-shrink: 0;
 }
 .landing-shell .hero-footnote {
+  max-width: 440px;
   font-size: 14px;
   color: var(--muted);
   margin-top: 17px;
   line-height: 1.6;
+}
+.landing-shell .hero-footnote p+p,.landing-shell .coverage-helper p+p {
+  margin-top: 8px;
+}
+.landing-shell .pilot-terms {
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.landing-shell .pilot-terms h3 {
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.landing-shell .pilot-terms p {
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--muted);
+  margin-top: 12px;
 }
 .landing-shell .hero-scene {
   position: absolute;
@@ -674,7 +710,8 @@
   margin-right: 30px;
 }
 .landing-shell .start-actions .button {
-  gap: 35px;
+  gap: 20px;
+  text-align: left;
 }
 .landing-shell .start-actions .quiet-link {
   margin-top: 13px;
@@ -1001,10 +1038,7 @@
     gap: 8px;
   }
   .landing-shell .header-cta {
-    min-height: 44px;
-    font-size: 12px;
-    padding: 12px 13px;
-    gap: 12px;
+    display: none;
   }
   .landing-shell .header-cta svg {
     width: 15px;
@@ -1034,6 +1068,10 @@
     line-height: 1.04;
     letter-spacing: -1.8px;
     max-width: 420px;
+  }
+  .landing-shell.audience-hoa h1,.landing-shell.audience-residents h1 {
+    font-size: 46px;
+    letter-spacing: -1.8px;
   }
   .landing-shell .hero-description {
     font-size: 16px;
@@ -1398,6 +1436,10 @@
     display: none;
   }
   .landing-shell h1 {
+    font-size: 44px;
+    letter-spacing: -1.7px;
+  }
+  .landing-shell.audience-hoa h1,.landing-shell.audience-residents h1 {
     font-size: 44px;
     letter-spacing: -1.7px;
   }
