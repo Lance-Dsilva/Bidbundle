@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 import { awardSchema, type BidSubmitInput } from "@/lib/validation/hoa";
 import { neighborhoodAwardSchema } from "@/lib/validation/neighborhood";
 type Row = Record<string, unknown>;
@@ -39,7 +40,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
   hoaRequestParticipation: { findMany: async () => [] },
   communityStaffAssignment: { findMany: async () => [], findFirst: async () => null },
   providerServiceArea: { findMany: async () => [{ centerLatitude: 30.4, centerLongitude: -97.7, radiusMiles: 5, postalCodes: [] }] },
-  user: { findUnique: async () => ({ id: "provider", email: "provider@example.test", role: "provider", providerProfile: { trades: ["cleaning"], accountStatus: "active", licenseVerifiedAt: new Date(), insuranceVerifiedAt: new Date() } }) },
+  user: { findUnique: async () => ({ id: "provider", email: "provider@example.test", role: "provider", providerProfile: { trades: ["cleaning"], accountStatus: "active", ...approvedProviderVerification() } }) },
   serviceBid: {
     findUnique: async () => structuredClone({ ...state.bid, request: state.request }), findUniqueOrThrow: async () => structuredClone({ ...state.bid, request: { totalOccurrences: 2, _count: { participations: 1 } } }), findMany: async () => [],
     update: (args: Row) => plan("bid", args), updateMany: (args: Row) => plan("otherBids", args),
@@ -65,7 +66,7 @@ import { awardBid, submitBid, withdrawBid } from "@/lib/server/hoa-market";
 const input = { amountCents: 20000, pricingBasis: "total", perHomeCents: null, scope: "Updated whole job", exclusions: null, cadenceLabel: null, proposedStartDate: null, estimatedDurationLabel: null, validUntil: null } satisfies BidSubmitInput;
 beforeEach(() => {
   state.bid = { id: "bid", requestId: "request", providerUserId: "provider", status: "submitted", version: 3, amountCents: 12345, pricingBasis: "total", perHomeCents: null, currency: "eur", proposedStartDate: null, validUntil: null, scope: "All homes", cadenceLabel: null, exclusions: null, estimatedDurationLabel: null, submittedAt: new Date(), provider: { fullName: "Provider", providerProfile: { companyName: "Company" } } };
-  state.request = { id: "request", communityId: "community", title: "Cleaning", category: "cleaning", status: "bidding_closed", updatedAt: new Date(), participantsLockedAt: new Date(), totalOccurrences: 2, recurrenceIntervalDays: null, startDate: null, biddingClosesAt: new Date(Date.now() + 86400000), community: { id: "community", type: "hoa", status: "active", name: "Oakwood" }, participations: [{ unitId: "unit", userId: null }], agreement: null };
+  state.request = { id: "request", communityId: "community", title: "Cleaning", category: "cleaning", status: "bidding_closed", updatedAt: new Date(), participantsLockedAt: new Date(), totalOccurrences: 2, recurrenceIntervalDays: null, startDate: null, biddingClosesAt: new Date(Date.now() + 86400000), community: { id: "community", type: "hoa", status: "active", name: "Oakwood", hoaProfile: { minimumInsuranceCoverageCents: 0, requiresAdditionalInsured: false } }, participations: [{ unitId: "unit", userId: null }], agreement: null };
   state.agreement = null; state.effects = []; state.claims = []; state.beforeWrite = null; state.failure = null; state.failModel = null;
 });
 

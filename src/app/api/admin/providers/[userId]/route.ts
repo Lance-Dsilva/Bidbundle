@@ -24,7 +24,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Nex
   const { userId } = await context.params;
 
   try {
-    const detail = await getProviderDetail(userId);
+    const detail = await getProviderDetail(userId, { includeCredentials: !gate.user.adminIsStaffAccount });
     if (!detail) return notFoundResponse("That provider account no longer exists.");
     return NextResponse.json(detail);
   } catch (error) {
@@ -54,10 +54,13 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
 
   const parsed = providerAdminUpdateSchema.safeParse(body.value);
   if (!parsed.success) return validationErrorResponse(fieldErrors(parsed.error));
+  if (gate.user.adminIsStaffAccount && (parsed.data.license || parsed.data.insurance)) {
+    return NextResponse.json({ error: "Private credential review requires administrator access." }, { status: 403 });
+  }
 
   try {
     const { changed } = await updateProviderAdministration(gate.user, userId, parsed.data);
-    const detail = await getProviderDetail(userId);
+    const detail = await getProviderDetail(userId, { includeCredentials: !gate.user.adminIsStaffAccount });
     if (!detail) return notFoundResponse("That provider account no longer exists.");
     return NextResponse.json({ ...detail, changed });
   } catch (error) {

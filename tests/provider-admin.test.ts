@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
+import { providerAdminUpdateSchema } from "@/lib/validation/community";
 
 /**
  * The provider fields only Bundleen staff may write.
@@ -14,6 +16,8 @@ type Op = { model: string; action: string; args: Record<string, unknown> };
 const state = vi.hoisted(() => ({
   provider: null as Record<string, unknown> | null,
   batches: [] as Op[][],
+  transactionError: null as unknown,
+  credentials: vi.fn(),
 }));
 
 function op(model: string, action: string) {
@@ -26,30 +30,44 @@ vi.mock("@/lib/server/db", () => ({
       findUnique: async () => state.provider,
       update: op("providerProfile", "update"),
     },
-    adminAuditLog: { create: op("adminAuditLog", "create") },
+    adminAuditLog: { create: op("adminAuditLog", "create"), findMany: async () => [] },
+    user: { findMany: async () => [] },
+    providerCommunityApproval: { findMany: async () => [] },
+    mediaAsset: { update: op("mediaAsset", "update") },
     notification: { createMany: op("notification", "createMany") },
     outboxEvent: { createMany: op("outboxEvent", "createMany") },
     $transaction: async (ops: Op[]) => {
+      if (state.transactionError) throw state.transactionError;
       state.batches.push(ops);
       return ops;
     },
   },
 }));
+vi.mock("@/lib/server/provider-credentials", () => ({ listProviderCredentials: state.credentials }));
 
-const { assertProviderCanAct, updateProviderAdministration } = await import(
+const { assertProviderCanAct, updateProviderAdministration, getProviderDetail } = await import(
   "@/lib/server/providers-admin"
 );
 
 const ADMIN = { id: "admin-1" };
+const LICENSE_REVIEW = {
+  licenseDocumentId: "license-document-1", licenseDocumentChecksum: "a".repeat(64), licenseExpiresOn: "2099-01-01",
+};
+const INSURANCE_REVIEW = {
+  insuranceDocumentId: "insurance-document-1", insuranceDocumentChecksum: "b".repeat(64), insuranceExpiresOn: "2099-01-01",
+  insuranceCoverageCents: 100_000_000, insuranceAdditionalInsured: true,
+};
 
 beforeEach(() => {
+  vi.clearAllMocks();
   state.provider = {
+    ...approvedProviderVerification(),
     accountStatus: "pending",
     licenseNumber: "LIC-1",
     licenseState: "TX",
     licenseVerifiedAt: null,
     licenseVerifiedByUserId: null,
-    insuranceProvider: "Acme Mutual",
+    insuranceProvider: "Example Mutual",
     insurancePolicyNumber: "POL-1",
     insuranceVerifiedAt: null,
     insuranceVerifiedByUserId: null,
@@ -57,6 +75,8 @@ beforeEach(() => {
     updatedAt: new Date("2026-08-12T12:00:00.000Z"),
   };
   state.batches = [];
+  state.transactionError = null;
+  state.credentials.mockResolvedValue({ license: { id: "private-document", url: "/api/provider/credentials/private-document" } });
 });
 
 function updateData(): Record<string, unknown> {
@@ -76,6 +96,7 @@ describe("updateProviderAdministration", () => {
     const before = Date.now();
     await updateProviderAdministration(ADMIN, "p1", {
       license: "verify",
+      ...LICENSE_REVIEW,
       expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
     });
 
@@ -87,6 +108,12 @@ describe("updateProviderAdministration", () => {
     expect(providerWrite?.args.where).toMatchObject({
       userId: "p1",
       updatedAt: new Date("2026-08-12T12:00:00.000Z"),
+    });
+    expect(data).toMatchObject({ licenseVerifiedDocumentChecksum: LICENSE_REVIEW.licenseDocumentChecksum,
+      licenseExpiresAt: new Date("2099-01-01T00:00:00Z") });
+    expect(state.batches[0].find((entry) => entry.model === "mediaAsset")?.args).toMatchObject({
+      where: { id: LICENSE_REVIEW.licenseDocumentId, checksum: LICENSE_REVIEW.licenseDocumentChecksum, providerProfileId: "provider-profile-1" },
+      data: { credentialReviewStatus: "approved", credentialReviewedByUserId: ADMIN.id, credentialExpiresAt: new Date("2099-01-01") },
     });
   });
 
@@ -163,6 +190,8 @@ describe("updateProviderAdministration", () => {
       accountStatus: "active",
       license: "verify",
       insurance: "verify",
+      ...LICENSE_REVIEW,
+      ...INSURANCE_REVIEW,
       expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
     });
 
@@ -181,6 +210,86 @@ describe("updateProviderAdministration", () => {
     await expect(
       updateProviderAdministration(ADMIN, "p1", { accountStatus: "active" }),
     ).rejects.toMatchObject({ code: "not_found", status: 404 });
+  });
+
+  it.each([
+    { id: "replaced-document" }, { checksum: "changed-bytes" },
+    { providerProfileId: "another-provider" }, { purpose: "amenity_gallery" },
+    { status: "removed" }, { credentialSnapshot: { licenseNumber: "LIC-2", licenseState: "TX" } },
+  ])("refuses to approve mismatched or replaced evidence: %j", async (change) => {
+    state.provider!.licenseDocument = { ...(state.provider!.licenseDocument as Record<string, unknown>), ...change };
+    await expect(updateProviderAdministration(ADMIN, "p1", {
+      license: "verify", ...LICENSE_REVIEW, expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("does not let a caller replay another document or checksum against the current review", async () => {
+    await expect(updateProviderAdministration(ADMIN, "p1", {
+      license: "verify", ...LICENSE_REVIEW, licenseDocumentId: "old-document", licenseDocumentChecksum: "old-checksum",
+      expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it.each(["2000-01-01", "2099-02-30", "invalid"])("refuses an expired or invalid confirmed expiration: %s", async (licenseExpiresOn) => {
+    await expect(updateProviderAdministration(ADMIN, "p1", {
+      license: "verify", ...LICENSE_REVIEW, licenseExpiresOn, expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).rejects.toMatchObject({ status: 422 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("records a rejection reason while clearing the rejected credential approval", async () => {
+    await updateProviderAdministration(ADMIN, "p1", {
+      insurance: "reject", ...INSURANCE_REVIEW, note: "The certificate does not name this provider.", expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    });
+    expect(updateData()).toMatchObject({ insuranceVerifiedAt: null, insuranceExpiresAt: null,
+      insuranceVerifiedDocumentChecksum: null, insuranceCoverageCents: null, insuranceAdditionalInsured: false });
+    expect(state.batches[0].find((entry) => entry.model === "mediaAsset")?.args.data).toMatchObject({
+      credentialReviewStatus: "rejected", credentialReviewReason: "The certificate does not name this provider.", credentialReviewedByUserId: ADMIN.id,
+    });
+    expect(auditCount()).toBe(1);
+  });
+
+  it("requires a rejection reason and writes nothing without one", async () => {
+    await expect(updateProviderAdministration(ADMIN, "p1", {
+      insurance: "reject", expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).rejects.toMatchObject({ status: 422 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("returns stale review when replacement wins the write race", async () => {
+    state.transactionError = { code: "P2025" };
+    await expect(updateProviderAdministration(ADMIN, "p1", {
+      license: "verify", ...LICENSE_REVIEW, expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).rejects.toMatchObject({ code: "stale_review", status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it.each(["verify", "revoke", "reject"] as const)("denies an operations staff member's %s credential intent at the service boundary", async (intent) => {
+    await expect(updateProviderAdministration({ id: "staff-1", adminIsStaffAccount: true }, "p1", {
+      license: intent, ...LICENSE_REVIEW, note: "Staff attempted review", expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).rejects.toMatchObject({ status: 403 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("preserves operations staff account-status changes without credential authority", async () => {
+    await expect(updateProviderAdministration({ id: "staff-1", adminIsStaffAccount: true }, "p1", {
+      accountStatus: "suspended", expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
+    })).resolves.toEqual({ changed: true });
+    expect(updateData()).toMatchObject({ accountStatus: "suspended", accountStatusUpdatedByUserId: "staff-1" });
+    expect(updateData()).not.toHaveProperty("licenseVerifiedAt");
+  });
+});
+
+describe("operations provider detail redaction", () => {
+  it("keeps account and contact data while skipping the private credential loader entirely", async () => {
+    Object.assign(state.provider!, { userId: "p1", companyName: "Example provider", trades: ["cleaning"], createdAt: new Date("2026-01-01"),
+      user: { id: "p1", fullName: "Example Provider", email: "provider@example.invalid", role: "provider", avatarUrl: null, neighborhood: null, phone: "555-0100" } });
+    const detail = await getProviderDetail("p1", { includeCredentials: false });
+    expect(detail).toMatchObject({ companyName: "Example provider", phone: "555-0100", credentials: null });
+    expect(state.credentials).not.toHaveBeenCalled();
+    expect(JSON.stringify(detail)).not.toMatch(/api\/provider\/credentials|private-document|storageUrl|storagePath/);
   });
 });
 
@@ -210,5 +319,27 @@ describe("assertProviderCanAct", () => {
   it("blocks an account with no provider profile", async () => {
     state.provider = null;
     await expect(assertProviderCanAct("p1")).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("staff credential review request boundary", () => {
+  it("accepts an exact document review with an explicit expiry and row version", () => {
+    expect(providerAdminUpdateSchema.safeParse({ license: "verify", ...LICENSE_REVIEW,
+      expectedUpdatedAt: "2026-08-12T12:00:00.000Z" }).success).toBe(true);
+  });
+
+  it.each(["licenseDocumentId", "licenseDocumentChecksum", "licenseExpiresOn", "expectedUpdatedAt"])("requires %s for approval", (field) => {
+    const body: Record<string, unknown> = { license: "verify", ...LICENSE_REVIEW, expectedUpdatedAt: "2026-08-12T12:00:00.000Z" };
+    delete body[field];
+    expect(providerAdminUpdateSchema.safeParse(body).success).toBe(false);
+  });
+
+  it.each([
+    { insuranceCoverageCents: -1 }, { insuranceCoverageCents: 1.5 },
+    { insuranceCoverageCents: undefined }, { insuranceAdditionalInsured: undefined },
+    { storageUrl: "https://attacker.invalid/document" },
+  ])("rejects missing or invalid insurance terms and client storage URLs: %j", (change) => {
+    expect(providerAdminUpdateSchema.safeParse({ insurance: "verify", ...INSURANCE_REVIEW,
+      expectedUpdatedAt: "2026-08-12T12:00:00.000Z", ...change }).success).toBe(false);
   });
 });

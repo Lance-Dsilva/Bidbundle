@@ -6,6 +6,7 @@ import type { HoaManagerDashboard, HoaRequestSummary } from "@/lib/hoa-types";
 import { hoaRequestCreateSchema } from "@/lib/validation/hoa";
 const state = vi.hoisted(() => ({ fetch: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: state.refresh }) }));
+vi.mock("@/components/hoa/ProviderPolicyEditor", () => ({ ProviderPolicyEditor: () => null }));
 function dashboard(): HoaManagerDashboard { return { communities: [{ id: "hoa-1", name: "Owned HOA", profile: null, activeMemberCount: 2, units: [], invitations: [], requests: [], bidsByRequest: {}, agreements: [], occurrencesByAgreement: {}, surveys: [] }] }; }
 function ok() { return { ok: true, json: async () => ({}) }; }
 beforeEach(() => { state.fetch.mockReset().mockResolvedValue(ok()); state.refresh.mockReset(); vi.stubGlobal("fetch", state.fetch); });

@@ -100,10 +100,44 @@ async function fixture() {
 }
 
 async function verify(userId: string, clerkId: string, credentials: { license?: "verify"; insurance?: "verify" }) {
+  const evidence = await reviewEvidence(userId, Object.keys(credentials) as Array<"license" | "insurance">);
   const row = await client.providerProfile.findUniqueOrThrow({ where: { userId } });
   session.clerkId = clerkId;
-  return adminRoute.PATCH(request("PATCH", { ...credentials, expectedUpdatedAt: row.updatedAt.toISOString() }),
+  return adminRoute.PATCH(request("PATCH", { ...credentials, ...evidence, expectedUpdatedAt: row.updatedAt.toISOString() }),
     { params: Promise.resolve({ userId }) });
+}
+
+/** Provision evidence as test-fixture setup, not an application upload. Keep
+ * the fixture revision so the original same-millisecond CAS assertions still
+ * measure only production writes. Upload/replacement races have their own
+ * PostgreSQL tests; these cases retain the original claim-edit/review races. */
+async function reviewEvidence(userId: string, kinds: Array<"license" | "insurance">) {
+  const profile = await client.providerProfile.findUniqueOrThrow({ where: { userId } });
+  const fields: Record<string, unknown> = {};
+  for (const kind of kinds) {
+    const id = randomUUID();
+    const checksum = (kind === "license" ? "a" : "b").repeat(64);
+    await client.mediaAsset.create({ data: {
+      id, providerProfileId: profile.id, uploaderUserId: userId,
+      purpose: `provider_${kind}`, storagePath: `provider-credentials/${profile.id}/provider_${kind}/${id}.pdf`,
+      storageUrl: "", contentType: "application/pdf", byteSize: 32, checksum,
+      credentialSnapshot: kind === "license"
+        ? { licenseNumber: profile.licenseNumber, licenseState: profile.licenseState }
+        : { insuranceProvider: profile.insuranceProvider, insurancePolicyNumber: profile.insurancePolicyNumber },
+    } });
+    await client.providerProfile.update({ where: { userId }, data: {
+      ...(kind === "license" ? { licenseDocumentId: id } : { insuranceDocumentId: id }),
+      updatedAt: profile.updatedAt,
+    } });
+    fields[`${kind}DocumentId`] = id;
+    fields[`${kind}DocumentChecksum`] = checksum;
+    fields[`${kind}ExpiresOn`] = "2099-12-31";
+    if (kind === "insurance") {
+      fields.insuranceCoverageCents = 100_000_000;
+      fields.insuranceAdditionalInsured = true;
+    }
+  }
+  return fields;
 }
 
 function save(method: "PATCH" | "PUT", business: Record<string, unknown>) {
@@ -151,10 +185,11 @@ describe("provider credential edits cannot inherit another claim's staff verific
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Credential read barrier was not reached.")), 5_000)),
       ]);
       expect((await providerRoute.PATCH(request("PATCH", newClaim))).status).toBe(200);
+      const evidence = await reviewEvidence(provider.id, [credential]);
       const reviewed = await client.providerProfile.findUniqueOrThrow({ where: { userId: provider.id } });
       session.clerkId = admin.clerkUserId;
       const verified = await adminRoute.PATCH(request("PATCH", {
-        [credential]: "verify", expectedUpdatedAt: reviewed.updatedAt.toISOString(),
+        [credential]: "verify", ...evidence, expectedUpdatedAt: reviewed.updatedAt.toISOString(),
       }), { params: Promise.resolve({ userId: provider.id }) });
       expect(verified.status).toBe(200);
       const before = await client.providerProfile.findUniqueOrThrow({ where: { userId: provider.id } });
@@ -224,11 +259,12 @@ describe("provider credential edits cannot inherit another claim's staff verific
 
   it.each(matrix)("rejects an in-flight staff verification overtaken by %s %s editing", async (method, credential) => {
     const { provider, admin } = await fixture();
+    const evidence = await reviewEvidence(provider.id, [credential]);
     const reviewed = await client.providerProfile.findUniqueOrThrow({ where: { userId: provider.id } });
     session.clerkId = admin.clerkUserId;
     barrier = { armed: true, read: deferred(), release: deferred() };
     const delayed = adminRoute.PATCH(request("PATCH", {
-      [credential]: "verify", expectedUpdatedAt: reviewed.updatedAt.toISOString(),
+      [credential]: "verify", ...evidence, expectedUpdatedAt: reviewed.updatedAt.toISOString(),
     }), { params: Promise.resolve({ userId: provider.id }) });
     try {
       await Promise.race([
@@ -274,7 +310,12 @@ describe("provider credential edits cannot inherit another claim's staff verific
       expect(changed.updatedAt.getTime()).toBe(initial.updatedAt.getTime() + 2);
       const auditCount = await client.adminAuditLog.count({ where: { providerUserId: provider.id } });
       session.clerkId = admin.clerkUserId;
-      const stale = await adminRoute.PATCH(request("PATCH", { [credential]: "verify", expectedUpdatedAt: reviewed.updatedAt.toISOString() }),
+      const stale = await adminRoute.PATCH(request("PATCH", { [credential]: "verify", expectedUpdatedAt: reviewed.updatedAt.toISOString(),
+        [`${credential}DocumentId`]: reviewed[credential === "license" ? "licenseDocumentId" : "insuranceDocumentId"],
+        [`${credential}DocumentChecksum`]: (credential === "license" ? "a" : "b").repeat(64),
+        [`${credential}ExpiresOn`]: "2099-12-31",
+        ...(credential === "insurance" ? { insuranceCoverageCents: 100_000_000, insuranceAdditionalInsured: true } : {}),
+      }),
         { params: Promise.resolve({ userId: provider.id }) });
       expect(stale.status).toBe(409);
       expect(await client.providerProfile.findUniqueOrThrow({ where: { userId: provider.id } })).toEqual(changed);

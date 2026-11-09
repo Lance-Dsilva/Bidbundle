@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 import { bidSubmitSchema, MAX_BID_AMOUNT_CENTS, type BidSubmitInput } from "@/lib/validation/hoa";
 type Row = Record<string, unknown>;
 const state = vi.hoisted(() => ({ provider: null as Row | null, request: null as Row | null, areas: [] as Row[], existing: null as Row | null, written: [] as Row[], batches: 0, actions: [] as string[] }));
@@ -22,7 +23,7 @@ vi.mock("@/lib/server/notifications", () => ({ buildPreferenceAwareNotificationO
 import { submitBid } from "@/lib/server/hoa-market";
 const input = { amountCents: 10001, pricingBasis: "total", perHomeCents: null, scope: "Complete the whole job", proposedStartDate: null, estimatedDurationLabel: null, exclusions: null, cadenceLabel: null, validUntil: null } satisfies BidSubmitInput;
 beforeEach(() => {
-  state.provider = { role: "provider", providerProfile: { trades: ["cleaning"], accountStatus: "active", licenseVerifiedAt: new Date(), insuranceVerifiedAt: new Date() } };
+  state.provider = { role: "provider", providerProfile: { trades: ["cleaning"], accountStatus: "active", ...approvedProviderVerification() } };
   state.request = { id: "request-1", communityId: "hood-1", title: "Cleaning", category: "cleaning", status: "open_for_bids", biddingClosesAt: new Date(Date.now() + 86400000), totalOccurrences: 4, participations: [{ id: "p1" }, { id: "p2" }, { id: "p3" }], community: { type: "neighborhood", status: "active", name: "Oakwood" } };
   state.areas = [{ centerLatitude: 30.4, centerLongitude: -97.7, radiusMiles: 10, postalCodes: [] }]; state.existing = null; state.written = []; state.batches = 0; state.actions = [];
 });

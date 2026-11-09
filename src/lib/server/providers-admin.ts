@@ -1,5 +1,9 @@
 import "server-only";
 
+import { credentialIsCurrent, credentialSnapshotMatches, providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
+import { listProviderCredentials } from "./provider-credentials";
+import { HoaWorkflowError } from "./hoa";
+
 import { normalizeServiceCategory } from "@/lib/service-categories";
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -45,6 +49,7 @@ const personSelect = {
 } as const;
 
 const providerSummarySelect = {
+  ...providerVerificationSelect,
   userId: true,
   companyName: true,
   trades: true,
@@ -57,7 +62,7 @@ const providerSummarySelect = {
   user: { select: { ...personSelect, neighborhood: true } },
 } as const;
 
-type ProviderSummaryRow = {
+type ProviderSummaryRow = VerificationProfile & {
   userId: string;
   companyName: string | null;
   trades: string[];
@@ -88,8 +93,8 @@ function serializeProviderSummary(row: ProviderSummaryRow): ProviderSummary {
     accountStatusUpdatedAt: row.accountStatusUpdatedAt?.toISOString() ?? null,
     // "Verified" means a staff member recorded a timestamp. A provider filling
     // in a licence number never moves this to true.
-    isLicenseVerified: row.licenseVerifiedAt !== null,
-    isInsuranceVerified: row.insuranceVerifiedAt !== null,
+    isLicenseVerified: providerVerificationState(row).license,
+    isInsuranceVerified: providerVerificationState(row).insurance,
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
   };
@@ -108,11 +113,6 @@ export async function listProviders(query: ProviderListQuery): Promise<ProviderL
     : [];
   const where: Prisma.ProviderProfileWhereInput = {
     ...(query.status ? { accountStatus: query.status } : {}),
-    ...(query.verification === "verified"
-      ? { licenseVerifiedAt: { not: null }, insuranceVerifiedAt: { not: null } }
-      : query.verification === "unverified"
-        ? { OR: [{ licenseVerifiedAt: null }, { insuranceVerifiedAt: null }] }
-        : {}),
     ...(query.search
       ? {
           AND: [
@@ -131,6 +131,14 @@ export async function listProviders(query: ProviderListQuery): Promise<ProviderL
       : {}),
   };
 
+  if (query.verification) {
+    const candidates = await db.providerProfile.findMany({ where, select: providerSummarySelect,
+      orderBy: [{ accountStatus: "asc" }, { createdAt: "desc" }], take: 1001 });
+    if (candidates.length > 1000) throw new HoaWorkflowError("Narrow the search before filtering credential verification.", 422);
+    const filtered = candidates.filter((row) => providerVerificationState(row).verified === (query.verification === "verified"));
+    return { providers: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize).map(serializeProviderSummary),
+      total: filtered.length, page: query.page, pageSize: query.pageSize };
+  }
   const [total, rows] = await Promise.all([
     db.providerProfile.count({ where }),
     db.providerProfile.findMany({
@@ -150,7 +158,7 @@ export async function listProviders(query: ProviderListQuery): Promise<ProviderL
   };
 }
 
-export async function getProviderDetail(userId: string): Promise<ProviderDetail | null> {
+export async function getProviderDetail(userId: string, options: { includeCredentials?: boolean } = {}): Promise<ProviderDetail | null> {
   const row = await db.providerProfile.findUnique({
     where: { userId },
     select: {
@@ -202,6 +210,7 @@ export async function getProviderDetail(userId: string): Promise<ProviderDetail 
 
   return {
     ...serializeProviderSummary(row),
+    credentials: options.includeCredentials === false ? null : await listProviderCredentials(userId),
     bio: row.bio,
     phone: row.user.phone,
     licenseNumber: row.licenseNumber,
@@ -234,14 +243,18 @@ export async function getProviderDetail(userId: string): Promise<ProviderDetail 
  * otherwise the profile would show a verification badge over an empty field.
  */
 export async function updateProviderAdministration(
-  actor: { id: string },
+  actor: { id: string; adminIsStaffAccount?: boolean },
   userId: string,
   input: ProviderAdminUpdateInput,
 ): Promise<{ changed: boolean }> {
+  if (actor.adminIsStaffAccount && (input.license || input.insurance)) {
+    throw new HoaWorkflowError("Private credential review requires administrator access.", 403);
+  }
   const provider = await db.providerProfile.findUnique({
     where: { userId },
     select: {
       ...providerWriteSnapshotSelect,
+      ...providerVerificationSelect,
       accountStatus: true,
       user: { select: { email: true } },
     },
@@ -311,46 +324,62 @@ export async function updateProviderAdministration(
     );
   }
 
-  const licenseChanging =
-    input.license !== undefined &&
-    (input.license === "verify") !== (provider.licenseVerifiedAt !== null);
-
-  if (licenseChanging) {
-    const verifying = input.license === "verify";
-    data.licenseVerifiedAt = verifying ? now : null;
-    data.licenseVerifiedByUserId = verifying ? actor.id : null;
-
-    auditEntries.push(
-      buildAuditEntry({
-        actorUserId: actor.id,
-        action: verifying ? "provider_license_verified" : "provider_license_revoked",
-        targetType: "provider",
-        targetId: userId,
-        providerUserId: userId,
-        metadata: { note: input.note ?? null },
-      }),
-    );
-  }
-
-  const insuranceChanging =
-    input.insurance !== undefined &&
-    (input.insurance === "verify") !== (provider.insuranceVerifiedAt !== null);
-
-  if (insuranceChanging) {
-    const verifying = input.insurance === "verify";
-    data.insuranceVerifiedAt = verifying ? now : null;
-    data.insuranceVerifiedByUserId = verifying ? actor.id : null;
-
-    auditEntries.push(
-      buildAuditEntry({
-        actorUserId: actor.id,
-        action: verifying ? "provider_insurance_verified" : "provider_insurance_revoked",
-        targetType: "provider",
-        targetId: userId,
-        providerUserId: userId,
-        metadata: { note: input.note ?? null },
-      }),
-    );
+  const documentOps: ReturnType<typeof db.mediaAsset.update>[] = [];
+  for (const kind of ["license", "insurance"] as const) {
+    const intent = input[kind];
+    if (!intent) continue;
+    const doc = kind === "license" ? provider.licenseDocument : provider.insuranceDocument;
+    const currentId = kind === "license" ? provider.licenseDocumentId : provider.insuranceDocumentId;
+    const currentVerified = kind === "license" ? provider.licenseVerifiedAt : provider.insuranceVerifiedAt;
+    let expiry: Date | null = null;
+    if (intent === "verify") {
+      const expiresOn = input[`${kind}ExpiresOn`];
+      expiry = expiresOn ? new Date(`${expiresOn}T00:00:00.000Z`) : null;
+      if (!expiry || !credentialIsCurrent(expiry, now) || expiry.toISOString().slice(0, 10) !== expiresOn) {
+        throw new HoaWorkflowError("Confirm a valid expiry date today or later (valid through that UTC day).", 422);
+      }
+      if (!doc || doc.id !== currentId || doc.id !== input[`${kind}DocumentId`] || doc.checksum !== input[`${kind}DocumentChecksum`] ||
+        doc.providerProfileId !== provider.id || doc.purpose !== `provider_${kind}` || doc.status !== "active" ||
+        !credentialSnapshotMatches(doc.credentialSnapshot, provider, kind)) {
+        throw new HoaWorkflowError("The evidence or credential claim changed. Reload and review the current document.", 409);
+      }
+      if (kind === "insurance" && (input.insuranceCoverageCents === undefined || input.insuranceAdditionalInsured === undefined)) {
+        throw new HoaWorkflowError("Confirm the insurance coverage and additional-insured status.", 422);
+      }
+    }
+    if (intent === "reject" && !input.note) throw new HoaWorkflowError("Give a rejection reason.", 422);
+    if (intent === "reject" && (!doc || doc.id !== input[`${kind}DocumentId`] || doc.checksum !== input[`${kind}DocumentChecksum`])) throw new HoaWorkflowError("Reload and review the current document before rejecting it.", 409);
+    if (intent === "revoke" && !currentVerified) continue;
+    if (intent === "verify" && providerVerificationState(provider, now)[kind] &&
+      (kind === "license" ? provider.licenseExpiresAt : provider.insuranceExpiresAt)?.getTime() === expiry?.getTime() &&
+      (kind !== "insurance" || (provider.insuranceCoverageCents === input.insuranceCoverageCents && provider.insuranceAdditionalInsured === input.insuranceAdditionalInsured))) continue;
+    const verifying = intent === "verify";
+    if (kind === "license") {
+      data.licenseVerifiedAt = verifying ? now : null;
+      data.licenseVerifiedByUserId = verifying ? actor.id : null;
+      data.licenseExpiresAt = verifying ? expiry : null;
+      data.licenseVerifiedDocumentChecksum = verifying ? doc!.checksum : null;
+    } else {
+      data.insuranceVerifiedAt = verifying ? now : null;
+      data.insuranceVerifiedByUserId = verifying ? actor.id : null;
+      data.insuranceExpiresAt = verifying ? expiry : null;
+      data.insuranceVerifiedDocumentChecksum = verifying ? doc!.checksum : null;
+      data.insuranceCoverageCents = verifying ? input.insuranceCoverageCents : null;
+      data.insuranceAdditionalInsured = verifying ? input.insuranceAdditionalInsured : false;
+    }
+    if (doc) documentOps.push(db.mediaAsset.update({ where: { id: doc.id, checksum: doc.checksum, status: "active", providerProfileId: provider.id },
+      data: { credentialReviewStatus: verifying ? "approved" : intent === "reject" ? "rejected" : "pending",
+        credentialReviewReason: input.note ?? null, credentialReviewedAt: now, credentialReviewedByUserId: actor.id,
+        credentialExpiresAt: verifying ? expiry : null,
+        credentialReminder30At: null, credentialReminder7At: null,
+        ...(kind === "insurance" ? { credentialCoverageCents: verifying ? input.insuranceCoverageCents : null,
+          credentialAdditionalInsured: verifying ? input.insuranceAdditionalInsured : null } : {}) } }));
+    auditEntries.push(buildAuditEntry({ actorUserId: actor.id,
+      action: kind === "license" ? (verifying ? "provider_license_verified" : "provider_license_revoked") : (verifying ? "provider_insurance_verified" : "provider_insurance_revoked"),
+      targetType: "provider", targetId: userId, providerUserId: userId,
+      metadata: { intent, note: input.note ?? null, documentId: doc?.id ?? null, checksum: doc?.checksum ?? null,
+        expiresOn: expiry?.toISOString().slice(0, 10) ?? null,
+        ...(kind === "insurance" && verifying ? { insuranceCoverageCents: input.insuranceCoverageCents, insuranceAdditionalInsured: input.insuranceAdditionalInsured } : {}) } }));
   }
 
   if (auditEntries.length === 0) return { changed: false };
@@ -390,6 +419,7 @@ export async function updateProviderAdministration(
         },
         data: { ...data, updatedAt: nextProviderUpdatedAt(provider) },
       }),
+      ...documentOps,
       ...auditEntries.map((entry) => db.adminAuditLog.create({ data: entry })),
       ...notificationOps,
     ]);

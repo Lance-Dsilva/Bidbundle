@@ -1,5 +1,7 @@
 import "server-only";
 
+import { providerVerificationSelect, providerVerificationState } from "@/lib/provider-verification";
+
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import type { BidSummary } from "@/lib/hoa-types";
 import { db } from "@/lib/server/db";
@@ -77,8 +79,7 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
           providerProfile: {
             select: {
               companyName: true,
-              licenseVerifiedAt: true,
-              insuranceVerifiedAt: true,
+              ...providerVerificationSelect,
             },
           },
         },
@@ -92,10 +93,7 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
     providerUserId: row.providerUserId,
     providerName: row.provider.fullName,
     providerCompany: row.provider.providerProfile?.companyName ?? null,
-    providerVerified: Boolean(
-      row.provider.providerProfile?.licenseVerifiedAt &&
-        row.provider.providerProfile.insuranceVerifiedAt,
-    ),
+    providerVerified: providerVerificationState(row.provider.providerProfile).verified,
     status: row.status,
     amountCents: row.amountCents,
     currency: row.currency,

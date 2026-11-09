@@ -7,6 +7,9 @@ import type { HoaManagerDashboard, HoaRequestSummary } from "@/lib/hoa-types";
 
 const state = vi.hoisted(() => ({ refresh: vi.fn(), fetch: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: state.refresh }) }));
+// Insurance policy editing has its own behavior suite; keep these deadline
+// assertions scoped to request mutations rather than its background GET.
+vi.mock("@/components/hoa/ProviderPolicyEditor", () => ({ ProviderPolicyEditor: () => null }));
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 const NOW = new Date("2026-10-28T12:00:00.000Z");
 function request(overrides: Partial<HoaRequestSummary> = {}): HoaRequestSummary {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 /**
  * The one provider marketplace feed.
@@ -50,8 +51,7 @@ function verifiedProvider(overrides: Row = {}) {
     providerProfile: {
       trades: ["Cleaning"],
       accountStatus: "active",
-      licenseVerifiedAt: new Date(),
-      insuranceVerifiedAt: new Date(),
+      ...approvedProviderVerification(),
       ...overrides,
     },
   };
@@ -268,6 +268,16 @@ describe("account status gates", () => {
       eligible: false,
       feed: [],
     });
+  });
+
+  it.each([
+    { insuranceExpiresAt: new Date("2000-01-01") },
+    { licenseExpiresAt: null },
+    { insuranceDocument: null },
+  ])("withholds new opportunities when approved evidence is expired or incomplete: %j", async (change) => {
+    state.provider = verifiedProvider(change);
+    state.requests = [neighbourhoodRequest()];
+    await expect(getProviderHoaWorkspace("provider-1")).resolves.toMatchObject({ eligible: false, feed: [] });
   });
 
   it("refuses a non-provider account outright", async () => {

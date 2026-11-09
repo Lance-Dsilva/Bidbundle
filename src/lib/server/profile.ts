@@ -1,5 +1,7 @@
 import "server-only";
 
+import { providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
+
 import { NextResponse } from "next/server";
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -124,6 +126,16 @@ export function commonProfileUpdateData(
 
 /** The exact state used to decide credential invalidation and revocation audits. */
 export const providerWriteSnapshotSelect = {
+  id: true,
+  licenseDocumentId: true,
+  insuranceDocumentId: true,
+  licenseVerifiedDocumentChecksum: true,
+  insuranceVerifiedDocumentChecksum: true,
+  licenseExpiresAt: true,
+  insuranceExpiresAt: true,
+  insuranceCoverageCents: true,
+  insuranceAdditionalInsured: true,
+
   licenseNumber: true,
   licenseState: true,
   insuranceProvider: true,
@@ -142,6 +154,15 @@ type ProviderWriteSnapshot = Prisma.ProviderProfileGetPayload<{
 /** Reject a write if the state behind its verification/audit decisions changed. */
 export function providerWriteSnapshotWhere(current: ProviderWriteSnapshot) {
   return {
+    id: current.id,
+    AND: [{ licenseDocumentId: { equals: current.licenseDocumentId } }, { insuranceDocumentId: { equals: current.insuranceDocumentId } }],
+    licenseVerifiedDocumentChecksum: current.licenseVerifiedDocumentChecksum,
+    insuranceVerifiedDocumentChecksum: current.insuranceVerifiedDocumentChecksum,
+    licenseExpiresAt: current.licenseExpiresAt,
+    insuranceExpiresAt: current.insuranceExpiresAt,
+    insuranceCoverageCents: current.insuranceCoverageCents,
+    insuranceAdditionalInsured: current.insuranceAdditionalInsured,
+
     licenseNumber: current.licenseNumber,
     licenseState: current.licenseState,
     insuranceProvider: current.insuranceProvider,
@@ -191,16 +212,22 @@ export function providerProfileUpdateData(
   licenseVerifiedByUserId?: null;
   insuranceVerifiedAt?: null;
   insuranceVerifiedByUserId?: null;
+  licenseVerifiedDocumentChecksum?: null;
+  insuranceVerifiedDocumentChecksum?: null;
+  licenseExpiresAt?: null;
+  insuranceExpiresAt?: null;
+  insuranceCoverageCents?: null;
+  insuranceAdditionalInsured?: false;
 } {
   const { licenseChanged, insuranceChanged } = providerClaimChanges(current, patch);
 
   return {
     ...patch,
     ...(licenseChanged
-      ? { licenseVerifiedAt: null, licenseVerifiedByUserId: null }
+      ? { licenseVerifiedAt: null, licenseVerifiedByUserId: null, licenseVerifiedDocumentChecksum: null, licenseExpiresAt: null }
       : {}),
     ...(insuranceChanged
-      ? { insuranceVerifiedAt: null, insuranceVerifiedByUserId: null }
+      ? { insuranceVerifiedAt: null, insuranceVerifiedByUserId: null, insuranceVerifiedDocumentChecksum: null, insuranceExpiresAt: null, insuranceCoverageCents: null, insuranceAdditionalInsured: false }
       : {}),
   };
 }
@@ -239,6 +266,7 @@ export const homeownerProfileSelect = {
 } as const;
 
 export const providerProfileSelect = {
+  ...providerVerificationSelect,
   companyName: true,
   bio: true,
   trades: true,
@@ -321,7 +349,7 @@ export function serializeHomeownerProfile(row: HomeownerProfileRow): HomeownerPr
   };
 }
 
-type ProviderProfileRow = {
+type ProviderProfileRow = VerificationProfile & {
   companyName: string | null;
   bio: string | null;
   trades: string[];
@@ -359,10 +387,14 @@ export function serializeProviderProfile(row: ProviderProfileRow): ProviderProfi
     insurancePolicyNumber: row.insurancePolicyNumber,
     // Verified means an admin recorded a timestamp — never that the provider
     // filled in a license number.
-    isLicenseVerified: row.licenseVerifiedAt !== null,
-    isInsuranceVerified: row.insuranceVerifiedAt !== null,
+    isLicenseVerified: providerVerificationState(row).license,
+    isInsuranceVerified: providerVerificationState(row).insurance,
     licenseVerifiedAt: row.licenseVerifiedAt?.toISOString() ?? null,
     insuranceVerifiedAt: row.insuranceVerifiedAt?.toISOString() ?? null,
+    licenseExpiresOn: row.licenseExpiresAt?.toISOString().slice(0, 10) ?? null,
+    insuranceExpiresOn: row.insuranceExpiresAt?.toISOString().slice(0, 10) ?? null,
+    insuranceCoverageCents: row.insuranceCoverageCents ?? null,
+    insuranceAdditionalInsured: row.insuranceAdditionalInsured ?? false,
     payoutStatus: row.payoutStatus as ProviderProfile["payoutStatus"],
     payoutLast4: row.payoutLast4,
     payoutProvider: row.payoutProvider,

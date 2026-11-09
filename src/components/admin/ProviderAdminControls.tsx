@@ -14,6 +14,7 @@ import {
 } from "@/components/admin/AdminPrimitives";
 import { AdminRequestError, updateProvider, type ProviderAdminPatchBody } from "@/lib/admin-client";
 import type { ProviderDetail } from "@/lib/community-types";
+import { ProviderCredentialReview } from "@/components/admin/ProviderCredentialReview";
 import { PROVIDER_ACCOUNT_STATUSES, type ProviderAccountStatus } from "@/lib/validation/community";
 import {
   MAX_TICKET_MESSAGE_LENGTH,
@@ -40,7 +41,7 @@ const STATUS_EXPLANATION: Record<ProviderAccountStatus, string> = {
  * These fields are absent from `providerProfileUpdateSchema`, so a provider
  * cannot write any of them about themselves — which is the whole point of the
  * separation between a *claim* (a licence number they typed) and a
- * *verification* (a timestamp a staff member recorded after checking it).
+ * *verification* (a current document and expiry a reviewer has checked).
  *
  * Suspending is confirmed explicitly and the whole panel disables while a
  * request is in flight, so a double click cannot fire two status changes.
@@ -67,11 +68,13 @@ export function ProviderAdminControls({ initialProvider }: { initialProvider: Pr
     subject: string;
   } | null>(null);
   const ticketInFlight = useRef(false);
+  const operationInFlight = useRef(false);
 
   async function apply(body: ProviderAdminPatchBody, confirmation?: string) {
-    if (pending) return;
+    if (operationInFlight.current) return;
     if (confirmation && !window.confirm(confirmation)) return;
 
+    operationInFlight.current = true;
     setPending(true);
     setError(null);
     setMessage(null);
@@ -89,6 +92,32 @@ export function ProviderAdminControls({ initialProvider }: { initialProvider: Pr
           : "Something went wrong. Please try again.",
       );
     } finally {
+      operationInFlight.current = false;
+      setPending(false);
+    }
+  }
+
+  async function reloadProvider() {
+    if (operationInFlight.current) return;
+    operationInFlight.current = true;
+    setPending(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/providers/${encodeURIComponent(provider.userId)}`, {
+        credentials: "same-origin", cache: "no-store",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error ?? "Could not reload the provider.");
+      const next = payload as ProviderDetail;
+      setProvider(next);
+      setStatus(next.accountStatus);
+      setNote("");
+      setMessage("Current provider and document review loaded. Review the current evidence before approving.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not reload the provider.");
+    } finally {
+      operationInFlight.current = false;
       setPending(false);
     }
   }
@@ -279,7 +308,7 @@ export function ProviderAdminControls({ initialProvider }: { initialProvider: Pr
               {
                 accountStatus: status,
                 expectedUpdatedAt: provider.updatedAt,
-                note: note.trim() || null,
+                ...(note.trim() ? { note: note.trim() } : {}),
               },
               status === "suspended"
                 ? `Suspend ${provider.companyName ?? provider.user.fullName}? They will be unable to bid until reinstated.`
@@ -436,75 +465,42 @@ export function ProviderAdminControls({ initialProvider }: { initialProvider: Pr
         ) : null}
       </SectionCard>
 
-      <SectionCard
+      {provider.credentials != null && <SectionCard
         title="Credential verification"
-        subtitle="The provider supplies the claim; only Bundleen staff record the verification timestamp."
+        subtitle="Compare the current private document with the provider's claim, then confirm its expiry and reviewed coverage. Replacements require a new review."
+        action={<button type="button" disabled={pending} onClick={() => void reloadProvider()} className="min-h-10 rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">Reload provider &amp; documents</button>}
       >
         <div className="space-y-3">
-          <CredentialRow
-            title="Licence"
-            claim={
-              provider.licenseNumber
-                ? `${provider.licenseNumber}${provider.licenseState ? ` · ${provider.licenseState}` : ""}`
-                : null
-            }
-            submittedDetails={[
-              ["Licence number", provider.licenseNumber],
-              ["Issuing state", provider.licenseState],
-            ]}
+          <ProviderCredentialReview
+            key={`license:${provider.updatedAt}:${provider.credentials?.license?.id ?? "none"}`}
+            kind="license"
+            details={[["License number", provider.licenseNumber], ["Issuing state", provider.licenseState]]}
+            document={provider.credentials?.license ?? null}
+            expiresOn={provider.credentials?.licenseExpiresOn ?? null}
+            coverage={null}
+            additionalInsured={false}
+            verified={provider.isLicenseVerified}
             verifiedAt={provider.licenseVerifiedAt}
-            verifiedBy={provider.licenseVerifiedBy?.fullName ?? null}
+            expectedUpdatedAt={provider.updatedAt}
             pending={pending}
-            onVerify={() =>
-              apply({
-                license: "verify",
-                expectedUpdatedAt: provider.updatedAt,
-              })
-            }
-            onRevoke={() =>
-              apply(
-                {
-                  license: "revoke",
-                  expectedUpdatedAt: provider.updatedAt,
-                },
-                "Revoke this licence verification? The provider's profile will stop showing it as verified.",
-              )
-            }
+            onApply={apply}
           />
-          <CredentialRow
-            title="Insurance"
-            claim={
-              provider.insuranceProvider
-                ? `${provider.insuranceProvider}${
-                    provider.insurancePolicyNumber ? ` · policy on file` : ""
-                  }`
-                : null
-            }
-            submittedDetails={[
-              ["Insurance provider", provider.insuranceProvider],
-              ["Policy number", provider.insurancePolicyNumber],
-            ]}
+          <ProviderCredentialReview
+            key={`insurance:${provider.updatedAt}:${provider.credentials?.insurance?.id ?? "none"}`}
+            kind="insurance"
+            details={[["Insurance provider", provider.insuranceProvider], ["Policy number", provider.insurancePolicyNumber]]}
+            document={provider.credentials?.insurance ?? null}
+            expiresOn={provider.credentials?.insuranceExpiresOn ?? null}
+            coverage={provider.credentials?.insuranceCoverageCents ?? null}
+            additionalInsured={provider.credentials?.insuranceAdditionalInsured ?? false}
+            verified={provider.isInsuranceVerified}
             verifiedAt={provider.insuranceVerifiedAt}
-            verifiedBy={provider.insuranceVerifiedBy?.fullName ?? null}
+            expectedUpdatedAt={provider.updatedAt}
             pending={pending}
-            onVerify={() =>
-              apply({
-                insurance: "verify",
-                expectedUpdatedAt: provider.updatedAt,
-              })
-            }
-            onRevoke={() =>
-              apply(
-                {
-                  insurance: "revoke",
-                  expectedUpdatedAt: provider.updatedAt,
-                },
-                "Revoke this insurance verification? The provider's profile will stop showing it as verified.",
-              )
-            }
+            onApply={apply}
           />
         </div>
-      </SectionCard>
+      </SectionCard>}
 
       <SectionCard title="Change history" subtitle="From the append-only admin audit log">
         {provider.recentAudit.length === 0 ? (
@@ -541,97 +537,6 @@ function Field({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-[13px] font-semibold" style={{ color: "var(--ink-900)" }}>
         {value}
       </dd>
-    </div>
-  );
-}
-
-/**
- * One credential. "Submitted" and "Verified" are deliberately different words:
- * a claim with no timestamp behind it is never shown as verified anywhere.
- */
-function CredentialRow({
-  title,
-  claim,
-  submittedDetails,
-  verifiedAt,
-  verifiedBy,
-  pending,
-  onVerify,
-  onRevoke,
-}: {
-  title: string;
-  claim: string | null;
-  submittedDetails: Array<readonly [label: string, value: string | null]>;
-  verifiedAt: string | null;
-  verifiedBy: string | null;
-  pending: boolean;
-  onVerify: () => void;
-  onRevoke: () => void;
-}) {
-  const isVerified = verifiedAt !== null;
-
-  return (
-    <div
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"
-      style={{ borderColor: "var(--line)" }}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold" style={{ color: "var(--ink-900)" }}>
-          {title}
-        </p>
-        <p className="text-[12px]" style={{ color: "var(--muted)" }}>
-          {claim ? `Submitted: ${claim}` : "Nothing submitted"}
-          {isVerified
-            ? ` · verified ${formatDate(verifiedAt)}${verifiedBy ? ` by ${verifiedBy}` : ""}`
-            : ""}
-        </p>
-        {claim ? (
-          <details className="mt-2 rounded-lg border px-3 py-2" style={{ borderColor: "var(--line)", background: "var(--canvas)" }}>
-            <summary className="cursor-pointer select-none text-[11px] font-semibold" style={{ color: "var(--teal-800)" }}>
-              Review submitted details
-            </summary>
-            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
-              {submittedDetails.map(([label, value]) => (
-                <div key={label}>
-                  <dt className="text-[9px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--muted)" }}>{label}</dt>
-                  <dd className="mt-0.5 break-all text-[12px] font-medium" style={{ color: "var(--ink-900)" }}>{value || "Not provided"}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-2 text-[10px] leading-4" style={{ color: "var(--muted)" }}>
-              These are provider-entered claims. No credential document file has been uploaded to Bundleen for this submission.
-            </p>
-          </details>
-        ) : null}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <StatusPill
-          label={isVerified ? "Verified" : claim ? "Submitted" : "Not submitted"}
-          tone={isVerified ? "positive" : claim ? "warning" : "neutral"}
-        />
-        {isVerified ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={onRevoke}
-            className="rounded-xl border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-60"
-            style={{ borderColor: "var(--line)", color: "var(--danger-600)" }}
-          >
-            Revoke
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={pending || !claim}
-            onClick={onVerify}
-            className="rounded-xl px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
-            style={{ background: "var(--teal-800)" }}
-          >
-            Verify
-          </button>
-        )}
-      </div>
     </div>
   );
 }

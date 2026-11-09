@@ -1,3 +1,4 @@
+import type { ProviderCredentials } from "./provider-credential-types";
 import type { AppRole } from "@/lib/validation/auth";
 import type {
   CommunityStaffRole,
@@ -122,6 +123,7 @@ export type ProviderSummary = {
 };
 
 export type ProviderDetail = ProviderSummary & {
+  credentials?: ProviderCredentials | null;
   bio: string | null;
   phone: string | null;
   /** What the provider claims. Displaying it as proof would be wrong. */

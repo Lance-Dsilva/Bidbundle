@@ -7,6 +7,7 @@ import {
   enqueueUpcomingServiceReminders,
 } from "@/lib/server/notifications";
 import { reconcileExpiredWindows } from "@/lib/server/neighborhood-market";
+import { sweepProviderCredentialExpirations } from "@/lib/server/provider-credential-expiry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,8 +43,9 @@ async function drain(request: Request): Promise<NextResponse> {
     // than transitioning twice.
     const reconciled = await reconcileExpiredWindows();
     const remindersQueued = await enqueueUpcomingServiceReminders();
+    const credentials = await sweepProviderCredentialExpirations();
     const result = await deliverPendingOutbox(100);
-    return NextResponse.json({ ...result, remindersQueued, reconciled });
+    return NextResponse.json({ ...result, remindersQueued, reconciled, credentials });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

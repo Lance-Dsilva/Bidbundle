@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import type { HomeownerBidView } from "@/lib/server/marketplace-reads";
@@ -170,8 +171,8 @@ export default function HomeownerBidsPage() {
                   </p>
                   <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>
                     {bid.providerCompany ?? bid.providerName}
-                    {bid.providerVerified ? " · verified" : ""}
                   </p>
+                  <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
                 </div>
                 <span
                   className="rounded-full px-3 py-1 text-xs font-semibold"

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 type Row = Record<string, unknown>;
 const state = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ vi.mock("@/lib/server/notifications", () => ({
 vi.mock("@/lib/server/db", () => ({
   db: {
     user: { findUnique: async () => ({ role: state.role, providerProfile: {
+      ...approvedProviderVerification(),
       trades: state.trades,
       accountStatus: state.accountStatus,
       licenseVerifiedAt: state.licenseVerified ? new Date() : null,
@@ -51,7 +53,7 @@ vi.mock("@/lib/server/db", () => ({
         proposedStartDate: null, estimatedDurationLabel: null, scope: "Full service",
         exclusions: null, cadenceLabel: null, validUntil: null, version: 1, submittedAt: new Date(),
         provider: { fullName: "Green Crew", providerProfile: { companyName: "Green Crew",
-          licenseVerifiedAt: new Date(), insuranceVerifiedAt: new Date() } },
+          ...approvedProviderVerification() } },
       }),
     },
     // The parent lock's result is unused. This unit mock models the call only;

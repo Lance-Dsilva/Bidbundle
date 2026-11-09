@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 /**
  * The non-HOA neighbourhood lifecycle, against a scripted database.
@@ -474,15 +475,14 @@ function readyToAward(overrides: Record<string, unknown> = {}) {
       fullName: "Shine Co",
       providerProfile: {
         companyName: "Shine Co LLC",
-        licenseVerifiedAt: new Date(),
-        insuranceVerifiedAt: new Date(),
+        ...approvedProviderVerification(),
       },
     },
   };
   state.providerUser = {
     id: "provider-1",
     email: "provider@example.com",
-    providerProfile: { accountStatus: "active" },
+    providerProfile: { accountStatus: "active", ...approvedProviderVerification() },
   };
   state.users = [
     {
