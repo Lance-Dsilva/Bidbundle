@@ -10,11 +10,17 @@ The complete dedicated REST pair now takes precedence. Complete direct/legacy pa
 
 ## Verification
 
-- 87/87 focused AI, limiter and UI checks passed, including no model/conversation/tool work after a denied rate-limit check.
-- Full unit suite: 2,434/2,438 passed; only the four previously recorded enrollment-reconciliation failures, matched by exact test name and first error. Zero new failures or skipped tests.
+- 103/103 focused AI, limiter, UI and diagnostic checks passed, including no model/conversation/tool work after a denied rate-limit check.
+- Full unit suite before the build-only diagnostic follow-up: 2,434/2,438 passed; only the four previously recorded enrollment-reconciliation failures, matched by exact test name and first error. Zero new failures or skipped tests.
 - Standalone TypeScript and Next build passed after generating the branch-local Prisma client. Build used synthetic Clerk configuration and did not run migrations.
 - Actual components were checked in a clearly labeled synthetic browser fixture at 320px, 390px and 1280px. Send measured 44×44, the launcher was hidden while open, no page overflow occurred, and actual Enter submission/close-focus behavior passed. Requests were local stubs; this is not authenticated live AI verification.
 - Read-only production-scoped PING/constant-EVAL diagnostic jobs failed at Vercel resource provisioning before their scripts ran. No Redis command or model call was executed by those jobs. Available-resource metadata does not establish live Redis transport health. Do not report a successful chat or deploy from this evidence.
+
+## Opt-in connection verification
+
+`scripts/verify-ai-rate-limit.mjs` uses the same server-only credential resolver as the runtime. It refuses to run unless `VERIFY_AI_RATE_LIMIT=1` and `VERCEL_ENV=preview`. Through the normal Vercel build wrapper, an explicitly requested Preview build can check PING and scripting/write permissions on one fresh diagnostic UUID key. An atomic SET/INCR/DEL uses a 30-second TTL, with exact-key cleanup even after an indeterminate transport response. No customer key, real account limiter bucket, database record or model call is involved. Only source enum, phase/status and safe error class are logged; parsing and credentials remain inside the sanitized boundary.
+
+Normal builds omit the flag. Production rejects this Preview-only diagnostic flag. Standalone static diagnostic builds were blocked before execution, so a normal project Preview is the verification target. Record its actual result before claiming connectivity; do not infer a successful signed-in conversation from a connection check.
 
 ## Handoff
 
