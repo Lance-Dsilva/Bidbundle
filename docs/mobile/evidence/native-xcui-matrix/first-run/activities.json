@@ -1,0 +1,1105 @@
+{
+  "testIdentifier" : "N04NavigationUITests/testNativeNavigationMatrix()",
+  "testIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests/testNativeNavigationMatrix",
+  "testName" : "testNativeNavigationMatrix()",
+  "testRuns" : [
+    {
+      "activities" : [
+        {
+          "attachments" : [
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "Screen Recording 2026-11-05 at 05.08.53 PM.mp4",
+              "payloadId" : "0~_UQtNuVbOZJ9vqN6D_I0LUKh3CNYcuVVKj32RKoE-EDVVMs9SjvnmdeWTB143O7kuy9NGd0x4Cg1sKI_BRdsew==",
+              "timestamp" : 1793920133.028,
+              "uuid" : "3D441C83-7E30-459D-9957-34313CC0E6BF"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920133.028,
+              "title" : "kXCTAttachmentScreenRecording"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920132.763,
+          "title" : "Start Test at 2026-11-05 17:08:52.763"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920133.031,
+          "title" : "Set Up"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920133.867,
+                  "title" : "Setting up automation session"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920134.71,
+                  "title" : "Wait for com.bundleen.bundleen.development to idle"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920133.035,
+              "title" : "Launch com.bundleen.bundleen.development"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920133.034,
+          "title" : "Open com.bundleen.bundleen.development"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920136.403,
+          "title" : "Wait for com.bundleen.bundleen.development to become Running Foreground"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920137.448,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920137.496,
+          "title" : "Find the \"N04Marker\" Any"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920138.442,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920138.467,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920138.479,
+          "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "synthetic-n04-100-1-ready_0_E0E0F246-A29A-43C3-BF0A-EA9FD4EA7934.png",
+              "payloadId" : "0~DGp2VKM10vdE4vBf0GmcHNZ2JwE1oRwSeevgqoV9XHtZah6FuezGj1rPC9etSO8My_pK-IRdc7ns9kXyOTSfLA==",
+              "timestamp" : 1793920138.587,
+              "uuid" : "9F866204-AB6A-43C6-B946-E797E3334A81"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920138.587,
+              "title" : "synthetic-n04-100-1-ready"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920138.587,
+          "title" : "Added attachment named 'synthetic-n04-100-1-ready'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920138.588,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "UI Snapshot 2026-11-05 at 05.08.58 PM",
+              "payloadId" : "0~vJ9KYVee4-jaCdDleyUNtjKpVJNBOszk8hH6-zYecwXTswFS1dhqfqCRMzeYu8lMFSxY0uEC8V2BjKmTUXgugQ==",
+              "timestamp" : 1793920138.622,
+              "uuid" : "86B0DA00-F452-4A5D-93EF-B17E64C5B09E"
+            },
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "Synthesized Event 2026-11-05 at 05.08.59 PM",
+              "payloadId" : "0~NbiQoHfIBnKFhjG8AKzh9iC-Gcy1Z8ND4DQ6t-gHDCRs_2shbt1ZFB7fYtOn5jRbaunsEWbB3nQExIKyYjl6yA==",
+              "timestamp" : 1793920139.782,
+              "uuid" : "09D25BDD-5FB7-482F-9DD3-F93779D35A50"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920138.596,
+              "title" : "Wait for com.bundleen.bundleen.development to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920138.597,
+              "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920138.604,
+              "title" : "Check for interrupting elements affecting \"Bundleen Dev\" Application"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "deleteOnSuccess",
+                  "name" : "UI Snapshot 2026-11-05 at 05.08.58 PM",
+                  "payloadId" : "0~vJ9KYVee4-jaCdDleyUNtjKpVJNBOszk8hH6-zYecwXTswFS1dhqfqCRMzeYu8lMFSxY0uEC8V2BjKmTUXgugQ==",
+                  "timestamp" : 1793920138.622,
+                  "uuid" : "86B0DA00-F452-4A5D-93EF-B17E64C5B09E"
+                },
+                {
+                  "lifetime" : "deleteOnSuccess",
+                  "name" : "Synthesized Event 2026-11-05 at 05.08.59 PM",
+                  "payloadId" : "0~NbiQoHfIBnKFhjG8AKzh9iC-Gcy1Z8ND4DQ6t-gHDCRs_2shbt1ZFB7fYtOn5jRbaunsEWbB3nQExIKyYjl6yA==",
+                  "timestamp" : 1793920139.782,
+                  "uuid" : "09D25BDD-5FB7-482F-9DD3-F93779D35A50"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920138.622,
+                  "title" : "kXCTAttachmentLegacySnapshot"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920138.622,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920138.628,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920138.635,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920138.641,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920138.649,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920139.782,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920138.621,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920139.783,
+              "title" : "Wait for com.bundleen.bundleen.development to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920138.596,
+          "title" : "Press Target Application 'com.bundleen.bundleen.development'[0.01, 0.50] for 0.1 seconds, then drag to Target Application 'com.bundleen.bundleen.development'[0.85, 0.50] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds "
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "N04_XCUI_DRAG_DELIVERED_1_0_97E9FE5B-82D8-46D9-99D6-016CFE25A9EC.txt",
+              "payloadId" : "0~Xn8N2EX1JFeq2_novuCfEaSVGT2HV27Av08-IVP1D5AM9akCTBK77WWeRqkxSgIU_JDjeu_UnTcbeUZmK-2pfg==",
+              "timestamp" : 1793920139.786,
+              "uuid" : "B7372250-5C1E-4161-9BA2-096712A84984"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920139.786,
+              "title" : "N04_XCUI_DRAG_DELIVERED_1"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920139.786,
+          "title" : "Added attachment named 'N04_XCUI_DRAG_DELIVERED_1'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.827,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.855,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.868,
+          "title" : "Checking existence of `\"N04PointerFacts\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.88,
+          "title" : "Find the \"N04PointerFacts\" Any"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "N04_DEVICE_FACTS_1_0_5B11836F-6A6A-44F9-B9B1-92724215FC92.txt",
+              "payloadId" : "0~4NESsTHlLc0vPctxy23VGDTRm7M6jbzs_yiu9A40bR7zQwjcf9aCf7z3JdREOCRVhxz-Ha2Owr4RxQYQ2Rlr2Q==",
+              "timestamp" : 1793920140.891,
+              "uuid" : "5F0B1918-1532-4B9A-A6AA-4BCCB3675FD5"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920140.891,
+              "title" : "N04_DEVICE_FACTS_1"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.891,
+          "title" : "Added attachment named 'N04_DEVICE_FACTS_1'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.892,
+          "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "synthetic-n04-100-1-observed_0_21462DAD-9521-4866-BA84-59405287F2D0.png",
+              "payloadId" : "0~_ytRCJ7ujqSATPfEvFWifbyMYzuqe58JlAcZpU66wTJKRFxcRLfmpVlI2qLVhRp6Xv7d4Iv-EUzuYywTu7GWJQ==",
+              "timestamp" : 1793920140.974,
+              "uuid" : "5973FF34-A4E0-4A8A-A898-6851F0A53A83"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920140.974,
+              "title" : "synthetic-n04-100-1-observed"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920140.974,
+          "title" : "Added attachment named 'synthetic-n04-100-1-observed'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920142.017,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920142.043,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920142.992,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920143.013,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920144.072,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920144.095,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920145.042,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920145.066,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920146.017,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920146.04,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920146.992,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920147.017,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920148.072,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920148.096,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920149.047,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920149.074,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920150.022,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920150.035,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920150.982,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920151.008,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920152.062,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920152.084,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920153.037,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920153.059,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920154.012,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920154.037,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920154.987,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920155.007,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920156.062,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920156.084,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920157.037,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920157.054,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920157.997,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920158.017,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920158.977,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920159,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920159.013,
+          "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "synthetic-n04-100-2-ready_0_B5E5A5AC-D941-4189-B107-44DA81204223.png",
+              "payloadId" : "0~oqAEWvQZLP8egG4T5J5z4mHrG25B79GKPSrliw9rxjCKGN60sFZwix70AKLauehFOvIbgAaA55_DXV96X92I6Q==",
+              "timestamp" : 1793920159.102,
+              "uuid" : "6040F458-54F6-4532-9825-0BDC02D7E4E4"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920159.102,
+              "title" : "synthetic-n04-100-2-ready"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920159.102,
+          "title" : "Added attachment named 'synthetic-n04-100-2-ready'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920159.102,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "UI Snapshot 2026-11-05 at 05.09.19 PM",
+              "payloadId" : "0~vJ9KYVee4-jaCdDleyUNtjKpVJNBOszk8hH6-zYecwXTswFS1dhqfqCRMzeYu8lMFSxY0uEC8V2BjKmTUXgugQ==",
+              "timestamp" : 1793920159.13,
+              "uuid" : "A45ECAA8-CA6E-400E-AF1D-6E3E1E2E325F"
+            },
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "Synthesized Event 2026-11-05 at 05.09.20 PM",
+              "payloadId" : "0~NbiQoHfIBnKFhjG8AKzh9iC-Gcy1Z8ND4DQ6t-gHDCRs_2shbt1ZFB7fYtOn5jRbaunsEWbB3nQExIKyYjl6yA==",
+              "timestamp" : 1793920160.177,
+              "uuid" : "7D0107FF-D815-4181-935A-A3EAA074D539"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920159.11,
+              "title" : "Wait for com.bundleen.bundleen.development to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920159.111,
+              "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920159.119,
+              "title" : "Check for interrupting elements affecting \"Bundleen Dev\" Application"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "deleteOnSuccess",
+                  "name" : "UI Snapshot 2026-11-05 at 05.09.19 PM",
+                  "payloadId" : "0~vJ9KYVee4-jaCdDleyUNtjKpVJNBOszk8hH6-zYecwXTswFS1dhqfqCRMzeYu8lMFSxY0uEC8V2BjKmTUXgugQ==",
+                  "timestamp" : 1793920159.13,
+                  "uuid" : "A45ECAA8-CA6E-400E-AF1D-6E3E1E2E325F"
+                },
+                {
+                  "lifetime" : "deleteOnSuccess",
+                  "name" : "Synthesized Event 2026-11-05 at 05.09.20 PM",
+                  "payloadId" : "0~NbiQoHfIBnKFhjG8AKzh9iC-Gcy1Z8ND4DQ6t-gHDCRs_2shbt1ZFB7fYtOn5jRbaunsEWbB3nQExIKyYjl6yA==",
+                  "timestamp" : 1793920160.177,
+                  "uuid" : "7D0107FF-D815-4181-935A-A3EAA074D539"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920159.13,
+                  "title" : "kXCTAttachmentLegacySnapshot"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920159.13,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920159.136,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920159.143,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920159.149,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920159.157,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920160.177,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920159.129,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920160.178,
+              "title" : "Wait for com.bundleen.bundleen.development to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920159.11,
+          "title" : "Press Target Application 'com.bundleen.bundleen.development'[0.01, 0.50] for 0.1 seconds, then drag to Target Application 'com.bundleen.bundleen.development'[0.85, 0.50] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds "
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "N04_XCUI_DRAG_DELIVERED_2_0_607241D2-8603-43F6-8557-54DF230A20A0.txt",
+              "payloadId" : "0~cgLForkwFEmdMDOP_tA2sfDisGupVpccmlbvbxWS9XcL7cN62JGqP2tg_DnBH0sO_iS77ZkrlpxEDepgPyW20Q==",
+              "timestamp" : 1793920160.18,
+              "uuid" : "EBE58E54-981D-4812-A21C-FD6EB28A5106"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920160.18,
+              "title" : "N04_XCUI_DRAG_DELIVERED_2"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920160.18,
+          "title" : "Added attachment named 'N04_XCUI_DRAG_DELIVERED_2'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.222,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.247,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.26,
+          "title" : "Checking existence of `\"N04PointerFacts\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.271,
+          "title" : "Find the \"N04PointerFacts\" Any"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "N04_DEVICE_FACTS_2_0_829F288E-66B6-4C0B-8E26-C932AA87FD8E.txt",
+              "payloadId" : "0~HftM1UL4IAjaFYwaiUBqGghguMBiylzpncRaufdmXHTATAJ8npjj6nh5LhdUjnD3XV90hmDsojDV5BpQl0mhqw==",
+              "timestamp" : 1793920161.281,
+              "uuid" : "96E14E5A-4E82-4973-B8DA-D59251CD3194"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920161.281,
+              "title" : "N04_DEVICE_FACTS_2"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.281,
+          "title" : "Added attachment named 'N04_DEVICE_FACTS_2'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.281,
+          "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "synthetic-n04-100-2-observed_0_FC4B713E-B717-4346-BD28-990F3A74DE75.png",
+              "payloadId" : "0~6H3TpIy-eEn8OBE9oqTSe8eFjpoUjxJLUnPVO91vESJLr1jBkpw985CLFI94MkwXgjW3ElOPunaY6S9CQbFZ2Q==",
+              "timestamp" : 1793920161.361,
+              "uuid" : "29FB4CAF-6902-470A-907D-A3EF816E620B"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920161.361,
+              "title" : "synthetic-n04-100-2-observed"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920161.361,
+          "title" : "Added attachment named 'synthetic-n04-100-2-observed'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920162.407,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920162.42,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920163.457,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920163.484,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920164.432,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920164.457,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920165.402,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920165.421,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920166.367,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920166.389,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920167.447,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920167.47,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920168.417,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920168.437,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920169.367,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920169.391,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920170.437,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920170.444,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920171.382,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920171.405,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920172.457,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920172.479,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920173.427,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920173.449,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920174.397,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920174.418,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920175.367,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920175.389,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920176.437,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920176.46,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920176.473,
+          "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "synthetic-n04-100-3-ready_0_4A14D345-64AD-48EF-88DC-9FC9120E6C3B.png",
+              "payloadId" : "0~f89ROJsfhfiTOeCdlGmxw_tsFb1Bitx2ic4jhD3F0CPHWZ3g19NKxBmMAoPASnOJha4z7I3MgTJK5mo5KDGCog==",
+              "timestamp" : 1793920176.558,
+              "uuid" : "1083D23C-2F8B-487D-BA6B-13CC7C772E0F"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920176.558,
+              "title" : "synthetic-n04-100-3-ready"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920176.558,
+          "title" : "Added attachment named 'synthetic-n04-100-3-ready'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920176.558,
+          "title" : "Find the \"N04Marker\" StaticText"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "UI Snapshot 2026-11-05 at 05.09.36 PM",
+              "payloadId" : "0~vJ9KYVee4-jaCdDleyUNtjKpVJNBOszk8hH6-zYecwXTswFS1dhqfqCRMzeYu8lMFSxY0uEC8V2BjKmTUXgugQ==",
+              "timestamp" : 1793920176.584,
+              "uuid" : "2F128919-CE21-4208-A539-E875DDF953E6"
+            },
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "Synthesized Event 2026-11-05 at 05.09.37 PM",
+              "payloadId" : "0~NbiQoHfIBnKFhjG8AKzh9iC-Gcy1Z8ND4DQ6t-gHDCRs_2shbt1ZFB7fYtOn5jRbaunsEWbB3nQExIKyYjl6yA==",
+              "timestamp" : 1793920177.645,
+              "uuid" : "9979A6FA-4142-484D-9B35-E9D04FF3D5B7"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920176.566,
+              "title" : "Wait for com.bundleen.bundleen.development to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920176.567,
+              "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920176.574,
+              "title" : "Check for interrupting elements affecting \"Bundleen Dev\" Application"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "deleteOnSuccess",
+                  "name" : "UI Snapshot 2026-11-05 at 05.09.36 PM",
+                  "payloadId" : "0~vJ9KYVee4-jaCdDleyUNtjKpVJNBOszk8hH6-zYecwXTswFS1dhqfqCRMzeYu8lMFSxY0uEC8V2BjKmTUXgugQ==",
+                  "timestamp" : 1793920176.584,
+                  "uuid" : "2F128919-CE21-4208-A539-E875DDF953E6"
+                },
+                {
+                  "lifetime" : "deleteOnSuccess",
+                  "name" : "Synthesized Event 2026-11-05 at 05.09.37 PM",
+                  "payloadId" : "0~NbiQoHfIBnKFhjG8AKzh9iC-Gcy1Z8ND4DQ6t-gHDCRs_2shbt1ZFB7fYtOn5jRbaunsEWbB3nQExIKyYjl6yA==",
+                  "timestamp" : 1793920177.645,
+                  "uuid" : "9979A6FA-4142-484D-9B35-E9D04FF3D5B7"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920176.584,
+                  "title" : "kXCTAttachmentLegacySnapshot"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920176.585,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920176.593,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920176.601,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920176.607,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920176.617,
+                  "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793920177.645,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920176.583,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920177.645,
+              "title" : "Wait for com.bundleen.bundleen.development to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920176.566,
+          "title" : "Press Target Application 'com.bundleen.bundleen.development'[0.01, 0.50] for 0.1 seconds, then drag to Target Application 'com.bundleen.bundleen.development'[0.85, 0.50] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds "
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "N04_XCUI_DRAG_DELIVERED_3_0_3B0810B4-B165-48E5-A464-E8BECEC598D2.txt",
+              "payloadId" : "0~WvADnLPne92y7H34Rt35SxeThIdzBPiFxFIGBDmWFzggabaAGXcwg70xpJPRO6I9EGKZioDBon-aaafJhU1WIg==",
+              "timestamp" : 1793920177.648,
+              "uuid" : "BAF97DFD-EF29-4AA7-AA7B-42A008989BE7"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920177.648,
+              "title" : "N04_XCUI_DRAG_DELIVERED_3"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920177.648,
+          "title" : "Added attachment named 'N04_XCUI_DRAG_DELIVERED_3'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.687,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.708,
+          "title" : "Checking existence of `\"N04Marker\" StaticText`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.72,
+          "title" : "Requesting snapshot of accessibility hierarchy for app with pid 53356"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.737,
+          "title" : "Requesting snapshot of accessibility hierarchy for app with pid 53356"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "N04_FAILURE_3_observed_0_19BD1C87-5686-40C0-910B-607319191382.txt",
+              "payloadId" : "0~c5bpXXBYNvD1m9DKHTxXujOWo_T7fapxS6GCCT8q67C0AZITbFISSCFC5Fw9m_0yzKS0gEXPWPFQOALFEjTo_A==",
+              "timestamp" : 1793920178.742,
+              "uuid" : "694F7E48-9836-48D8-BD62-9F298B878FF8"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920178.742,
+              "title" : "N04_FAILURE_3_observed"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.742,
+          "title" : "Added attachment named 'N04_FAILURE_3_observed'"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.743,
+          "title" : "Find the Target Application 'com.bundleen.bundleen.development'"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "synthetic-n04-failure-3-observed_0_EE8AB914-43D9-486C-A385-D0006C3C7DD0.png",
+              "payloadId" : "0~QByaTEY1uXYGJoKHQSB7J0_lw7VeOLQYAnPX-6BXRQpzIJHWvalS4Jl8ZW5oyTwDIpmXwHVTD9UvqGAJmfCGqw==",
+              "timestamp" : 1793920178.829,
+              "uuid" : "58F9B38E-A814-46AB-B296-79DB27B657D8"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793920178.829,
+              "title" : "synthetic-n04-failure-3-observed"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920178.829,
+          "title" : "Added attachment named 'synthetic-n04-failure-3-observed'"
+        },
+        {
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "title" : "N04NavigationUITests.testNativeNavigationMatrix()"
+            }
+          ],
+          "isAssociatedWithFailure" : true,
+          "startTime" : 1793920178.832,
+          "title" : "XCTAssertNil failed: \"marker-disappeared\""
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793920179.092,
+          "title" : "Tear Down"
+        }
+      ],
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "modelName" : "iPhone 17",
+        "osBuildNumber" : "23E254a",
+        "osVersion" : "26.4.1",
+        "platform" : "iOS Simulator"
+      },
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ]
+}

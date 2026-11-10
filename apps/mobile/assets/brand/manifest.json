@@ -1,0 +1,169 @@
+{
+  "source": "public/bundleen/brand/bundleen-company-icon.svg",
+  "sourceSha256": "5444477735a2164ccd6791a6889c941534945f3859cbc0764ede0d113c47f461",
+  "provenance": [
+    "docs/homepage-v5.md",
+    "src/components/brand/BundleenCompanyIcon.tsx"
+  ],
+  "tools": {
+    "rsvg": "rsvg-convert version 2.61.3",
+    "imagemagick": "Version: ImageMagick 7.1.2-13 Q16-HDRI aarch64 23522 https://imagemagick.org"
+  },
+  "derivation": "Unchanged SVG child geometry/colors. Uniform rasterization; launcher padding and opaque warm-paper background. Adaptive foreground padded separately. No font or generated logo.",
+  "outputs": [
+    {
+      "path": "android/app/src/main/res/drawable-nodpi/company_foreground.png",
+      "width": 432,
+      "height": 432,
+      "bytes": 8091,
+      "sha256": "57900bbf45c1631c9a9a68ec998e82e39b815b75014c730f31188025def86b23"
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-hdpi/ic_launcher.png",
+      "width": 72,
+      "height": 72,
+      "bytes": 1268,
+      "sha256": "cc34314e6a438b35a1cd46e5b80abe525726f96d69657a47d495e98b6fe5a45d"
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-mdpi/ic_launcher.png",
+      "width": 48,
+      "height": 48,
+      "bytes": 856,
+      "sha256": "ff5eb26fb65c0f1312ed730d0a207abf01ecd0fd26b3db37d6f3c71d2c1bfacc"
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+      "width": 96,
+      "height": 96,
+      "bytes": 1540,
+      "sha256": "7ffecc4572ca7ac9ea94a19de8b75f3ea571802ffde18accfdf8b6c9388408f3"
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+      "width": 144,
+      "height": 144,
+      "bytes": 3398,
+      "sha256": "06b1860e354aea00c48a6988b20755a539370e0a7b776b713dd01239e74cb6c1"
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "width": 192,
+      "height": 192,
+      "bytes": 4538,
+      "sha256": "0666bf485c7ff6dc6c82a83c35ee83c98a239250f3dac19c3b3435a9185d8da0"
+    },
+    {
+      "path": "assets/brand/company-mark.png",
+      "width": 288,
+      "height": 288,
+      "bytes": 9140,
+      "sha256": "79985db59ccddb9c03dc437b2d1c317da83c2b07767af4e035236d466d6bcbf7"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 28336,
+      "sha256": "6ab8b76f1b88706754e6bf22359e1fa0e0bf3d54d8cd9325f0ca6a6086d77931"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png",
+      "width": 20,
+      "height": 20,
+      "bytes": 417,
+      "sha256": "ea41d3e1447714c896f8896cc4bd5fcfe4b0e6c259b7dd4ffeb26ff1e663a043"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png",
+      "width": 40,
+      "height": 40,
+      "bytes": 748,
+      "sha256": "3419768a85798a16030af5465ca12406518a206079c69ca7ea1a33e2841ffcdb"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png",
+      "width": 60,
+      "height": 60,
+      "bytes": 1077,
+      "sha256": "e8c08b1a82e0592218b5e5f573b1e4b3da2ee91755c5621443af84d4befe743e"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png",
+      "width": 29,
+      "height": 29,
+      "bytes": 579,
+      "sha256": "90bd5e13869a6b8df2eef736ab8b396cc6a3848a50593fa06b4819a71e89f57a"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png",
+      "width": 58,
+      "height": 58,
+      "bytes": 1045,
+      "sha256": "c107e7eebc008c517657d1eb2588684c6b328bdb9139d08540c26785669930f2"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png",
+      "width": 87,
+      "height": 87,
+      "bytes": 1477,
+      "sha256": "a2336c37ea6148125c996195e813ebc6e942f36e9981b366c18c71ad17b15a4c"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png",
+      "width": 40,
+      "height": 40,
+      "bytes": 748,
+      "sha256": "3419768a85798a16030af5465ca12406518a206079c69ca7ea1a33e2841ffcdb"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png",
+      "width": 80,
+      "height": 80,
+      "bytes": 1380,
+      "sha256": "ffba048522198840d1978fef8afdef4c5a7293b0c9060d801912ade8753e2fb5"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png",
+      "width": 120,
+      "height": 120,
+      "bytes": 1897,
+      "sha256": "09a01fa09a1e49df76d791af0ce883c81a8980bcaf0354a7d358182cb8b84cd6"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png",
+      "width": 120,
+      "height": 120,
+      "bytes": 1897,
+      "sha256": "09a01fa09a1e49df76d791af0ce883c81a8980bcaf0354a7d358182cb8b84cd6"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png",
+      "width": 180,
+      "height": 180,
+      "bytes": 4393,
+      "sha256": "0eed6bcf15d3e9822465c2737a14e50a18f06478d7403113b5ea5612e9a807de"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png",
+      "width": 76,
+      "height": 76,
+      "bytes": 1323,
+      "sha256": "68cd6be668941596865b69c26fb00dfb83f04fcad285efe397ec5c69d6a8c532"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png",
+      "width": 152,
+      "height": 152,
+      "bytes": 3608,
+      "sha256": "7f7d4cff26eef25de664c74d47937ab263718ac14e25bb04fc7c213ce5f648a0"
+    },
+    {
+      "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png",
+      "width": 167,
+      "height": 167,
+      "bytes": 3960,
+      "sha256": "66717860667f993b4a171caf0e286c017ea2bf09c52cd54ef911adfc3cc5ddd4"
+    }
+  ]
+}

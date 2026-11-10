@@ -1,0 +1,16 @@
+{
+  "development": [
+    "package: name='com.bundleen.bundleen.development' versionCode='1' versionName='0.1.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+    "minSdkVersion:'24'",
+    "targetSdkVersion:'36'",
+    "application-label:'Bundleen Dev'",
+    "launchable-activity: name='com.bundleen.bundleen.MainActivity'  label='' icon=''"
+  ],
+  "staging": [
+    "package: name='com.bundleen.bundleen.staging' versionCode='1' versionName='0.1.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+    "minSdkVersion:'24'",
+    "targetSdkVersion:'36'",
+    "application-label:'Bundleen Staging'",
+    "launchable-activity: name='com.bundleen.bundleen.MainActivity'  label='' icon=''"
+  ]
+}

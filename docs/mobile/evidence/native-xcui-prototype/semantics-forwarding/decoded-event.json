@@ -1,0 +1,29 @@
+{
+  "targetProcessID": 24204,
+  "events": [
+    {
+      "eventType": 1,
+      "coordinate.x": 4.0200000000000005,
+      "coordinate.y": 437.0,
+      "offset": 0.0
+    },
+    {
+      "eventType": 2,
+      "coordinate.x": 4.0200000000000005,
+      "coordinate.y": 437.0,
+      "offset": 0.1
+    },
+    {
+      "eventType": 2,
+      "coordinate.x": 341.7,
+      "coordinate.y": 437.0,
+      "offset": 0.7753599999999999
+    },
+    {
+      "eventType": 3,
+      "coordinate.x": 341.7,
+      "coordinate.y": 437.0,
+      "offset": 0.7753599999999999
+    }
+  ]
+}

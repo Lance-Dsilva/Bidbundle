@@ -1,0 +1,233 @@
+# Mobile phased delivery plan
+
+Baseline: fetched origin/main fb4a245 on 2026-11-01. Existing homepage PRs [40](https://github.com/Lance-Dsilva/Bidbundle/pull/40) and [41](https://github.com/Lance-Dsilva/Bidbundle/pull/41) are merged. Connected GitHub open issue/PR search returned no results on discovery; mobile has direct authorization independent of that queue.
+
+## Phase gates
+1. Discovery: source-backed parity and contract matrix, auth feasibility decision, native UX, pinned toolchain/setup, environment prerequisites, test strategy, independent architecture/security/UX review. Gate remains open until evidence identifies a feasible real authenticated slice.
+2. Foundation and live slice: Flutter app, environment validation, design tokens, navigation, typed transport/repositories, secure SDK session boundary, CI. Prove sign-in → live server profile/context → homeowner dashboard → sign-out/expiry. Require formatter/analyzer/unit/widget/contract checks, Android build, iOS compile, runtime evidence and independent security/code review. Mocks cannot close this gate.
+3. Product parity: reviewed homeowner onboarding/coverage/request participation, provider onboarding/verification/discovery/bidding/service areas/scheduling, authorized HOA flows, messaging/notifications/profile/support/amenities/surveys/reviews/AI per PARITY. Each slice gets contracts, authority checks, screenshots and tests. Explicitly defer internal admin and unsupported device features; no silent omissions.
+4. Hardening: full scoped regressions, cross-role/community isolation, both platform integration, accessibility/text scaling, background/resume/expiry, network and upload failures, duplicate submissions, performance, reproducible release builds/licenses/privacy/deletion/store checks. Independent test/UX/code evidence plus manager signoff.
+5. Beta handoff: exact verified artifacts, instructions/screenshots/notes, signing/account owner checklist, rollout/rollback. Stop before external distribution, agreements, production deployment or public publication unless separately authorized.
+
+## Ordered issue-sized work
+| ID | Task | Owner | Dependency / acceptance |
+| --- | --- | --- | --- |
+| M01 | Source route and screen inventory | Backend | Actual methods/auth/errors; admin and AI inventoried |
+| M02 | Auth adapter feasibility and threat review | Security | Primary docs, maintenance/license, lifecycle and callback requirements |
+| M03 | Toolchain and architecture | Lead | Actual installed tools, pinned version, reproducible commands |
+| M04 | Native UX plan and independent discovery review | UX/reviewer | Role navigation, accessibility, phase gate findings |
+| M05 | Staging identity/backend readiness | Manager/security | Non-production API and Clerk instance, safe role identities |
+| M06 | Flutter scaffold and typed read-only client | Lead/application | M01–M04; local formatting/analyzer/tests/builds |
+| M07 | Native auth adapter and live slice | Security/application | M05/M06; real both-platform sign-in/context/dashboard/sign-out/expiry |
+| M08 | Homeowner onboarding and coverage | Application/backend | Phase 2 passed; actual location/coverage contract |
+| M09 | Requests and participation lifecycle | Application/backend | M08; authority and duplicate-submit tests |
+| M10 | Provider onboarding/verification and marketplace | Application/backend | Phase 2 passed; server eligibility, bids and scheduling |
+| M11 | HOA manager/resident journeys | Application/backend | Verified grants; community isolation tests |
+| M12 | Shared communications and account/support | Application | Contracts, notifications distinct from push |
+| M13 | Amenities/surveys/reviews/AI remaining parity | Application | Explicit PARITY dependencies and evidence |
+| M14 | Cross-platform hardening | Test/UX/security/reviewer | Complete declared parity; fix and retest findings |
+| M15 | Beta artifacts and handoff | Release operations | Phase 4 accepted; signing readiness |
+
+After every task: implement → independent verification/review → fix → rerun → record evidence. Progress automatically when dependencies and gates pass. If blocked, continue independent work; never relabel an unrun mandatory gate as passed.
+
+## Milestone status
+
+M01 source inventory and initial contracts recorded; per-slice payload audits continue. M02 native SDK audit and compile completed; live feasibility pending. M03 pinned toolchain and native compile complete. M04 independent source/fixture UX review complete for delivered slices. M05 awaits parent-owned safe staging. M06 foundation and reviewed read-only presentation are implemented. M07 real authenticated lifecycle remains unproven. M08–M15 full workflows remain backlog, with explicitly reordered read-only preparation R01–R03 below. Current exact scoped evidence belongs to STATE.md, TEST_RESULTS.md and the PR handoff; historical tests/builds do not certify a later head.
+
+## R01 — reordered read-only homeowner request browsing
+
+Authorized by parent Engineering under the human's instruction to continue/complete Flutter work. This is an independently testable M09 presentation/contract preparation slice moved ahead of unresolved M07 live prerequisites. It does not pass Phase 1/2 or permit dependent business writes.
+
+Owners: backend specialist owns API_CONTRACT appendix only; Flutter application engineer owns mobile lib/ implementation; independent test/UX/code reviewer owns request tests/captures/review; mobile manager owns acceptance and checkpoint. No shared-server writer or server edits.
+
+Acceptance criteria:
+
+- Native homeowner Home/Requests navigation; real GET /api/homeowner/requests and GET /api/homeowner/requests/{encodedId}, separate strict typed DTOs per actual services.
+- Read real title/status/category/community, available budgets/dates/counts. Handle null values honestly. No create/join/edit/award or inferred manager authority. Provider/admin contexts do not receive homeowner request navigation.
+- Loading, empty, malformed/error/denied, retry and refresh states. Detail denial never falls back to owner-list data. Legacy HOA rows remain visible but explicitly lack mobile detail support because no compatible HOA detail GET exists.
+- Back navigation and200% text work. Sign-out/session expiry/account change clear protected request state/detail; late requests cannot resurrect it. Session errors distinguish access denial from expiry.
+- Meaningful contract/repository/widget/race tests, formatter/analyzer, independent UX/code/security review and fixture screenshots. Resulting-head Android/iOS CI builds required. Fixtures do not prove native runtime/backend authorization.
+
+First live acceptance remains sign-in → profile/context → homeowner overview → sign-out/expiry on approved isolated staging, then real request list/detail and denied membership cases. Backend/API integration, native auth/storage/callback/resume and business-write gates remain open. Other M09 actions and all other PARITY rows are unchanged backlog.
+
+## R02 — reordered read-only Account and Recent notifications
+
+Selected after reviewed R01 under parent Engineering's authorization to continue eligible independent parity preparation. R01 commit04cc2dc is being checked in CI; R02 work stays local until that exact-head result is recorded. Live auth/business-write gates remain open.
+
+Owners: Flutter application engineer owns lib; independent reviewer owns account/notification tests, captures and review; manager owns plan/parity/checkpoint; release/security specialist monitors R01 CI then reviews R02 session boundaries. Backend contract discovery is complete; no shared-server edits.
+
+Acceptance: use real GET /api/profile and GET /api/me/notifications with typed separate DTOs, matching account identity, nullable fields, email-verification terminology and latest30 cap. Account accessible to public customer roles; Requests remains homeowner-only and admin/unknown workflows remain unsupported. Account→notifications uses native backable navigation, accessible200% text, loading/empty/error/retry/refresh. Do not edit profile, auto-mark read, dismiss notifications, show an invented unread-total or imply push. Stored links remain inert. Sign-out/expiry/account or role change clear private data/routes and stale replies cannot restore them. Dates include year and timezone, including a bounded correction to R01's date formatting. Tests/captures are synthetic and cannot certify live auth or storage. Require independent review, formatter/analyzer/tests and resulting-head native CI.
+
+R02 local acceptance:106 tests pass with independent source/security/UX review; no actionable outstanding findings. Native resulting-head CI remains required after push. Fixture captures do not close live auth/runtime gates.
+
+## R03 — reordered read-only provider Home overview
+
+Parent Engineering accepted this as the next eligible candidate after R02 review and checkpoint. Source contracts are in API_CONTRACT.md. Application engineer owns lib; independent reviewer owns provider tests/captures/review; manager owns scope/checkpoint, security reviewer owns source audit. No shared-server edits.
+
+Acceptance: only matched provider profile/context may request GET /api/provider/overview. Render company name (nullable fallback), explicit pending/active/suspended account state, active bids, active/completed agreements, published rating/review count and decided-bid win rate. Parse a strict bounded subset; null comparisons are unavailable, never zero. Account state is not bid eligibility or verification. Provider overview403/409/5xx must preserve authorized Account/notifications access;401 globally expires all private state. Include loading, errors/retry/refresh, role/account/signout stale-response fences and200% text evidence. No homeowner calls for providers; no provider calls for other roles.
+
+Explicit deferrals: revenue/trends because source sums potentially mixed currencies and caps period data without a truncation flag; conversation previews/unread, marketplace, scheduling, bids and all mutations remain subsequent slices. Do not claim payouts or complete provider parity. Require independent fixture/source/security review, full appropriate local checks and exact resulting-head Android/iOS CI; live/runtime Phase1/2 gates remain OPEN.
+
+## R04 — reordered read-only Support requests
+
+Source-backed Account → Support requests → ticket detail. Existing GET routes have no hidden mutations. Server visibility includes own tickets and tickets of actively assigned managed communities; no client management grant or all-tickets ownership claim. Mobile only exposes supported public roles after identity/context matching. Use encoded opaque IDs and response-ID matching;404 detail clears state without list fallback.
+
+Render a minimal summary (ticket number, subject, category/status, nullable community and timestamps) and plain customer/admin replies. Reject internal_note/unknown message kinds; do not retain requester email, assigned admin identity, unfiltered messageCount, mutation permissions or related routing IDs. No links/attachments/create/reply/reopen. List is latest100; unpaginated detail can exceed existing1MiB transport cap and must fail honestly, with no silent truncation or enlarged limit.
+
+Require real backable native routes, distinct scroll state, loading/empty/errors/retry/refresh, notification/support route switching,200% text, global401/renewal clearing and role/account/signout/navigation generation fences. Application engineer owns lib, independent reviewer owns contract/state/UI tests and captures, security reviewer audits source; manager checkpoints only reviewed/tested source with exact resulting-head native CI. No live/mutation/release gate advances.
+
+## R05 — reordered read-only provider Opportunities
+
+Manager-selected next eligible slice after R04 review/checkpoint; source contract and limits in API_CONTRACT.md. Provider-only tab with inline current-feed details from GET /api/provider/marketplace, after matched profile/context. There is no detail GET-by-ID; never invent one or reuse homeowner endpoints. Keep server eligibility/reason authoritative, distinguish ineligible/eligible-empty, and describe a feed filtered from at most200 candidate requests rather than a complete catalogue.
+
+Minimal DTO only: eligible/reason/feed titles, community/context/category/kind, plain description, nullable locality/region/recurrence/distance/dates and bounded counts. Reject invalid enums/numbers/dates; never show feed under false eligibility. Omit budgets from this initial feed projection (underlying request budgets are explicitly USD), own bids, precise awarded-work addresses/access notes, service areas, agreement/occurrence data and any actions. No arbitrary links, direct IDs, local eligibility recomputation or status promotion. Existing1MiB bound can reject the shared workspace; fail honestly, no silenttruncate/newlimit.
+
+Child403/409/5xx errors preserve Home/Account,401 globally clears. Refresh discards old feed/expansion. Require role/account/signout/navigation generation fences,200% text, top-level back behavior, independent code/security/fixture review and full appropriate checks with exact-head native CI. Application engineer owns lib, independent reviewer owns tests/captures/review; no shared server writer. All live/mutation/release gates remain OPEN.
+
+R05 currency consistency correction: retain request budget USD displays because schema/validation/migration explicitly define US cents. Omit Home savings and request lowest-bid monetary displays because their API summaries drop bid/agreement currency; defaultUSD is not a database invariant. No actual mixed-production-data claim or server change. Require absence regressions and refreshed affected captures.
+
+## R06 — reordered read-only provider Service areas
+
+After R05 review/checkpoint, use canonical GET /api/provider/service-areas for a lazy provider Account child. Source read scopes active rows by authenticated provider; it does not require providerProfile/activation/credential state. Empty is genuine; saved coverage never proves eligibility. Retain only label/primary/coarse locality+region/nullable radius/postal codes/active status/updatedAt, with strict finite1..100 radius and canonical timestamp validation. Do not impose the10-area create rule on GET results.
+
+No coordinates/exact address retention, maps/geolocation/permissions, editing, per-ID or legacy route calls. Require native back/route switching,200% text, empty/errors/retry/refresh, existing response limits, owner/role/session/navigation fences and global401 clearing. Local errors preserve Account. Also remove now-unused savings/bestBid fields from mobile DTOs, retaining strict USD budgets and behavioral omission tests; backend payloads stay unchanged. Application owns lib, independent reviewer tests/captures/docs, security source audit. Exact resulting-head native CI and all live gates remain separate.
+
+## R07 — reordered read-only homeowner Neighborhood
+
+Source contract confirms GET /api/homeowner/neighbourhood has no workflow mutations, geocoding or membership reconciliation. Homeowner-only Community tab is a bounded mobile product choice (API also admits hoa_staff). Lazy matched-identity read; no per-ID, roster or manager endpoint. Retain communityId/name/active member count/optional managerName and up to50 visible request id/communityId/title/categoryLabel/status/date/plain description. Validate exact hub-community binding and unique IDs; active member count includes caller. Null hub is distinct from a real empty feed and does not explain why membership is unavailable.
+
+Inline current-feed expansion only; omit management/addressReady/permissions/creator identities/bids/participants/agreements/visits/occurrences/money. No participation/join/vote/create/award/invite/map or links. Keep1MiB and total-time bounds. Local failures preserve Account;401 clears globally; refresh/revocation/null/close discard prior snapshot and expansion with role/owner/generation fences. Require4-tab homeowner200% navigation/back, independent source/security/tests/captures and exact-head native CI. No live/mutation gate closure.
+
+## R08 — reordered read-only provider Published reviews
+
+Source-only proof establishes provider-console gate, owner-scoped published-only reads with no workflow writes. Provider Account child lazily fetches canonical ratings GET with limit20/offset0. Keep first-page bounds/hasMore honest; no fake full-history or pagination control. Retain minimal plain reviewer name/rating/comment/nullable subject/date, server page and optional server average/count. Drop distribution/extra identity data; never invent anonymous/verified badges or calculate a page average as the all-published summary. Do not require exact cross-query totals during concurrent moderation.
+
+No response/edit/delete/report/subject navigation, external links or per-ID/identity calls. Local errors preserve Account;401 globally clears; refresh/close/moderated-away rows/account/role changes clear prior text with generation fences. Require native back/Account-child switching,200% text, strict rating/date/numeric/page validation, existing size/time bounds, independent code/security/fixture review and exact-head native CI. No server writer, live gate or mutation progression.
+
+## R09 — reordered read-only Inbox and latest transcript
+
+GET callgraph is read-only; web separately POSTs /read, which mobile must not do. Account routes support homeowner+hoa_staff through homeowner inbox and provider through provider inbox after matched identity; response party labels never select endpoints. Server participation is the authority for existing history, not current membership/bid status. List up to100 recent threads, then fresh authorized encoded listed-ID detail GET limit50/offset0. Bind thread and every message to selected ID; no list fallback on denial.
+
+Retain minimal plain participant names/previews/body/date and server isMine, omit sender IDs/request links/unread totals/receipts. Show latest50 and older-available state honestly; no fake pagination, send/start/read-receipt/report or external/identity calls. List previews can visibly ellipsize as previews; transcript messages in the returned window stay complete. Preserve1MiB/timeout guards, local errors/Account access, global401 clearing, owner+role/navigation generations and refresh replacement. Require all Account-child switches/rapid reopen/native back/iOS/200%, independent source/security/fixture review and exact combined-head CI. No live/mutation progression.
+
+## N01 — isolated nonproduction native builds
+
+Parent accepted this priority after R09: one native prerequisite slice, with optional read-only screens deferred. Add development/staging flavors, provisional com.bundleen.bundleen.development and .staging IDs, and visible Dev/Staging names. Preserve the base ID provisionally; no production flavor or external callback/Native API registration. The real entry point requires appFlavor == BUNDLEEN_ENV and valid HTTPS/test-key configuration before constructing auth/network dependencies. Empty public templates intentionally cannot connect.
+
+Application owner handles native/Dart/config/CI/README; independent reviewer handles compiled configuration tests, four native builds, effective metadata and fresh task-owned no-config launches; security reviewer audits pinned SDK callbacks/storage settings. CI compiles both flavors on Android/iOS and retains unconfigured debug APK/unsigned simulator artifacts for seven days. Run compiled configuration scenarios once in Linux/development CI, alongside normal full-suite checks. No distribution signing or store action.
+
+Acceptance: mismatch/missing/production cases fail before auth/HTTP; matching development/staging factories accept synthetic public values without contacting them; effective APK/plist IDs, labels, callbacks, backup/storage settings match source expectations; both flavors build on both platforms and coexist on fresh task-owned devices. Record actual no-config screenshots and clean up only created devices. Configuration guards reduce mistakes; they do not prove approved backend/Clerk/database pairing or measured SDK persistence/isolation. Real auth callbacks/storage/resume and authenticated UI remain live gates. Native fixture journeys and final artwork/fonts are separate future slices.
+
+## N02 — native fixture journeys
+
+Prerequisite N01 exact head 741b13d54368a172d1e681a613faae172f7246b2 passed all four CI/build/artifact gates in run41372909197. Parent approved this separate bounded slice. Architect owns integration_test, SDK dev dependency/lock and test tooling; independent reviewer owns native evidence and review/test results. Manager owns scope/checkpoint. No production fixture flag or main-entrypoint bypass is permitted.
+
+| Both fresh task-owned Android and iOS runtimes | Acceptance |
+| --- | --- |
+| Homeowner | Home, Requests/detail/back, Community, Account/Inbox/transcript/back, logout clears private content |
+| Provider | Home, Opportunities, Account child page, injected recoverable error/retry, back/logout |
+| Large text and semantics | Key journeys at 200% text; usable labels/controls, no overflow; record exact assertion and input methods |
+| Isolation of fixtures | Inject synthetic AuthSession and strict API transport only from integration_test; unexpected app service/channel/network calls fail; no real auth/account/server access |
+| Evidence | Exact commit, command, device/OS, clearly labelled synthetic screenshots, result and cleanup; distinguish tester input from OS input and screen-reader use |
+
+Production widgets/models are reused directly. Normal main.dart and shipping artifacts retain no fixture data or bypass. SDK integration_test is a development dependency. Branding/fonts, physical devices, VoiceOver/TalkBack, live auth and runtime secure-storage isolation remain separate unrun gates.
+
+## N03 — canonical native identity and Service areas presentation
+
+Parent accepted N02 at e8b21f65cb023c0fdc48c8cb98412e06acf7aa16 after all four CI41374602416 jobs and normal artifact uploads passed. N03 is a separate approved presentation slice, not additional API scope.
+
+Architect owns mobile UI, deterministic local icon generation/assets and affected tests. Independent reviewer owns source/asset review and fresh native evidence; manager owns checkpoints and CI. Reuse only public/bundleen/brand/bundleen-company-icon.svg geometry/colors, whose shared component is identified as approved in docs/homepage-v5.md. Record source/output hashes, dimensions, generator/version and platform padding. No new logo, font acquisition, runtime network asset, external registration or production setting change. Native platform fonts remain.
+
+Service areas error and Retry move directly below its heading. Compact app-authored disclosures while retaining read-only and no-account-eligibility meanings. At selected 100%/200% native viewports Retry must be initially visible and hit-testable without scroll. A modest header mark and reproducible native launcher derivatives must preserve usable back/title/sign-out at large text, without overlap or forced inputs. Distinct Dev/Staging names and provisional IDs remain.
+
+Acceptance: targeted UI/semantics/regression checks; independent canonical geometry/color/provenance review; both development/staging packaged icon/label inspection; fresh task-owned Android/iOS launcher and affected header/error/navigation captures at 100%/200%, exact source provenance and cleanup; resulting-head four-job normal CI/artifacts. Repeat only affected N02 coverage. Synthetic content is not app copy; tester/semantics evidence is not OS gesture, screen-reader, physical-device, live auth or release acceptance.
+
+## N04 — actual native navigation and first-transaction contract tracing
+
+Parent accepted N03 at f0272811b1c1604ae9025f149ccc81aca3bf2e55 after CI41377368867 and four normal artifact gates. N04 is approved for focused OS-input evidence, not another optional screen. Architect owns test-only readiness/wait instrumentation and only reproduced minimal product fixes; independent reviewer owns actual input, fresh task resources, evidence and cleanup. Manager traces the first transactional contract; security reviewer independently checks failure/duplicate semantics. No shared-server edits or business submissions.
+
+Confirm supported tooling first. Android uses actual system Back via adb. Installed simctl has no swipe command; iOS edge input requires a documented supported native UI surface or stays explicitly open. Test-only readiness messages and bounded waits permit external navigation without a shipping hook. Cover Requests/detail and Account child routes, top-level return and logout-cleared state at 100% / 200%; distinguish tester setup from actual external navigation input. Inspect affected semantics/labels/focus/targets without host accessibility-setting changes. Screen-reader/physical-device/live-auth claims require separate real evidence.
+
+Record exact source and input method, before/after state and any unsupported path. No forced success, error suppression, fixture flags or auth bypass. Reverify only affected code after a reproduced finding; normal resulting-head CI/artifacts remain required. First-transaction tracing covers endpoint/schema/authority, profile and membership prerequisites, duplicate submissions and ambiguous failures, and a proposed isolated disposable-fixture plan. Execution remains gated on parent-approved staging/Clerk ownership and live auth acceptance.
+
+## N04 public XCUITest bounded prototype — 2026-11-02
+
+Manager approved one implementation/compile/runtime prototype after source-only feasibility review. Scope is a single 100% Requests detail → list edge drag, using public XCTest/XCUIAutomation coordinates. Architect owns a minimal test-only N04NavigationUITests target, n04-ui scheme and integration-only marker/fixture entrypoint; independent reviewer owns one fresh task simulator, evidence and cleanup; security reviewer audits boundaries. Root checkpoints exact source before runtime. No CUA retry/private input injection or host/account/permission setting change.
+
+XCTest owns one initial launch. Before/after input must match nonce, Dart isolate and process identity, remain foreground, and expose independent Dart-model destination observation. Missing/backgrounded/replaced process or stale marker fails; no activate/relaunch/reinstall recovery. Actual native drag delivery is separate from marker/receipt acknowledgement. Use explicit task outputs/UDID, finite compile/start/test deadlines and cancellation only of task-owned processes. Local public simulator/ad-hoc signing is authorized, credentials/external signing is not.
+
+First prove runner compilation, app launch, stable accessibility readiness, native edge drag and same-engine model destination. No signed-out coordinator or full 100%/200% matrix is accepted from this one route. Report prototype evidence and supported VM discovery protocol for manager review before extending. Installed Flutter attach --machine with exact device/app ID supplies app.debugPort/wsUri without launching a second app; its runtime correlation still requires later verification. Normal main/schemes/artifacts remain fixture-free, test runner excluded from distribution. Restore ignored Flutter generated configuration to lib/main.dart and verify normal flavor entrypoints before CI. No unchanged Android/N02/N03 matrix rerun. Live/staging/business-write/release gates remain open.
+
+
+## N04 pointer forwarding checkpoint — 2026-11-05
+
+Previous source `08f3b245c4afee62df5a9f18e3e1a6ca4c7d2820` exposed the genuine Flutter accessibility marker and delivered one public XCTest edge drag, but no Dart destination was observed. It remains failed/partial; separate evidence is preserved under `evidence/native-xcui-prototype/semantics-forwarding`. The old task simulator and processes are gone and both normal flavor configurations were verified as `lib/main.dart`. The anomalous reported build elapsed time is retained without claiming a bounded wall duration.
+
+The approved next correction changes only the integration-test entrypoint: save the binding's device-pointer propagation value, enable it inside the protected body, log/assert it at ready, and restore it first in unconditional cleanup. Independent review accepted the source; no product, SDK or native-host change. One fresh 100% Requests detail-to-list XCTest run is authorized after exact source checkpoint, with one initial launch, bounded watchdogs and no retry. Native input and same-engine Dart destination are both required. Full matrix/signed-out, isolated staging/live auth, business writes and release remain gated.
+
+The return message to the Engineering chat remains blocked by automatic approval review pending direct human confirmation in this chat. Do not retry or relay around that restriction; ordinary repository/test work continues.
+
+
+### N04 bounded resume stopped before runtime — 2026-11-05
+
+Reviewed source checkpoint `447783746f809d4b1363ee78a57e5b97d6488da6` passed analyzer, formatting/diff checks and 29 focused Requests tests. The one fresh attempt stopped before configuration/build/launch: automatic approval review encountered a stream-disconnected transport/response-decoding error and explicitly reported the configuration action was not executed. This is a service failure, not an unsafe-action determination or a native test failure. Per the bounded-resume instruction, no retry occurred.
+
+The newly created task simulator `A03C2862-A90C-40E3-9931-CDD29A2108ED` was shut down and deleted; boot/cleanup sessions completed. Read-only verification confirms Generated.xcconfig and flutter_export_environment.sh still target `lib/main.dart`; neither was changed by the refused command. There is no app launch, native input or destination evidence for `4477837`. The pointer correction is source-reviewed but runtime-unverified. Resume requires a new explicit bounded assignment after service availability; full matrix and live gates remain open.
+
+
+## N04 one-route prototype passed — 2026-11-05
+
+A newly authorized single configuration attempt passed normal automatic approval and completed before simulator creation. Exact runtime checkpoint `933a1532ea5ccae25938cf897e31c587a5c99d20` has identical mobile source to reviewed `447783746f809d4b1363ee78a57e5b97d6488da6`. One fresh iPhone17/iOS26.4.1 simulator, one initial XCTest launch and one actual public edge drag passed the 100% homeowner Requests detail-to-list prototype. Genuine native ready/observed markers matched nonce1793892858912970, PID36787 and isolate5144479952354159. The observed marker is gated by independent Dart destination/model/foreground/guard assertions; screenshots confirm detail then list. Standalone Dart console and completed teardown proof are unavailable and not claimed.
+
+Independent reviewer accepted this bounded result; manager verified all14 evidence hashes in `evidence/native-xcui-prototype/pointer-forwarding-passed`. Prior failed/partial and service-blocked evidence remains separate. Config/build/test exited0 within monotonic watchdog deadlines; anomalous wall-clock divergence is preserved without inferring a cause or bounded wall duration. Exact task simulator7346B9BE-510B-440B-8142-1309F0D973BF and owned processes were cleaned up. Both normal development/staging configurations were explicitly regenerated and config/export targets verified as lib/main.dart. No unchanged Android/N02/N03 runtime matrix was repeated.
+
+Exact runtime source933a153 already passed normal four-job CI42023666940. This accepts only the single synthetic100%Requests prototype; full100%/200%navigation, signed-out, screen-reader, real-device and live-auth gates remain open. Next scope requires manager review. Return cross-chat handoff remains separately blocked pending direct human authorization; no retry or relay attempted.
+
+
+### Proposed full iOS matrix — source-only
+
+See `N04_IOS_MATRIX_PLAN.md`: eight native edge drags across100%/200% Requests and Inbox nested routes plus signed-out same-engine private-state observation, with a passive DEVICE-source pointer observer, per-step identity markers, finite watchdogs and exact cleanup. Independent design review refinements are incorporated. No implementation or execution is authorized until manager review and CI resolution or explicit capacity parking. Parent owns current344ec89 CI recovery; do not duplicate reruns or push a superseding head while it is active. Cross-chat return handoff remains separately blocked.
+
+
+### Full iOS matrix implementation authorized — 2026-11-05
+
+Manager approved N04_IOS_MATRIX_PLAN.md for bounded test-only implementation, independent source review, exact checkpoint and ONE controlled eight-drag native matrix. Use monotonic Stopwatch deadlines for every Dart acceptance/input wait; DateTime is provenance only. Source writer: Flutter architect; independent reviewer owns runtime/evidence; security reviewer audits private-state assertions. No runtime before reviewed source checkpoint. One fresh simulator/initial launch/engine across both scales; stop on failure with no retries.
+
+Parent verified recovered exact344ec89 CI42081425043 completed success: jobs127537885367,127537974660,127537886735,127537888467 and matching nonexpired artifacts13454432571,13451092319,13441951930,13441686454. No further rerun is needed for that head. Design-only commit830298f remains local until included with implementation/evidence. Existing cross-chat return block and live/backend/write/release gates remain unchanged.
+
+
+### Full iOS matrix first run — failed/partial
+
+Exactsource39c0dd3323aa6770d5da5962bc212380437ab6a3 passed independent code/security review, analyzer/format/Swift typecheck and29focused tests. The single approved native run delivered three100%XCTestdrags in one engine. Requests detail→list and Inbox conversation→list passed same-identity observed checkpoints. Inbox list→Account completed DEVICE down/move/up but failed a Dart destination finder for top Account helper copy; no step3observed acceptance. Signed-out,200%and finalcomplete were not reached. No retry or code correction followed.
+
+Available Dart log distinguishes the assertion failure from input/semantics failure; subsequent missing marker/black capture followed fixture teardown and is not evidence of a product black screen. Source diagnosis suggests the preserved Account scroll offset and lazy construction can omit the top helper from the finder tree. A proposed future test-only correction would assert Account route/widget and absent Inbox route/clearedstate without requiring offscreen copy; this needs manager review and is not implemented.
+
+Evidence is preserved in evidence/native-xcui-matrix/first-run, including3native deliveries,2native-captured DEVICE summaries,6screenshots and sanitized step3failure facts. Independent review complete; exact simulator6283FABD-C0C6-44C1-98C2-A279DF16A9D4/processes removed and both normalflavor config/export targets explicitly regenerated and verified lib/main.dart. Resulting-head normalCI remains required. Prior evidence preserved; fullmatrix/live/write/releasegates remain open. Returncross-chat handoff remains separately blocked.
+
+
+### Narrow Account destination correction authorized — 2026-11-06
+
+Manager accepted01cec01 evidence and four-jobCI42127809165, retaining failed/partialmatrix classification. Authorized one test-only replacement of the lazy/offscreen Account helper finder with current visible Account route/page/render assertions plus cleared/absent Inbox state. Two-scale retained-scroll regression and independent review/checks precede an exact checkpoint and ONE fresh fullmatrix run. All input/identity/foreground/private-state/finalcomplete gates and finite budgets stay unchanged. Prior first-run evidence remains separate; stop/preserve at first failure. Temporary SDK restored at the same pinned revision as recorded in TOOLCHAIN.md. No product/backend/live/account/settings/release changes or blocked return message.
+
+
+### Account correction matrix result — 2026-11-06, failed/partial
+
+Reviewed source b0c815baf5e0518333dd29bf0943a20ac526c527 passed two independently executed retained-scroll widget regressions at100%/200%, analyzer and formatting. The old Account helper omission was reproduced in widget tests and replaced with current visible Account route/page/render plus cleared Inbox assertions. The native run accepted all four100%checkpoints, including Account return and actual signed-out DEVICE input followed by two-second settling and explicit same-engine cleared private state. This remains synthetic auth/API evidence, not Clerk persistence.
+
+Step5 at200% completed actual native input and DEVICE sequence but failed the exact Your requests text finder. Five deliveries, four accepted destinations/native DEVICE summaries, ten captures; no accepted200%destination or finalcomplete. Prior first-run evidence preserved separately; new evidence at evidence/native-xcui-matrix/account-correction-run. Source inspection suggests Requests retained scroll/lazy header is a similar assertion issue, not a proven product failure. Proposed future review: visible Requests route/page checks with retained-scroll regression, plus audit analogous Inbox header assertion. No further fix/retry performed.
+
+Task simulator5216ED9D-02CD-4DD8-AA4E-F98B7A6507CB and owned processes removed; both normalflavor config/export targets restored to lib/main.dart using the restored identical pinned SDK. Resulting-head normal CI remains required. Fullmatrix/live/business-write/release gates and separate cross-chat return authorization block remain open.
+
+
+### Requests and Inbox destination correction authorized — 2026-11-06
+
+Manager accepted f8b1ec6 evidence and CI42179264067 while retaining overall failed/partialmatrix classification. Authorized narrow test-only Requests/Inbox list checks based on current visible route/page/render, matching model, retained expected fixture rows and absent detail routes; meaningful retained-scroll and active-detail/wrong-route regressions at both scales precede independent review, exactcheckpoint and ONE freshmatrix. Existing native action/DEVICEobserver/identity/foreground/privateclear/finalcomplete gates and all finite budgets remain unchanged. No product scroll-state change or additional feature scope. Prior failures remain separate; returncross-chat block remains unchanged.
+
+
+### Full synthetic iOS matrix passed — 2026-11-06
+
+Exact runtime source facb7800e1b5cef2a6cd6552fe70c4e517af4bee passed independent source review, six focused retained-scroll/wrong-route regressions, analyzer and formatting before execution. The one authorized native run passed all eight actual XCTest drags across100%/200%: Requests detail→list, Inbox conversation→list, Inbox list→Account and signed-out input→still signed out. One initial launch/engine, unchanged nonce1793977431714843/PID16037/isolate227204681218603; every observed checkpoint correlated DEVICE facts and independent Dart route/model/foreground/guard assertions. Both signed-out steps rechecked private clearing after completed input and settling; finalexactcomplete reached. No retry or deadline inflation.
+
+Independent reviewer inspected all17screenshots and8native/8DEVICE correlations. Evidence in evidence/native-xcui-matrix/list-correction-run preserves sanitized Dart milestones, finalcomplete, metadata and finite command outcomes. Prior failures/serviceblocked attempts remain unchanged. Fixture overlays limit visual-design claims; synthetic replacement between scales is setup, not persisted-session proof. Completed marker does not prove subsequent Dart teardown.
+
+Exact task simulator A7611DB3-5CF9-4538-B92B-BB0DD1E4C0AD and owned processes were removed; both normal flavor config/export targets explicitly regenerated and verified lib/main.dart. Resulting-head normal CI remains required. The approved synthetic iOS navigation matrix is complete; liveauth/storage revocation, screenreader/physicaldevice, backend/business writes and release gates remain separate and open. No unchanged Android/N02/N03 runtime repeated. Returncross-chat action remains separately blocked pending human authorization.

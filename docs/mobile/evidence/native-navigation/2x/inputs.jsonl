@@ -1,0 +1,5 @@
+{"utc": "2026-11-02T02:44:04.553761+00:00", "step": "request-detail-back", "command": ["/Users/lancedsilva/Library/Android/sdk/platform-tools/adb", "-s", "emulator-5586", "shell", "input", "keyevent", "KEYCODE_BACK"], "exitCode": 0}
+{"utc": "2026-11-02T02:44:22.578357+00:00", "step": "inbox-detail-back", "command": ["/Users/lancedsilva/Library/Android/sdk/platform-tools/adb", "-s", "emulator-5586", "shell", "input", "keyevent", "KEYCODE_BACK"], "exitCode": 0}
+{"utc": "2026-11-02T02:44:36.553211+00:00", "step": "inbox-list-back", "command": ["/Users/lancedsilva/Library/Android/sdk/platform-tools/adb", "-s", "emulator-5586", "shell", "input", "keyevent", "KEYCODE_BACK"], "exitCode": 0}
+{"utc": "2026-11-02T02:44:57.902527+00:00", "step": "account-top-back", "command": ["/Users/lancedsilva/Library/Android/sdk/platform-tools/adb", "-s", "emulator-5586", "shell", "input", "keyevent", "KEYCODE_BACK"], "exitCode": 0}
+{"utc": "2026-11-02T02:45:16.826433+00:00", "step": "signed-out-back", "command": ["/Users/lancedsilva/Library/Android/sdk/platform-tools/adb", "-s", "emulator-5586", "shell", "input", "keyevent", "KEYCODE_BACK"], "exitCode": 0}

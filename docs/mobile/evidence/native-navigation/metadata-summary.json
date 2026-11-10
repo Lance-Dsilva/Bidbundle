@@ -1,0 +1,841 @@
+{
+  "2x/request-detail.xml": [
+    {
+      "label": "Back",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        11,
+        74,
+        137,
+        200
+      ],
+      "widthDp": 48.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        765,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 120.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "2x/signed-out.xml": [
+    {
+      "label": "Sign in",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1533,
+        1017,
+        1670
+      ],
+      "widthDp": 363.43,
+      "heightDp": 52.19
+    },
+    {
+      "label": "Create an account",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1701,
+        1017,
+        1838
+      ],
+      "widthDp": 363.43,
+      "heightDp": 52.19
+    }
+  ],
+  "2x/account.xml": [
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        765,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 120.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Recent notifications",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1424,
+        1017,
+        1560
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Inbox",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1592,
+        1017,
+        1728
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Support requests",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1760,
+        1017,
+        1896
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Refresh account",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1928,
+        1017,
+        2064
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "2x/inbox-list.xml": [
+    {
+      "label": "Back",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        11,
+        74,
+        137,
+        200
+      ],
+      "widthDp": 48.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        765,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 120.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "View conversation",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        126,
+        1575,
+        797,
+        1712
+      ],
+      "widthDp": 255.62,
+      "heightDp": 52.19
+    },
+    {
+      "label": "Refresh inbox",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1817,
+        1017,
+        1953
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "2x/inbox-detail.xml": [
+    {
+      "label": "Back",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        11,
+        74,
+        137,
+        200
+      ],
+      "widthDp": 48.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        765,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 120.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "1x/request-detail.xml": [
+    {
+      "label": "Back",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        11,
+        74,
+        137,
+        200
+      ],
+      "widthDp": 48.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        879,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 76.57,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "1x/signed-out.xml": [
+    {
+      "label": "Sign in",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        693,
+        1017,
+        830
+      ],
+      "widthDp": 363.43,
+      "heightDp": 52.19
+    },
+    {
+      "label": "Create an account",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        861,
+        1017,
+        998
+      ],
+      "widthDp": 363.43,
+      "heightDp": 52.19
+    }
+  ],
+  "1x/account.xml": [
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        879,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 76.57,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Recent notifications",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1424,
+        1017,
+        1560
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Inbox",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1592,
+        1017,
+        1728
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Support requests",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1760,
+        1017,
+        1896
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Refresh account",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1928,
+        1017,
+        2064
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "1x/inbox-list.xml": [
+    {
+      "label": "Back",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        11,
+        74,
+        137,
+        200
+      ],
+      "widthDp": 48.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        879,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 76.57,
+      "heightDp": 48.0
+    },
+    {
+      "label": "View conversation",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        126,
+        830,
+        558,
+        966
+      ],
+      "widthDp": 164.57,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Refresh inbox",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1071,
+        1017,
+        1208
+      ],
+      "widthDp": 363.43,
+      "heightDp": 52.19
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ],
+  "1x/inbox-detail.xml": [
+    {
+      "label": "Back",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        11,
+        74,
+        137,
+        200
+      ],
+      "widthDp": 48.0,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Sign out",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        879,
+        74,
+        1080,
+        200
+      ],
+      "widthDp": 76.57,
+      "heightDp": 48.0
+    },
+    {
+      "label": "Refresh conversation",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        63,
+        1754,
+        1017,
+        1890
+      ],
+      "widthDp": 363.43,
+      "heightDp": 51.81
+    },
+    {
+      "label": "Home\nTab 1 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        0,
+        2127,
+        270,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Requests\nTab 2 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        270,
+        2127,
+        540,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Community\nTab 3 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        540,
+        2127,
+        810,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    },
+    {
+      "label": "Account\nTab 4 of 4",
+      "className": "android.widget.Button",
+      "focusable": "true",
+      "bounds": [
+        810,
+        2127,
+        1080,
+        2337
+      ],
+      "widthDp": 102.86,
+      "heightDp": 80.0
+    }
+  ]
+}

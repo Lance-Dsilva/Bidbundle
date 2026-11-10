@@ -1,0 +1,53 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "A7611DB3-5CF9-4538-B92B-BB0DD1E4C0AD",
+      "deviceName" : "Bundleen-N04-Matrix-Lists",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23E254a",
+      "osVersion" : "26.4.1",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "2m 44s",
+                  "durationInSeconds" : 164.57504200935364,
+                  "name" : "testNativeNavigationMatrix()",
+                  "nodeIdentifier" : "N04NavigationUITests/testNativeNavigationMatrix()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests/testNativeNavigationMatrix",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "N04NavigationUITests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "N04NavigationUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "n04-ui",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}
