@@ -276,7 +276,8 @@ it("does not offer raw coordinate controls while selected point metadata may be 
   vi.stubGlobal("fetch", vi.fn());
   renderEditor();
   expect(screen.queryByRole("textbox", { name: /latitude|longitude|coordinates/i })).not.toBeInTheDocument();
-  expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+  expect(screen.queryByRole("spinbutton", { name: /latitude|longitude|coordinates/i })).not.toBeInTheDocument();
+  expect(screen.getByRole("spinbutton", { name: /year business started/i })).toBeInTheDocument();
   expect(screen.queryByLabelText(/latitude|longitude|coordinates/i)).not.toBeInTheDocument();
 });
 

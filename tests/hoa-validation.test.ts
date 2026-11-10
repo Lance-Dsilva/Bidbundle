@@ -289,11 +289,14 @@ describe("visit status validation", () => {
 });
 
 describe("review validation", () => {
-  it("bounds the rating and requires a comment", () => {
+  it("requires a bounded rating and accepts an optional comment", () => {
     expect(reviewCreateSchema.safeParse({ rating: 5, comment: "Great work" }).success).toBe(true);
     expect(reviewCreateSchema.safeParse({ rating: 0, comment: "Bad bounds" }).success).toBe(false);
     expect(reviewCreateSchema.safeParse({ rating: 6, comment: "Bad bounds" }).success).toBe(false);
-    expect(reviewCreateSchema.safeParse({ rating: 4, comment: "" }).success).toBe(false);
+    expect(reviewCreateSchema.parse({ rating: 4, comment: "" })).toEqual({ rating: 4, comment: "" });
+    expect(reviewCreateSchema.parse({ rating: 4 })).toEqual({ rating: 4, comment: "" });
+    expect(reviewCreateSchema.safeParse({ comment: "A rating is still required." }).success).toBe(false);
+    expect(reviewCreateSchema.safeParse({ rating: 4, comment: "x".repeat(2001) }).success).toBe(false);
   });
 });
 

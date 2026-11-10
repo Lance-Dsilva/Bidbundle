@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { VisitPhotoPanel } from "@/components/hoa/VisitPhotoPanel";
 import { apiFetch } from "@/lib/api";
 import type { AgreementSummary, OccurrenceSummary, VisitSummary } from "@/lib/hoa-types";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
@@ -38,6 +39,7 @@ const NEXT_STATUSES: Record<string, string[]> = {
 export default function ProviderSchedulePage() {
   const { workspace, loading, error, refresh } = useProviderMarketplace();
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const [confirmation, setConfirmation] = useState<{
@@ -49,7 +51,8 @@ export default function ProviderSchedulePage() {
   const validConfirmation = Boolean(confirmation && currentVisit && currentVisit.status === confirmation.previousStatus &&
     currentVisit.stopLabel === confirmation.stopLabel && currentOccurrence?.serviceDate === confirmation.serviceDate &&
     workspace?.agreements.some((agreement) => agreement.id === confirmation.agreementId && agreement.status === "active") &&
-    (NEXT_STATUSES[currentVisit.status] ?? []).includes(confirmation.status));
+    (NEXT_STATUSES[currentVisit.status] ?? []).includes(confirmation.status) &&
+    (confirmation.status !== "completed" || !currentVisit.requiresAfterPhoto || currentVisit.photos?.some((photo) => photo.purpose === "visit_after")));
 
 
   const agreementsById = useMemo(() => {
@@ -137,9 +140,12 @@ export default function ProviderSchedulePage() {
               </p>
               {occurrences.map((occurrence) => (
                 <OccurrenceBlock
-                  busy={busy}
+                  busy={busy || photoBusy}
                   key={occurrence.id}
                   occurrence={occurrence}
+                  canUploadPhotos={agreementsById.get(agreementId)?.status === "active"}
+                  onPhotosUpdated={() => refresh({ background: true })}
+                  onPhotoBusyChange={setPhotoBusy}
                   onPublish={(stops) =>
                     void call(`/provider/marketplace/occurrences/${occurrence.id}/plan`, {
                       stops,
@@ -150,6 +156,10 @@ export default function ProviderSchedulePage() {
                     if (status === "completed" || status === "skipped" || status === "blocked") {
                       const visit = occurrence.visits.find((item) => item.id === visitId);
                       if (!visit) return;
+                      if (status === "completed" && visit.requiresAfterPhoto && !visit.photos?.some((photo) => photo.purpose === "visit_after")) {
+                        setActionError("Upload at least one after photo and refresh this visit before marking it complete.");
+                        return;
+                      }
                       setActionError(null);
                       setConfirmation({
                         agreementId, occurrenceId: occurrence.id, visitId, previousStatus: visit.status,
@@ -175,7 +185,7 @@ export default function ProviderSchedulePage() {
           valid={validConfirmation} error={actionError}
           onCancel={() => setConfirmation(null)}
           onConfirm={async () => {
-            if (!validConfirmation || busy) return false;
+            if (!validConfirmation || busy || photoBusy) return false;
             return call(`/provider/marketplace/visits/${confirmation.visitId}/status`, {
               status: confirmation.status,
               completionNote: confirmation.status === "skipped" || confirmation.status === "blocked"
@@ -185,7 +195,7 @@ export default function ProviderSchedulePage() {
           description={<>
             <p>“{confirmation.title}” — {confirmation.stopLabel}, service day {new Date(confirmation.serviceDate).toLocaleDateString()}.</p>
             <p>{confirmation.status === "completed"
-              ? "This marks this visit complete. The resident may be notified and asked to review the service, according to their preferences."
+              ? "This marks this visit complete. The resident can view its private photos and may receive a completion notice, followed by a review reminder about two hours later, according to their preferences."
               : `This marks this visit ${confirmation.status}. The resident may be notified according to their preferences. It does not automatically schedule another visit.`}</p>
           </>}
         />
@@ -199,11 +209,17 @@ function OccurrenceBlock({
   busy,
   onPublish,
   onStatus,
+  canUploadPhotos,
+  onPhotosUpdated,
+  onPhotoBusyChange,
 }: {
   occurrence: OccurrenceSummary;
   busy: boolean;
   onPublish: (stops: Array<{ visitId: string; stopRank: number }>) => void;
   onStatus: (visitId: string, status: string) => void;
+  canUploadPhotos: boolean;
+  onPhotosUpdated: () => Promise<unknown>;
+  onPhotoBusyChange: (busy: boolean) => void;
 }) {
   // Local ordering only until it is published; the server is what makes an
   // order authoritative, and it re-reads the visits it is given.
@@ -291,7 +307,8 @@ function OccurrenceBlock({
                 {(NEXT_STATUSES[visit.status] ?? []).map((status) => (
                   <button
                     className="rounded-md px-2 py-1 text-xs font-semibold"
-                    disabled={busy}
+                    disabled={busy || (status === "completed" && visit.requiresAfterPhoto && !visit.photos?.some((photo) => photo.purpose === "visit_after"))}
+                    title={status === "completed" && visit.requiresAfterPhoto && !visit.photos?.some((photo) => photo.purpose === "visit_after") ? "Upload an after photo before marking this visit complete." : undefined}
                     key={status}
                     onClick={() => onStatus(visit.id, status)}
                     style={{ background: "var(--cream-100)", color: "var(--ink-700)" }}
@@ -302,6 +319,8 @@ function OccurrenceBlock({
                 ))}
               </div>
             </div>
+            {canUploadPhotos && visit.status === "unscheduled" && <p className="mt-3 text-xs text-amber-800">Publish the day plan before uploading visit photos.</p>}
+            <VisitPhotoPanel visitId={visit.id} photos={visit.photos ?? []} requiresAfterPhoto={visit.requiresAfterPhoto} canUpload={canUploadPhotos && ["scheduled", "en_route", "in_progress"].includes(visit.status)} disabled={busy} onUpdated={onPhotosUpdated} onBusyChange={onPhotoBusyChange} />
           </li>
         ))}
       </ol>

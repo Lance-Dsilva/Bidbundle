@@ -1,3 +1,5 @@
+import type { PoolQuote, PoolTemplate, PoolTier, PoolTierCounts, PoolAgreementSnapshot } from "@/lib/pool-bid-template";
+
 export type HoaRequestStatusValue =
   | "draft"
   | "collecting_interest"
@@ -152,6 +154,8 @@ export type BidSummary = {
   providerName: string;
   providerCompany: string | null;
   providerVerified: boolean;
+  providerRating?: number | null;
+  providerReviewCount?: number;
   status: BidStatusValue;
   amountCents: number;
   currency: string;
@@ -168,6 +172,13 @@ export type BidSummary = {
   validUntil: string | null;
   version: number;
   submittedAt: string;
+  poolQuote?: PoolQuote | null;
+  poolTemplate?: PoolTemplate | null;
+  tierCounts?: PoolTierCounts;
+  /** Set by the server when resident-facing identifying fields are redacted. */
+  identityHidden?: boolean;
+  providerYearsInBusiness?: number | null;
+  revisions?: Array<{ version: number; amountCents: number; submittedAt: string; poolQuote: PoolQuote | null }>;
 };
 
 export type HoaRequestSummary = {
@@ -180,6 +191,9 @@ export type HoaRequestSummary = {
   recurrenceLabel: string | null;
   recurrenceIntervalDays: number | null;
   totalOccurrences: number;
+  requiresAfterPhoto?: boolean;
+  reviewAverage?: number | null;
+  reviewCount?: number;
   status: HoaRequestStatusValue;
   opensAt: string | null;
   enrollmentClosesAt: string | null;
@@ -194,6 +208,9 @@ export type HoaRequestSummary = {
   bidCount: number;
   viewerResponse: "joined" | "declined" | null;
   createdAt: string;
+  poolTemplate?: PoolTemplate | null;
+  tierCounts?: PoolTierCounts;
+  viewerPoolTier?: PoolTier | null;
 };
 
 export type AgreementSummary = {
@@ -216,6 +233,17 @@ export type AgreementSummary = {
   endDate: string | null;
   status: "active" | "completed" | "cancelled";
   createdAt: string;
+  /** Server must redact other households before returning a resident's snapshot. */
+  poolSnapshot?: PoolAgreementSnapshot | null;
+};
+
+export type VisitPhotoRef = {
+  id: string;
+  purpose: "visit_before" | "visit_after";
+  src: string;
+  createdAt: string;
+  marketingConsented: boolean;
+  canConsent?: boolean;
 };
 
 export type VisitSummary = {
@@ -251,6 +279,10 @@ export type VisitSummary = {
   status: VisitStatusValue;
   completionNote: string | null;
   completedAt: string | null;
+  requiresAfterPhoto?: boolean;
+  photos?: VisitPhotoRef[];
+  canReview?: boolean;
+  viewerReview?: { rating: number; comment: string; createdAt: string } | null;
 };
 
 export type OccurrenceSummary = {
@@ -359,6 +391,7 @@ export type ProviderFeedItem = {
   description: string;
   recurrenceLabel: string | null;
   totalOccurrences: number;
+  requiresAfterPhoto?: boolean;
   /** Locked participating homes once bidding is open. Never a per-home list. */
   homeCount: number;
   /**
@@ -374,6 +407,8 @@ export type ProviderFeedItem = {
   biddingClosesAt: string | null;
   /** The caller's own bid. Competitors' amounts are never included. */
   myBid: BidSummary | null;
+  poolTemplate?: PoolTemplate | null;
+  tierCounts?: PoolTierCounts;
 };
 
 export type ProviderHoaWorkspace = {

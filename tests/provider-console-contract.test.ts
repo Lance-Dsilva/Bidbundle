@@ -104,7 +104,9 @@ function matches(route: string, path: string): boolean {
  * collapse to a single segment so a dynamic route can match them.
  */
 function calledRequests(source: string): Array<{ method: string; path: string }> {
-  const body = stripComments(source);
+  // Normalize complete template placeholders before scanning delimiters;
+  // encodeURIComponent(id) contains a ')' that is not the URL's end.
+  const body = stripComments(source).replace(/\$\{[^}]*\}/g, "x");
   const found: Array<{ method: string; path: string }> = [];
 
   const collect = (pattern: RegExp) => {

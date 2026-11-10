@@ -44,6 +44,7 @@ vi.mock("@/lib/server/db", () => ({
       postalCode: "78758", locality: "Austin", region: "TX",
     } }) },
     communityStaffAssignment: { findFirst: async () => null },
+    review: { groupBy: async () => [] },
     serviceBid: {
       findUnique: async () => null,
       create: (args: Row) => { state.writes.push(args); return args; },

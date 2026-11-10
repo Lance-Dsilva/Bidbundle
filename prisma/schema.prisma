@@ -111,6 +111,7 @@ enum AdminAuditAction {
   marketplace_recovery_action
   review_moderated
   provider_service_area_changed
+  provider_bid_invited
   support_ticket_assigned
   support_ticket_status_changed
   support_ticket_priority_changed
@@ -383,6 +384,8 @@ model User {
   auditLogEntries              AdminAuditLog[]             @relation("AuditActor")
   providerServiceAreas         ProviderServiceArea[]
   serviceBids                  ServiceBid[]                @relation("BidProvider")
+  bidInvitationsReceived       ProviderBidInvitation[]     @relation("BidInviteProvider")
+  bidInvitationsSent           ProviderBidInvitation[]     @relation("BidInviteSender")
   serviceVisitsAsHomeowner     ServiceVisit[]              @relation("VisitHomeowner")
   serviceAgreementsWon         ServiceAgreement[]          @relation("AgreementProvider")
   serviceAgreementsAwarded     ServiceAgreement[]          @relation("AgreementAwarder")
@@ -433,6 +436,9 @@ model User {
   amenityReviewsModerated  AmenityReview[]         @relation("AmenityReviewModerator")
   amenityReviewResponses   AmenityReviewResponse[] @relation("AmenityReviewResponder")
   mediaUploaded            MediaAsset[]            @relation("MediaUploader")
+  visitPhotosConsented     MediaAsset[]            @relation("VisitPhotoConsenter")
+  visitPhotoConsentsChanged MediaAsset[]           @relation("VisitPhotoConsentActor")
+  visitPhotoPoliciesUpdated CategoryVisitPolicy[]
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -786,6 +792,10 @@ model HoaServiceRequest {
   recurrenceIntervalDays Int?
   /// How many occurrences the agreement materializes. 1 for one-off work.
   totalOccurrences       Int       @default(1)
+  /// Versioned, opt-in pool-care monthly scope. Legacy requests remain null.
+  poolTemplate           Json?
+  /// Category proof policy frozen at creation. Existing requests remain exempt.
+  requiresAfterPhoto     Boolean   @default(false)
 
   /// Optional requests: minimum/maximum homes needed before an award.
   minHomes Int?
@@ -807,6 +817,7 @@ model HoaServiceRequest {
   bids           ServiceBid[]
   agreement      ServiceAgreement?
   conversations  ServiceConversation[]
+  providerInvitations ProviderBidInvitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -831,6 +842,8 @@ model HoaRequestParticipation {
   unit      CommunityUnit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
   response  ParticipationResponse @default(joined)
+  /// Resident-selected applicable pool size, frozen with the audience.
+  poolTier  String?
   joinedAt  DateTime              @default(now())
   updatedAt DateTime              @default(now()) @updatedAt
 
@@ -902,6 +915,8 @@ model ServiceBid {
   pricingBasis BidPricingBasis
   /// Per-home price in cents when the basis needs a breakdown.
   perHomeCents Int?
+  /// Monthly tier rates and structured scope; amountCents remains the whole-term total.
+  poolQuote Json?
 
   proposedStartDate      DateTime?
   estimatedDurationLabel String?
@@ -916,6 +931,7 @@ model ServiceBid {
   decidedAt   DateTime?
 
   agreement ServiceAgreement?
+  revisions ServiceBidRevision[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -923,6 +939,36 @@ model ServiceBid {
   @@unique([requestId, providerUserId])
   @@index([providerUserId, status])
   @@index([requestId, status])
+}
+
+/// Database-appended commercial snapshots, not an editable version counter.
+model ServiceBidRevision {
+  id String @id @default(cuid())
+  bidId String
+  bid ServiceBid @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  version Int
+  amountCents Int
+  currency String
+  submittedAt DateTime
+  poolQuote Json?
+  snapshot Json
+  createdAt DateTime @default(now())
+
+  @@unique([bidId, version])
+}
+
+/// One named, registered provider invitation per request; delivery uses outbox dedupe.
+model ProviderBidInvitation {
+  id String @id @default(cuid())
+  requestId String
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  providerUserId String
+  provider User @relation("BidInviteProvider", fields: [providerUserId], references: [id], onDelete: Restrict)
+  invitedByUserId String
+  invitedBy User @relation("BidInviteSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([requestId, providerUserId])
 }
 
 /// The accepted commercial terms, snapshotted at award time so later bid or
@@ -954,6 +1000,8 @@ model ServiceAgreement {
   cadenceLabel    String?
   /// Number of participating homes locked at award time.
   lockedHomeCount Int
+  /// Immutable tier/rate/household snapshot; no average is used as a charge.
+  poolSnapshot Json?
 
   startDate DateTime?
   endDate   DateTime?
@@ -1054,8 +1102,11 @@ model ServiceVisit {
   statusChangedAt DateTime?
   completionNote  String?
   completedAt     DateTime?
+  /// Copied from the awarded request; later category policy edits do not rewrite work.
+  requiresAfterPhoto Boolean @default(false)
 
   reviews Review[]
+  photos MediaAsset[] @relation("VisitPhotos")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1327,6 +1378,8 @@ model ProviderProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   companyName String?
+  /// Optional, provider-reported business history, distinct from platform tenure.
+  businessStartedYear Int?
   bio         String?
   trades      String[] @default([])
 
@@ -1907,6 +1960,8 @@ enum MediaPurpose {
   amenity_issue
   provider_license
   provider_insurance
+  visit_before
+  visit_after
 }
 
 enum CredentialReviewStatus {
@@ -2337,6 +2392,16 @@ model MediaAsset {
   community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   purpose MediaPurpose
+  visitId String?
+  visit ServiceVisit? @relation("VisitPhotos", fields: [visitId], references: [id], onDelete: Restrict)
+  /// Resident opt-in to this immutable asset/checksum; never a public-access grant.
+  marketingConsentUserId String?
+  marketingConsentUser User? @relation("VisitPhotoConsenter", fields: [marketingConsentUserId], references: [id], onDelete: Restrict)
+  marketingConsentedAt DateTime?
+  marketingConsentVersion String?
+  /// Required actor for grants and revocations, including an original consenter who moved.
+  marketingConsentChangedByUserId String?
+  marketingConsentChangedBy User? @relation("VisitPhotoConsentActor", fields: [marketingConsentChangedByUserId], references: [id], onDelete: Restrict)
   providerProfileId String?
   providerProfile ProviderProfile? @relation("ProviderDocuments", fields: [providerProfileId], references: [id], onDelete: Cascade)
   licenseFor ProviderProfile? @relation("ProviderLicenseDocument")
@@ -2388,10 +2453,20 @@ model MediaAsset {
   coverOf Amenity? @relation("AmenityCover")
 
   @@index([providerProfileId, purpose, status])
+  @@index([visitId, purpose, status])
   @@index([amenityId, status, position])
   @@index([reviewId, status])
   @@index([issueId, status])
   @@index([communityId, purpose, createdAt])
+}
+
+/// Admin-owned defaults for future requests. Historical requests/visits are not backfilled.
+model CategoryVisitPolicy {
+  category String @id
+  requiresAfterPhoto Boolean @default(false)
+  updatedByUserId String?
+  updatedBy User? @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 /// Self-described contact responsibility, never an application authorization role.

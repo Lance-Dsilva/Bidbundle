@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { normalizeServiceCategory, SERVICE_CATEGORIES } from "@/lib/service-categories";
+import { POOL_TIERS, poolTemplateSchema, poolQuoteSchema } from "@/lib/pool-bid-template";
 
 import {
   SERVICE_RADIUS_MAX_MILES,
@@ -199,6 +200,7 @@ export const hoaRequestCreateSchema = z
     recurrenceLabel: boundedText(MAX_HOA_RECURRENCE_LENGTH),
     recurrenceIntervalDays: z.union([z.number().int().min(1).max(365), z.null()]).optional(),
     totalOccurrences: z.number().int().min(1).max(104).default(1),
+    poolTemplate: poolTemplateSchema.nullable().optional(),
     startDate: optionalDateTime,
     enrollmentClosesAt: optionalDateTime,
     biddingClosesAt: optionalDateTime,
@@ -208,6 +210,9 @@ export const hoaRequestCreateSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.poolTemplate && (value.category !== "pool_care" || value.kind !== "optional_group")) {
+      context.addIssue({ code: "custom", path: ["poolTemplate"], message: "The pool template requires an optional pool-care request so each resident can select their pool size." });
+    }
     if (value.kind === "compulsory_recurring") {
       if (!value.recurrenceLabel) {
         context.addIssue({
@@ -273,7 +278,7 @@ export const hoaRequestTransitionSchema = z
 export type HoaRequestTransitionInput = z.infer<typeof hoaRequestTransitionSchema>;
 
 export const participationResponseSchema = z
-  .object({ response: z.enum(["joined", "declined"]) })
+  .object({ response: z.enum(["joined", "declined"]), poolTier: z.enum(POOL_TIERS).nullable().optional() })
   .strict();
 
 export type ParticipationResponseInput = z.infer<typeof participationResponseSchema>;
@@ -375,7 +380,7 @@ export type ServiceAreaInput = z.infer<typeof serviceAreaSchema>;
 
 export const bidSubmitSchema = z
   .object({
-    amountCents: z.number().int().min(0).max(MAX_BID_AMOUNT_CENTS),
+    amountCents: z.number().int().min(0).max(MAX_BID_AMOUNT_CENTS).optional(),
     pricingBasis: z.literal("total"),
     // Averages are display-only, never separately supplied contract terms.
     perHomeCents: z.null().optional(),
@@ -385,8 +390,17 @@ export const bidSubmitSchema = z
     exclusions: boundedText(MAX_BID_TEXT_LENGTH),
     cadenceLabel: boundedText(MAX_HOA_RECURRENCE_LENGTH),
     validUntil: optionalDateTime,
+    poolQuote: poolQuoteSchema.nullable().optional(),
+    expectedBidVersion: z.number().int().positive().optional(),
   })
-  .strict();
+  .strict().superRefine((value, context) => {
+    if (!value.poolQuote && value.amountCents === undefined) {
+      context.addIssue({ code: "custom", path: ["amountCents"], message: "Enter the whole-job total." });
+    }
+    if (value.poolQuote && !value.validUntil) {
+      context.addIssue({ code: "custom", path: ["validUntil"], message: "Set when this pool quote expires." });
+    }
+  });
 
 export type BidSubmitInput = z.infer<typeof bidSubmitSchema>;
 
@@ -445,7 +459,7 @@ export type VisitStatusInput = z.infer<typeof visitStatusSchema>;
 export const reviewCreateSchema = z
   .object({
     rating: z.number().int().min(1).max(5),
-    comment: z.string().trim().min(1, "Write a short review.").max(MAX_REVIEW_COMMENT_LENGTH),
+    comment: z.string().trim().max(MAX_REVIEW_COMMENT_LENGTH).default(""),
   })
   .strict();
 

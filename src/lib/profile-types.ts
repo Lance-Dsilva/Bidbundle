@@ -43,6 +43,8 @@ export type HomeownerProfile = {
 };
 
 export type ProviderProfile = {
+  /** Provider-reported business founding year, distinct from account age. */
+  businessStartedYear?: number | null;
   companyName: string | null;
   bio: string | null;
   trades: string[];

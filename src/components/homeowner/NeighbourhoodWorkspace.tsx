@@ -7,6 +7,7 @@ import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { HomeAddressCompletion } from "@/components/homeowner/HomeAddressCompletion";
+import { ResidentVisitCard } from "@/components/hoa/ResidentHoaWorkspace";
 import { Button } from "@/components/ui/Button";
 import type { BidSummary } from "@/lib/hoa-types";
 import type { NeighborhoodRequestView } from "@/lib/neighborhood-types";
@@ -71,10 +72,30 @@ function defaultBiddingDeadline(): string {
 
 export function NeighbourhoodWorkspace() {
   const {
-    hub, loading, error, busy, missingAddresses, act,
+    hub, loading, error, busy, missingAddresses, act, refresh,
     addressRequiredRequestId, resumeJoin, cancelAddress,
     setError, ownerError, ownerSuccess, clearOwnerFeedback,
   } = useNeighbourhood();
+  const [reviewBusy, setReviewBusy] = useState<string | null>(null);
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
+  const reviewInFlight = useRef(false);
+
+  const reviewVisit = async (visitId: string, rating: number, comment: string) => {
+    if (busy || reviewInFlight.current) return;
+    reviewInFlight.current = true;
+    setReviewBusy(visitId); setReviewNotice(null); setError(null);
+    try {
+      const response = await fetch(`/api/hoa/visits/${encodeURIComponent(visitId)}/review`, {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, comment }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? "Could not save your review.");
+      setReviewNotice("Review submitted — thank you.");
+      await refresh();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not save your review."); }
+    finally { reviewInFlight.current = false; setReviewBusy(null); }
+  };
 
   if (loading) {
     return (
@@ -132,6 +153,7 @@ export function NeighbourhoodWorkspace() {
           {error}
         </p>
       ) : null}
+      {reviewNotice && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{reviewNotice}</p>}
 
       {missingAddresses ? (
         <div
@@ -163,7 +185,7 @@ export function NeighbourhoodWorkspace() {
         hub.requests.map((request) => (
           <RequestCard
             key={request.id}
-            busy={busy || Boolean(addressRequiredRequestId)}
+            busy={busy || reviewBusy !== null || Boolean(addressRequiredRequestId)}
             onAct={act}
             request={request}
             managerName={hub.managerName}
@@ -174,6 +196,8 @@ export function NeighbourhoodWorkspace() {
             needsAddress={addressRequiredRequestId === request.id}
             onAddressComplete={resumeJoin}
             onAddressCancel={cancelAddress}
+            onReview={reviewVisit}
+            onRefresh={refresh}
           />
         ))
       )}
@@ -193,6 +217,8 @@ function RequestCard({
   needsAddress,
   onAddressComplete,
   onAddressCancel,
+  onReview,
+  onRefresh,
 }: {
   request: NeighborhoodRequestView;
   busy: boolean;
@@ -205,6 +231,8 @@ function RequestCard({
   needsAddress: boolean;
   onAddressComplete: () => Promise<void>;
   onAddressCancel: () => void;
+  onReview: (visitId: string, rating: number, comment: string) => Promise<void>;
+  onRefresh: () => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -494,20 +522,12 @@ function RequestCard({
           <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--ink-400)" }}>
             Your visits
           </p>
-          <ul className="mt-2 space-y-1 text-xs" style={{ color: "var(--ink-700)" }}>
+          <div className="mt-2 grid gap-3 md:grid-cols-2">
             {request.myVisits.map((visit) => (
-              <li key={visit.id}>
-                {visit.scheduledDate
-                  ? new Date(visit.scheduledDate).toLocaleDateString()
-                  : "Not scheduled yet"}
-                {visit.windowStart && visit.windowEnd
-                  ? ` · ${visit.windowStart}–${visit.windowEnd}`
-                  : ""}{" "}
-                · {visit.status.replace("_", " ")}
-                {visit.addressLine1 ? ` · ${visit.addressLine1}` : ""}
-              </li>
+              <ResidentVisitCard key={visit.id} visit={visit} busy={busy ? "request-action" : null}
+                onRefresh={onRefresh} onReview={(rating, comment) => void onReview(visit.id, rating, comment)} />
             ))}
-          </ul>
+          </div>
         </div>
       ) : null}
       {confirmation ? (
