@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
 import { LandingInteractions } from "@/components/marketing/LandingInteractions";
+import pricingExample from "@/content/marketing/homepage-example.json";
 
 import "./landing.css";
 
@@ -17,12 +18,14 @@ const homeownerCta = "/get-started?role=homeowner";
 const providerCta = "/get-started?role=provider";
 const managerCta = "/community-onboarding";
 
-const pricingExample = {
-  service: "Pool cleaning",
-  soloMonthlyPrice: "$180",
-  groupMonthlyPrice: "$150",
-  participatingHomes: 20,
-};
+const exampleMoney = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: pricingExample.currency,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const exampleSavingsCents = pricingExample.soloMonthlyCents - pricingExample.groupMonthlyCents;
+const exampleSavingsPercent = Math.round(exampleSavingsCents / pricingExample.soloMonthlyCents * 100);
 
 const navigation = [
   { href: "#how-it-works", label: "How it works" },
@@ -173,13 +176,19 @@ export default function HomePage() {
               <dl className="example-prices">
                 <div>
                   <dt>On your own</dt>
-                  <dd><strong>{pricingExample.soloMonthlyPrice}</strong><span> /month per home</span></dd>
+                  <dd><strong>{exampleMoney.format(pricingExample.soloMonthlyCents / 100)}</strong><span> /month per home</span></dd>
                 </div>
                 <div>
                   <dt>With {pricingExample.participatingHomes} homes</dt>
-                  <dd><strong>{pricingExample.groupMonthlyPrice}</strong><span> /month per home</span></dd>
+                  <dd><strong>{exampleMoney.format(pricingExample.groupMonthlyCents / 100)}</strong><span> /month per home</span></dd>
                 </div>
               </dl>
+              <p className="example-savings">
+                Save {exampleMoney.format(exampleSavingsCents / 100)}/month per home — about {exampleSavingsPercent}% in this example.
+              </p>
+              <p className="example-request">
+                Illustrative request: {pricingExample.participatingHomes} homes joined · {pricingExample.providerBids} competing provider bids.
+              </p>
               <p className="example-note">Example pricing. Your community’s price is set by real provider bids.</p>
             </div>
             <div className="hero-actions">
