@@ -40,13 +40,24 @@ beforeEach(() => { media = installMatchMediaStub(false); });
 afterEach(cleanup);
 
 describe("V5 homepage copy and product boundaries", () => {
-  it("leads with the complete approved message and pricing opportunity", () => {
+  it("leads with a clearly qualified, per-home pricing example", () => {
     render(<HomePage />);
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading).toHaveTextContent(/^Home services, with your neighbors\.$/);
     const hero = heading.closest("section")!;
     expect(hero).toHaveTextContent("A neighborhood approach");
-    expect(hero).toHaveTextContent("Bring nearby homes into one service request. Local providers bid on the grouped work, creating an opportunity for better pricing.");
+    expect(hero).toHaveTextContent("Bring nearby homes into one service request. Compare local provider bids on the grouped work.");
+    const example = within(hero).getByText("Example · Pool cleaning").parentElement!;
+    const solo = within(example).getByText("On your own").parentElement!;
+    const group = within(example).getByText("With 20 homes").parentElement!;
+    expect(within(solo).getByText("$180")).toBeInTheDocument();
+    expect(within(group).getByText("$150")).toBeInTheDocument();
+    for (const price of [solo, group]) {
+      expect(within(price).getByText("/month per home")).toBeInTheDocument();
+    }
+    expect(example).toHaveTextContent("Example pricing. Your community’s price is set by real provider bids.");
+    expect(screen.getAllByText("Example pricing. Your community’s price is set by real provider bids.")).toHaveLength(1);
+    expect(document.body).not.toHaveTextContent(/not guaranteed|opportunity for better pricing/i);
     expect(hero).toHaveTextContent("Availability varies by neighborhood.");
     expect(within(hero).getByRole("link", { name: "Get started" })).toHaveAttribute("href", "#start");
     expect(within(hero).getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "#how-it-works");
@@ -69,11 +80,11 @@ describe("V5 homepage copy and product boundaries", () => {
     }
   });
 
-  it("keeps the approved shared-request explanation and discount qualification", () => {
+  it("explains the shared-request advantage through competing bids", () => {
     render(<HomePage />);
     const story = screen.getByRole("heading", { name: "More homes. One shared request." }).closest("section")!;
     expect(story).toHaveTextContent("When nearby homes need the same service, they can join one request.");
-    expect(story).toHaveTextContent("More work in one place can mean less travel for providers and simpler planning for the group. That creates an opportunity for better pricing. Discounts are not guaranteed.");
+    expect(story).toHaveTextContent("One shared request lets providers plan nearby visits together and compete for the group’s business. Neighbors can compare those bids together.");
   });
 
   it("explains four ordered stages with eligibility and authorized-manager selection", () => {
@@ -127,9 +138,9 @@ describe("V5 homepage copy and product boundaries", () => {
     const { container } = render(<HomePage />);
     const answers = [
       ["Do I need to be part of an HOA?", "No. Eligible homeowners who are not part of an HOA can open or join requests. HOA residents join optional work through requests opened by their HOA manager."],
-      ["Is Bundleen available at my address?", "Add your address during onboarding to check neighborhood eligibility. Creating an account does not guarantee coverage or provider bids."],
+      ["Is Bundleen available at my address?", "Add your address during onboarding to check whether your home is in an active Bundleen neighborhood and explore available requests."],
       ["Who chooses the service provider?", "Your community’s authorized manager selects the provider after bidding. Participating homes then follow the service schedule."],
-      ["Will I get a lower price?", "Grouped work creates an opportunity for better pricing. Actual bids depend on the work, participating homes and service availability. A lower price or discount is not guaranteed."],
+      ["Will I get a lower price?", "Competing provider bids set the price for your group’s service needs. The number of participating homes helps shape those bids. Residents see the final price before they are charged."],
     ];
     const disclosures = [...container.querySelectorAll("details")];
     expect(disclosures).toHaveLength(answers.length);
@@ -320,7 +331,9 @@ describe("semantics, original scenes and honest claims", () => {
   it("makes no unsupported price, timing, review, qualification or revenue claims", () => {
     render(<HomePage />);
     const text = document.body.textContent ?? "";
-    expect(text).not.toMatch(/\d+\s?%|\$\d|\d(?:\.\d)?\s?[★⭐]/);
+    // The explicitly labeled illustration is the only permitted price claim.
+    const example = screen.getByText("Example · Pool cleaning").parentElement!;
+    expect(text.replace(example.textContent!, "")).not.toMatch(/\d+\s?%|\$\d|\d(?:\.\d)?\s?[★⭐]/);
     for (const phrase of ["guaranteed volume", "zero marketing", "48-hour opt-out", "without lifting a finger", "do almost nothing", "pre-qualified", "auto-enrolled", "background-checked", "vetted providers", "guaranteed savings", "book now", "join for free"]) {
       expect(text.toLowerCase()).not.toContain(phrase);
     }
