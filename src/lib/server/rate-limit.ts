@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
+import { getRateLimitRedisCredentials as getRedisCredentials } from "@/lib/server/rate-limit-config";
 import { isUnknownIp } from "@/lib/server/request-ip";
 
 /**
@@ -108,34 +109,7 @@ export function buildIdentifier(parts: readonly string[]): string {
   return createHash("sha256").update(`${salt}:${parts.join("|")}`).digest("hex").slice(0, 32);
 }
 
-type RedisCredentials = {
-  url: string;
-  token: string;
-};
-
-/**
- * Supports both names emitted by a direct Upstash integration and the legacy
- * Vercel KV names that Vercel's Upstash Marketplace integration may inject.
- * A URL and token must come from the same pair so credentials from separate
- * resources cannot accidentally be combined.
- */
-function getRedisCredentials(): RedisCredentials | null {
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return {
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    };
-  }
-
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    return {
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN,
-    };
-  }
-
-  return null;
-}
+// Shared with the opt-in build diagnostic; it never exports credentials to a client.
 
 export function isRedisConfigured(): boolean {
   return getRedisCredentials() !== null;
@@ -151,7 +125,7 @@ function getRedis(): Redis {
     throw new RateLimiterUnavailableError("Upstash Redis credentials are not configured.");
   }
 
-  redisClient ??= new Redis(credentials);
+  redisClient ??= new Redis({ url: credentials.url, token: credentials.token });
 
   return redisClient;
 }
