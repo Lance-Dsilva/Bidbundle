@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { BidPrice } from "@/components/ui/BidPrice";
 import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
+import { VisitPhotoPanel } from "@/components/hoa/VisitPhotoPanel";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import type { BidSummary, ResidentHoaHub, VisitSummary } from "@/lib/hoa-types";
 import { serviceCategoryLabel } from "@/lib/service-categories";
@@ -41,11 +42,14 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const [visibleVisits, setVisibleVisits] = useState<Record<string, number>>({});
 
   if (hub.communities.length === 0) return null;
 
   const run = async (key: string, action: () => Promise<void>, successText?: string) => {
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(key);
     setError(null);
     setNotice(null);
@@ -56,6 +60,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong.");
     } finally {
+      inFlight.current = false;
       setBusy(null);
     }
   };
@@ -90,11 +95,12 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
             <>
               <h3 className="mt-6 text-sm font-bold text-[var(--ink-900)]">Your upcoming & recent visits</h3>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                {community.myVisits.slice(0, 6).map((visit) => (
-                  <VisitCard
+                {community.myVisits.slice(0, visibleVisits[community.id] ?? 6).map((visit) => (
+                  <ResidentVisitCard
                     key={visit.id}
                     visit={visit}
                     busy={busy}
+                    onRefresh={() => router.refresh()}
                     onReview={(rating, comment) =>
                       void run(
                         `review-${visit.id}`,
@@ -105,6 +111,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                   />
                 ))}
               </div>
+              {community.myVisits.length > (visibleVisits[community.id] ?? 6) && <button type="button" className="mt-3 min-h-11 rounded-lg border border-[var(--line)] px-3 text-xs font-semibold" onClick={() => setVisibleVisits((current) => ({ ...current, [community.id]: (current[community.id] ?? 6) + 6 }))}>Show more of your visits</button>}
             </>
           ) : null}
 
@@ -258,6 +265,7 @@ function BidList({ bids, winner }: { bids: BidSummary[]; winner: BidSummary | un
             <div className="min-w-0">
               <strong className="text-[var(--ink-900)]">{bid.providerCompany ?? bid.providerName}</strong>
               <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
+              <p className="mt-1 text-[var(--muted)]">{bid.providerRating == null ? "No published ratings yet" : `${bid.providerRating.toFixed(1)}/5 · ${bid.providerReviewCount ?? 0} published reviews`}</p>
               <BidPrice bid={bid} />
               {bid.proposedStartDate ? <p className="mt-1 text-[var(--muted)]">Starts {dateLabel(bid.proposedStartDate)}</p> : null}
             </div>
@@ -277,23 +285,25 @@ function BidList({ bids, winner }: { bids: BidSummary[]; winner: BidSummary | un
   );
 }
 
-function VisitCard({
+export function ResidentVisitCard({
   visit,
   busy,
   onReview,
+  onRefresh,
 }: {
   visit: VisitSummary;
   busy: string | null;
   onReview: (rating: number, comment: string) => void;
+  onRefresh?: () => void | Promise<unknown>;
 }) {
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState<number | "">("");
   const [comment, setComment] = useState("");
   const [showReview, setShowReview] = useState(false);
 
   return (
-    <article className="rounded-xl border p-4" style={{ borderColor: "var(--line)" }}>
+    <article id={`visit-${visit.id}`} className="scroll-mt-6 rounded-xl border p-4" style={{ borderColor: "var(--line)" }}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-[var(--ink-900)]">{dateLabel(visit.scheduledDate)}</p>
+        <p className="text-sm font-semibold text-[var(--ink-900)]">{visit.scheduledDate ? dateLabel(visit.scheduledDate) : "Not scheduled yet"}</p>
         <span className="rounded-full bg-[var(--teal-50)] px-2 py-1 text-[10px] font-bold uppercase text-[var(--teal-800)]">
           {visit.status.replace("_", " ")}
         </span>
@@ -302,13 +312,14 @@ function VisitCard({
         {visit.stopLabel}
         {visit.windowStart ? ` · window ${visit.windowStart}–${visit.windowEnd ?? ""}` : ""}
       </p>
-      {visit.status === "completed" ? (
+      <VisitPhotoPanel visitId={visit.id} photos={visit.photos ?? []} canConsent onUpdated={onRefresh} disabled={busy !== null} />
+      {visit.viewerReview ? <div className="mt-3 rounded-lg bg-[var(--teal-50)] p-3 text-xs text-[var(--teal-800)]"><p className="font-semibold">Your rating: {visit.viewerReview.rating}/5</p>{visit.viewerReview.comment && <p className="mt-1 break-words">{visit.viewerReview.comment}</p>}<p className="mt-1">Thank you — your review is saved.</p></div> : visit.status === "completed" && visit.canReview === true ? (
         showReview ? (
           <form
             className="mt-3 space-y-2"
             onSubmit={(event) => {
               event.preventDefault();
-              if (comment.trim()) onReview(rating, comment.trim());
+              if (typeof rating === "number" && rating >= 1 && rating <= 5 && busy === null) onReview(rating, comment.trim());
             }}
           >
             <div className="flex gap-2">
@@ -316,9 +327,11 @@ function VisitCard({
                 aria-label="Rating"
                 className="h-9 rounded-lg border px-2 text-xs"
                 style={{ borderColor: "var(--line)" }}
-                onChange={(event) => setRating(Number(event.currentTarget.value))}
+                onChange={(event) => setRating(event.currentTarget.value ? Number(event.currentTarget.value) : "")}
                 value={rating}
+                required
               >
+                <option value="" disabled>Choose rating</option>
                 {[5, 4, 3, 2, 1].map((value) => (
                   <option key={value} value={value}>
                     {value}★
@@ -329,8 +342,9 @@ function VisitCard({
                 className="h-9 min-w-0 flex-1 rounded-lg border px-3 text-xs"
                 style={{ borderColor: "var(--line)" }}
                 onChange={(event) => setComment(event.currentTarget.value)}
-                placeholder="How did it go?"
-                required
+                placeholder="How did it go? (optional)"
+                aria-label="Review comment (optional)"
+                maxLength={2000}
                 value={comment}
               />
             </div>

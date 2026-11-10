@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { OccurrenceSummary, VisitSummary } from "@/lib/hoa-types";
+import type { Prisma } from "@/generated/prisma/client";
+import { visitPhotoRef } from "@/lib/server/visit-photos";
 
 /**
  * The one place a service stop is turned into something a client can see.
@@ -36,6 +38,9 @@ export type VisitViewRow = {
   status: VisitSummary["status"];
   completionNote: string | null;
   completedAt: Date | null;
+  requiresAfterPhoto?: boolean;
+  photos?: Array<{ id: string; purpose: string; createdAt: Date; marketingConsentedAt: Date | null }>;
+  reviews?: Array<{ reviewerUserId: string; rating: number; comment: string; createdAt: Date; status: string }>;
   unit: {
     label: string;
     latitude: number | null;
@@ -48,6 +53,8 @@ export type VisitViewRow = {
 
 /** The Prisma `include` that produces a {@link VisitViewRow}. */
 export const visitViewInclude = {
+  photos: { where: { status: "active", purpose: { in: ["visit_before", "visit_after"] } }, select: { id: true, purpose: true, createdAt: true, marketingConsentedAt: true }, orderBy: { createdAt: "asc" }, take: 16 },
+  reviews: { select: { reviewerUserId: true, rating: true, comment: true, createdAt: true, status: true } },
   unit: {
     select: {
       label: true,
@@ -58,7 +65,7 @@ export const visitViewInclude = {
     },
   },
   homeowner: { select: { fullName: true } },
-} as const;
+} satisfies Prisma.ServiceVisitInclude;
 
 /**
  * @param includeLocation Whether this viewer may see the exact stop location.
@@ -71,7 +78,7 @@ export const visitViewInclude = {
 export function serializeVisitForViewer(
   row: VisitViewRow,
   includeLocation: boolean,
-  options?: { includeAccessNotes?: boolean },
+  options?: { includeAccessNotes?: boolean; viewerUserId?: string; canConsent?: boolean; canReview?: boolean },
 ): VisitSummary {
   const isUnit = row.unitId !== null;
   // The label is itself location data. A neighbourhood stop's label *is* the
@@ -86,6 +93,7 @@ export function serializeVisitForViewer(
     : row.stopRank
       ? `Stop ${row.stopRank}`
       : "Stop";
+  const ownReview = options?.viewerUserId ? row.reviews?.find((review) => review.reviewerUserId === options.viewerUserId) : null;
 
   return {
     id: row.id,
@@ -123,6 +131,10 @@ export function serializeVisitForViewer(
     status: row.status,
     completionNote: row.completionNote,
     completedAt: row.completedAt?.toISOString() ?? null,
+    requiresAfterPhoto: row.requiresAfterPhoto ?? false,
+    photos: includeLocation ? (row.photos ?? []).map((photo) => visitPhotoRef(photo, options?.canConsent === true)) : [],
+    canReview: includeLocation && options?.canReview === true && row.status === "completed" && !ownReview,
+    viewerReview: includeLocation && ownReview?.status === "published" ? { rating: ownReview.rating, comment: ownReview.comment, createdAt: ownReview.createdAt.toISOString() } : null,
   };
 }
 

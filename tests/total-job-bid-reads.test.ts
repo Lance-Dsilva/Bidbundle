@@ -6,6 +6,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
   hoaRequestParticipation: { findFirst: async () => null },
   hoaServiceRequest: { findUnique: async () => ({ id: "request", communityId: "hood", createdByUserId: "owner", community: { type: "neighborhood" } }) },
   serviceBid: { findMany: async (args: Row) => { state.queries.push(args); return state.rows; } },
+  review: { groupBy: async () => [] },
 } }));
 import { listHomeownerBids } from "@/lib/server/marketplace-reads";
 import { listRequestBids } from "@/lib/server/hoa-market";

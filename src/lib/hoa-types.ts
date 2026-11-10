@@ -152,6 +152,8 @@ export type BidSummary = {
   providerName: string;
   providerCompany: string | null;
   providerVerified: boolean;
+  providerRating?: number | null;
+  providerReviewCount?: number;
   status: BidStatusValue;
   amountCents: number;
   currency: string;
@@ -180,6 +182,9 @@ export type HoaRequestSummary = {
   recurrenceLabel: string | null;
   recurrenceIntervalDays: number | null;
   totalOccurrences: number;
+  requiresAfterPhoto?: boolean;
+  reviewAverage?: number | null;
+  reviewCount?: number;
   status: HoaRequestStatusValue;
   opensAt: string | null;
   enrollmentClosesAt: string | null;
@@ -218,6 +223,15 @@ export type AgreementSummary = {
   createdAt: string;
 };
 
+export type VisitPhotoRef = {
+  id: string;
+  purpose: "visit_before" | "visit_after";
+  src: string;
+  createdAt: string;
+  marketingConsented: boolean;
+  canConsent?: boolean;
+};
+
 export type VisitSummary = {
   id: string;
   occurrenceId: string;
@@ -251,6 +265,10 @@ export type VisitSummary = {
   status: VisitStatusValue;
   completionNote: string | null;
   completedAt: string | null;
+  requiresAfterPhoto?: boolean;
+  photos?: VisitPhotoRef[];
+  canReview?: boolean;
+  viewerReview?: { rating: number; comment: string; createdAt: string } | null;
 };
 
 export type OccurrenceSummary = {
@@ -359,6 +377,7 @@ export type ProviderFeedItem = {
   description: string;
   recurrenceLabel: string | null;
   totalOccurrences: number;
+  requiresAfterPhoto?: boolean;
   /** Locked participating homes once bidding is open. Never a per-home list. */
   homeCount: number;
   /**

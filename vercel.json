@@ -1,5 +1,10 @@
 {
   "buildCommand": "bash scripts/vercel-build.sh",
+  "git": {
+    "deploymentEnabled": {
+      "codex/issue-54-visit-photo-proof": false
+    }
+  },
   "crons": [
     {
       "path": "/api/jobs/outbox",

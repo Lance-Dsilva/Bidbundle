@@ -433,6 +433,9 @@ model User {
   amenityReviewsModerated  AmenityReview[]         @relation("AmenityReviewModerator")
   amenityReviewResponses   AmenityReviewResponse[] @relation("AmenityReviewResponder")
   mediaUploaded            MediaAsset[]            @relation("MediaUploader")
+  visitPhotosConsented     MediaAsset[]            @relation("VisitPhotoConsenter")
+  visitPhotoConsentsChanged MediaAsset[]           @relation("VisitPhotoConsentActor")
+  visitPhotoPoliciesUpdated CategoryVisitPolicy[]
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -786,6 +789,8 @@ model HoaServiceRequest {
   recurrenceIntervalDays Int?
   /// How many occurrences the agreement materializes. 1 for one-off work.
   totalOccurrences       Int       @default(1)
+  /// Category proof policy frozen at creation. Existing requests remain exempt.
+  requiresAfterPhoto     Boolean   @default(false)
 
   /// Optional requests: minimum/maximum homes needed before an award.
   minHomes Int?
@@ -1054,8 +1059,11 @@ model ServiceVisit {
   statusChangedAt DateTime?
   completionNote  String?
   completedAt     DateTime?
+  /// Copied from the awarded request; later category policy edits do not rewrite work.
+  requiresAfterPhoto Boolean @default(false)
 
   reviews Review[]
+  photos MediaAsset[] @relation("VisitPhotos")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1907,6 +1915,8 @@ enum MediaPurpose {
   amenity_issue
   provider_license
   provider_insurance
+  visit_before
+  visit_after
 }
 
 enum CredentialReviewStatus {
@@ -2337,6 +2347,16 @@ model MediaAsset {
   community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   purpose MediaPurpose
+  visitId String?
+  visit ServiceVisit? @relation("VisitPhotos", fields: [visitId], references: [id], onDelete: Restrict)
+  /// Resident opt-in to this immutable asset/checksum; never a public-access grant.
+  marketingConsentUserId String?
+  marketingConsentUser User? @relation("VisitPhotoConsenter", fields: [marketingConsentUserId], references: [id], onDelete: Restrict)
+  marketingConsentedAt DateTime?
+  marketingConsentVersion String?
+  /// Required actor for grants and revocations, including an original consenter who moved.
+  marketingConsentChangedByUserId String?
+  marketingConsentChangedBy User? @relation("VisitPhotoConsentActor", fields: [marketingConsentChangedByUserId], references: [id], onDelete: Restrict)
   providerProfileId String?
   providerProfile ProviderProfile? @relation("ProviderDocuments", fields: [providerProfileId], references: [id], onDelete: Cascade)
   licenseFor ProviderProfile? @relation("ProviderLicenseDocument")
@@ -2388,10 +2408,20 @@ model MediaAsset {
   coverOf Amenity? @relation("AmenityCover")
 
   @@index([providerProfileId, purpose, status])
+  @@index([visitId, purpose, status])
   @@index([amenityId, status, position])
   @@index([reviewId, status])
   @@index([issueId, status])
   @@index([communityId, purpose, createdAt])
+}
+
+/// Admin-owned defaults for future requests. Historical requests/visits are not backfilled.
+model CategoryVisitPolicy {
+  category String @id
+  requiresAfterPhoto Boolean @default(false)
+  updatedByUserId String?
+  updatedBy User? @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 /// Self-described contact responsibility, never an application authorization role.

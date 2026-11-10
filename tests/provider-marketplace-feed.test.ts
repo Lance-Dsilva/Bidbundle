@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   bids: [] as Row[],
   agreements: [] as Row[],
   occurrences: [] as Row[],
+  reviewStats: [] as Array<{ providerUserId: string; _avg: { rating: number }; _count: { rating: number } }>,
 }));
 
 vi.mock("@/lib/server/db", () => ({
@@ -30,6 +31,7 @@ vi.mock("@/lib/server/db", () => ({
     serviceBid: { findMany: async () => state.bids },
     serviceAgreement: { findMany: async () => state.agreements },
     serviceOccurrence: { findMany: async () => state.occurrences },
+    review: { groupBy: vi.fn(async () => state.reviewStats) },
     community: { findUnique: async () => null },
     hoaProfile: { findUnique: async () => null },
     providerProfile: { findMany: async () => [] },
@@ -43,6 +45,7 @@ vi.mock("@/lib/server/db", () => ({
 }));
 
 import { getProviderHoaWorkspace } from "@/lib/server/hoa-market";
+import { db } from "@/lib/server/db";
 
 /** An active, fully verified provider who offers cleaning. */
 function verifiedProvider(overrides: Row = {}) {
@@ -134,12 +137,14 @@ function hoaRequest(overrides: Row = {}) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   state.provider = verifiedProvider();
   state.areas = [AUSTIN_AREA];
   state.requests = [];
   state.bids = [];
   state.agreements = [];
   state.occurrences = [];
+  state.reviewStats = [];
 });
 
 describe("what the feed includes", () => {
@@ -313,6 +318,7 @@ describe("what the feed withholds", () => {
   });
 
   it("returns this provider's own bid and no competitor amount", async () => {
+    state.reviewStats = [{ providerUserId: "provider-1", _avg: { rating: 4.25 }, _count: { rating: 4 } }];
     state.requests = [
       neighbourhoodRequest({
         bids: [
@@ -348,6 +354,11 @@ describe("what the feed withholds", () => {
 
     const [item] = (await getProviderHoaWorkspace("provider-1")).feed;
     expect(item.myBid?.amountCents).toBe(22_500);
+    expect(item.myBid).toMatchObject({ providerRating: 4.25, providerReviewCount: 4 });
+    expect(db.review.groupBy).toHaveBeenCalledExactlyOnceWith({
+      by: ["providerUserId"], where: { providerUserId: { in: ["provider-1"] }, status: "published" },
+      _avg: { rating: true }, _count: { rating: true },
+    });
     // The Prisma read is already scoped to this provider's bids; the payload
     // has no field a competitor's amount could travel in.
     expect(Object.keys(item)).not.toContain("bids");
