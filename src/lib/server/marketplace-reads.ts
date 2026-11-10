@@ -3,6 +3,8 @@ import "server-only";
 import { providerVerificationSelect, providerVerificationState } from "@/lib/provider-verification";
 
 import { compareBidQuotes } from "@/lib/bid-pricing";
+import { parsePoolQuote, parsePoolTemplate } from "@/lib/pool-bid-template";
+import { redactPoolBidIdentity } from "@/lib/pool-bid-privacy";
 import type { BidSummary } from "@/lib/hoa-types";
 import { db } from "@/lib/server/db";
 
@@ -69,6 +71,8 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
           category: true,
           communityId: true,
           totalOccurrences: true,
+          poolTemplate: true,
+          awardedAt: true,
           _count: { select: { participations: { where: { response: "joined" } } } },
           community: { select: { name: true } },
         },
@@ -87,13 +91,14 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
     },
   });
 
-  return rows.map((row) => ({
+  return rows.map((row) => redactPoolBidIdentity({
     id: row.id,
     requestId: row.requestId,
     providerUserId: row.providerUserId,
     providerName: row.provider.fullName,
     providerCompany: row.provider.providerProfile?.companyName ?? null,
     providerVerified: providerVerificationState(row.provider.providerProfile).verified,
+    poolQuote: parsePoolQuote(row.poolQuote),
     status: row.status,
     amountCents: row.amountCents,
     currency: row.currency,
@@ -118,7 +123,8 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
       row.pricingBasis === "total" &&
       ["open_for_bids", "bidding_closed"].includes(row.request.status) &&
       managedCommunityIds.has(row.request.communityId),
-  })).sort((a, b) => a.requestId.localeCompare(b.requestId) || compareBidQuotes(a, b));
+  }, parsePoolTemplate(row.request.poolTemplate), Boolean(row.request.awardedAt), managedCommunityIds.has(row.request.communityId)))
+    .sort((a, b) => a.requestId.localeCompare(b.requestId) || compareBidQuotes(a, b));
 }
 
 /* ── Provider: earnings ──────────────────────────────────────────────────── */

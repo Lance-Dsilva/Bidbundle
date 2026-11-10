@@ -163,6 +163,7 @@ export async function recordAudit(
 /* ── Presentation ────────────────────────────────────────────────────────── */
 
 const ACTION_SUMMARIES: Record<AdminAuditAction, string> = {
+  provider_bid_invited: "invited a verified provider to quote",
   community_created: "created the community",
   community_updated: "updated community details",
   community_archived: "archived the community",

@@ -7,6 +7,9 @@ import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
+import { PoolTemplateFields } from "@/components/hoa/PoolTemplateFields";
+import { PoolBidComparison } from "@/components/hoa/PoolBidComparison";
+import { poolTemplateSchema, POOL_TIER_LABELS, type PoolTemplate, type PoolTierCounts } from "@/lib/pool-bid-template";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 
 import type {
@@ -89,7 +92,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
   const [awardState, setAwardState] = useState(IDLE);
   const [surveyState, setSurveyState] = useState(IDLE);
   const [confirmation, setConfirmation] = useState<{
-    action: "cancel" | "complete" | "award"; requestId: string; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary;
+    action: "cancel" | "complete" | "award"; requestId: string; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary; poolTemplate?: PoolTemplate | null; tierCounts?: PoolTierCounts;
   } | null>(null);
   const currentRequest = confirmation ? community.requests.find((item) => item.id === confirmation.requestId) : null;
   const currentBid = confirmation?.bid ? community.bidsByRequest[confirmation.requestId]?.find((bid) => bid.id === confirmation.bid?.id) : null;
@@ -99,6 +102,9 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         currentRequest.joinedCount === confirmation.joinedCount && currentRequest.totalOccurrences === confirmation.totalOccurrences && currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
         currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
         currentBid.providerUserId === confirmation.bid.providerUserId &&
+        JSON.stringify(currentBid.poolQuote ?? null) === JSON.stringify(confirmation.bid.poolQuote ?? null) &&
+        JSON.stringify(currentRequest.poolTemplate ?? null) === JSON.stringify(confirmation.poolTemplate ?? null) &&
+        JSON.stringify(currentRequest.tierCounts ?? null) === JSON.stringify(confirmation.tierCounts ?? null) &&
         currentBid.homeCount === confirmation.bid.homeCount && currentBid.totalOccurrences === confirmation.bid.totalOccurrences && !community.bidsByRequest[confirmation.requestId]?.some((bid) => bid.status === "accepted")
       : confirmation.action === "complete" ? ["awarded", "scheduled", "in_progress"].includes(currentRequest.status)
         : ["draft", "collecting_interest", "open_for_bids", "bidding_closed"].includes(currentRequest.status)));
@@ -109,6 +115,8 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
 
   const [requestFrequency, setRequestFrequency] = useState<string>(FREQUENCIES[0].value);
   const [requestVisits, setRequestVisits] = useState("");
+  const [requestCategory, setRequestCategory] = useState("");
+  const [poolEnabled, setPoolEnabled] = useState(false);
   const requestPending = useRef(false);
 
   const residentInvitations = community.invitations.filter((item) => item.role === "homeowner");
@@ -197,6 +205,12 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
     };
     requestPending.current = true;
     void run(setRequestState, "Service request created.", async () => {
+      let poolTemplate: PoolTemplate | null = null;
+      if (poolEnabled && requestCategory === "pool_care" && kind === "optional_group") {
+        const parsed = poolTemplateSchema.safeParse({ version: 1, serviceMonths: asInt("poolServiceMonths"), visitsPerMonth: asInt("poolVisitsPerMonth"), tiers: data.getAll("poolTier"), hideProviderNamesUntilAward: data.get("poolHideNames") === "on" });
+        if (!parsed.success) throw new Error(parsed.error.issues.some((issue) => issue.path[0] === "tiers") ? "Choose at least one applicable pool tier." : "Set whole calendar months and visits per month, with no more than 104 visits per home.");
+        poolTemplate = parsed.data;
+      }
       const payload = hoaRequestCreateSchema.safeParse({
         title: data.get("title"),
         category: data.get("category"),
@@ -204,7 +218,8 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         kind,
         recurrenceLabel: kind === "compulsory_recurring" ? frequency!.label : null,
         recurrenceIntervalDays: kind === "compulsory_recurring" ? frequency!.days : null,
-        totalOccurrences: asInt("totalOccurrences") ?? 1,
+        totalOccurrences: poolTemplate ? poolTemplate.serviceMonths * poolTemplate.visitsPerMonth : asInt("totalOccurrences") ?? 1,
+        ...(poolTemplate ? { poolTemplate } : {}),
         startDate: asDate("startDate"),
         enrollmentClosesAt: kind === "optional_group" ? asDate("enrollmentClosesAt") : null,
         biddingClosesAt: asDate("biddingClosesAt"),
@@ -217,6 +232,8 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
       setRequestKind("compulsory_recurring");
       setRequestFrequency(FREQUENCIES[0].value);
       setRequestVisits("");
+      setRequestCategory("");
+      setPoolEnabled(false);
     }).finally(() => {
       requestPending.current = false;
     });
@@ -252,7 +269,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
     const bid = community.bidsByRequest[requestId]?.find((item) => item.id === bidId);
     if (!request || !bid) return;
     setAwardState(IDLE);
-    setConfirmation({ action: "award", requestId, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences, bid: { ...bid } });
+    setConfirmation({ action: "award", requestId, status: request.status, title: request.title, joinedCount: request.joinedCount, totalOccurrences: request.totalOccurrences, bid: { ...bid }, poolTemplate: request.poolTemplate, tierCounts: request.tierCounts });
   };
 
   const submitSurvey = (event: FormEvent<HTMLFormElement>) => {
@@ -429,7 +446,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
             <Field name="title" label="Request title" placeholder="Biweekly gardening" />
             <label>
               <span className="mb-1 block text-xs font-semibold text-[#334e68]">Service category</span>
-              <select className={inputClass} name="category" defaultValue="" required>
+              <select className={inputClass} name="category" value={requestCategory} onChange={(event) => { setRequestCategory(event.target.value); if (event.target.value !== "pool_care") setPoolEnabled(false); }} required>
                 <option value="" disabled>Choose a service category</option>
                 {SERVICE_CATEGORIES.map((category) => (
                   <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
@@ -442,9 +459,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
                 className={inputClass}
                 name="kind"
                 value={requestKind}
-                onChange={(event) =>
-                  setRequestKind(event.currentTarget.value as typeof requestKind)
-                }
+                onChange={(event) => { setRequestKind(event.currentTarget.value as typeof requestKind); if (event.target.value !== "optional_group") setPoolEnabled(false); }}
               >
                 <option value="compulsory_recurring">Every home gets this service</option>
                 <option value="optional_group">Residents choose to join</option>
@@ -484,9 +499,10 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
                   </p>
                 </div>
                 <Field name="minHomes" label="Minimum homes" type="number" placeholder="3" required={false} />
-                <Field name="totalOccurrences" label="How many visits" type="number" placeholder="1" required={false} min={1} max={104} step={1} value={requestVisits} onChange={setRequestVisits} />
+                {!poolEnabled && <Field name="totalOccurrences" label="How many visits" type="number" placeholder="1" required={false} min={1} max={104} step={1} value={requestVisits} onChange={setRequestVisits} />}
               </>
             )}
+            {requestCategory === "pool_care" && requestKind === "optional_group" && <PoolTemplateFields enabled={poolEnabled} onEnabled={setPoolEnabled} />}
             <label className="md:col-span-2">
               <span className="mb-1 block text-xs font-semibold text-[#334e68]">Scope shown to residents and providers</span>
               <textarea
@@ -670,7 +686,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
           }}
           description={confirmation.action === "award" && confirmation.bid ? <>
             <p>Award “{confirmation.title}” to {confirmation.bid.providerCompany ?? confirmation.bid.providerName} (quote version {confirmation.bid.version})?</p>
-            <BidPrice bid={confirmation.bid} />
+            {confirmation.poolTemplate && confirmation.bid.poolQuote ? <div className="space-y-1"><p><strong>{money(confirmation.bid.amountCents, confirmation.bid.currency)}</strong> whole-job total for {confirmation.poolTemplate.serviceMonths} calendar months.</p>{confirmation.poolTemplate.tiers.map((tier) => <p key={tier}>{POOL_TIER_LABELS[tier]}: {money(confirmation.bid!.poolQuote!.monthlyCents[tier]!, confirmation.bid!.currency)} /home/month × {confirmation.tierCounts?.[tier] ?? 0} locked homes.</p>)}<p>{confirmation.bid.poolQuote.chemicalsIncluded ? "Chemicals included" : "Chemicals excluded"}; equipment repairs excluded; {confirmation.bid.poolQuote.cancellationNoticeDays} days’ cancellation notice.</p></div> : <BidPrice bid={confirmation.bid} />}
             <p>Current request scope: {confirmation.joinedCount} {confirmation.joinedCount === 1 ? "joined home" : "joined homes"}; {confirmation.totalOccurrences} {confirmation.totalOccurrences === 1 ? "visit" : "visits"} per home.</p>
             <p>{confirmation.status === "open_for_bids" ? "Awarding now ends bidding immediately. No more quotes can be submitted." : "Bidding is already closed."} This choice cannot be undone here.</p>
             <p>This accepts this quote, rejects other submitted quotes, and creates the agreement and service visits. The provider, affected residents and other bidders may be notified according to their preferences.</p>
@@ -710,6 +726,7 @@ function RequestCard({
         </Badge>
       </div>
       <p className="mt-2 line-clamp-2 text-sm text-[#64748b]">{request.description}</p>
+      {request.poolTemplate && <p className="mt-2 text-xs text-[#64748b]">Pool template · {request.poolTemplate.serviceMonths} calendar months · {request.poolTemplate.visitsPerMonth} visits/month · {request.poolTemplate.tiers.map((tier) => `${POOL_TIER_LABELS[tier]}: ${request.tierCounts?.[tier] ?? 0} homes`).join(" · ")}</p>}
       <p className="mt-2 text-xs text-[#64748b]">
         {request.kind === "compulsory_recurring"
           ? `Compulsory · ${request.recurrenceLabel ?? ""} · ${request.joinedCount} homes`
@@ -752,7 +769,8 @@ function RequestCard({
         ) : null}
       </div>
 
-      {bids.length > 0 ? (
+      {request.poolTemplate ? <PoolBidComparison template={request.poolTemplate} bids={bids} tierCounts={request.tierCounts} managerView busy={busy} canAward={["open_for_bids", "bidding_closed"].includes(request.status) && !accepted} onAward={(bid) => void onAward(request.id, bid.id)} /> : null}
+      {!request.poolTemplate && bids.length > 0 ? (
         <div className="mt-4 rounded-xl bg-[#f6faf9] p-3">
           <h4 className="text-xs font-bold uppercase tracking-wide text-[#334e68]">
             Bids ({bids.length})

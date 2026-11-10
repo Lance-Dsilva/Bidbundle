@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 
 import { Prisma } from "@/generated/prisma/client";
 import { compareBidQuotes } from "@/lib/bid-pricing";
+import { calculatePoolTotal, computePoolOccurrenceDates, computePoolTermEnd, isPoolTier, parsePoolTemplate, parsePoolQuote, parsePoolAgreementSnapshot, poolTierCounts, type PoolAgreementSnapshot } from "@/lib/pool-bid-template";
+import { redactPoolBidIdentity } from "@/lib/pool-bid-privacy";
 import { normalizeServiceCategory, normalizeServiceTrades, serviceCategoryLabel } from "@/lib/service-categories";
 import type {
   AgreementSummary,
@@ -115,6 +117,7 @@ type RequestRow = {
   recurrenceLabel: string | null;
   recurrenceIntervalDays: number | null;
   totalOccurrences: number;
+  poolTemplate?: unknown;
   status: HoaRequestSummary["status"];
   opensAt: Date | null;
   enrollmentClosesAt: Date | null;
@@ -125,12 +128,12 @@ type RequestRow = {
   participantsLockedAt: Date | null;
   awardedAt: Date | null;
   createdAt: Date;
-  participations: Array<{ userId: string | null; response: "joined" | "declined" }>;
+  participations: Array<{ userId: string | null; response: "joined" | "declined"; poolTier?: string | null }>;
   _count: { bids: number };
 };
 
 const requestInclude = {
-  participations: { select: { userId: true, response: true } },
+  participations: { select: { userId: true, response: true, poolTier: true } },
   _count: { select: { bids: { where: { status: { in: ["submitted", "accepted", "rejected"] } } } } },
 } satisfies Prisma.HoaServiceRequestInclude;
 
@@ -150,6 +153,9 @@ function serializeRequest(row: RequestRow, viewerUserId?: string): HoaRequestSum
     recurrenceLabel: row.recurrenceLabel,
     recurrenceIntervalDays: row.recurrenceIntervalDays,
     totalOccurrences: row.totalOccurrences,
+    poolTemplate: parsePoolTemplate(row.poolTemplate),
+    tierCounts: poolTierCounts(row.participations),
+    viewerPoolTier: isPoolTier(viewerRow?.poolTier) ? viewerRow.poolTier : null,
     status: row.status,
     opensAt: row.opensAt?.toISOString() ?? null,
     enrollmentClosesAt: row.enrollmentClosesAt?.toISOString() ?? null,
@@ -184,8 +190,12 @@ type BidRow = {
   validUntil: Date | null;
   version: number;
   submittedAt: Date;
+  poolQuote?: unknown;
+  revisions?: Array<{ version: number; amountCents: number; currency: string; submittedAt: Date; poolQuote: unknown }>;
   request?: {
     totalOccurrences: number;
+    poolTemplate?: unknown;
+    participations?: Array<{ poolTier?: string | null }>;
     _count: { participations: number };
   };
   provider: {
@@ -194,6 +204,7 @@ type BidRow = {
       companyName: string | null;
       licenseVerifiedAt: Date | null;
       insuranceVerifiedAt: Date | null;
+      businessStartedYear?: number | null;
     } | null;
   };
 };
@@ -202,6 +213,8 @@ const bidInclude = {
   request: {
     select: {
       totalOccurrences: true,
+      poolTemplate: true,
+      participations: { where: { response: "joined" }, select: { poolTier: true } },
       _count: { select: { participations: { where: { response: "joined" } } } },
     },
   },
@@ -209,13 +222,32 @@ const bidInclude = {
     select: {
       fullName: true,
       providerProfile: {
-        select: { companyName: true, ...providerVerificationSelect },
+        select: { companyName: true, businessStartedYear: true, ...providerVerificationSelect },
       },
     },
   },
+  revisions: { orderBy: { version: "asc" }, select: { version: true, amountCents: true, currency: true, submittedAt: true, poolQuote: true } },
 } satisfies Prisma.ServiceBidInclude;
 
-function serializeBid(row: BidRow): BidSummary {
+type BidRating = { rating: number | null; count: number };
+
+async function bidReviewStats(rows: BidRow[]): Promise<Map<string, BidRating>> {
+  const providerIds = [...new Set(rows.filter((row) => parsePoolQuote(row.poolQuote)).map((row) => row.providerUserId))];
+  if (providerIds.length === 0) return new Map();
+  const groups = await db.review.groupBy({
+    by: ["providerUserId"], where: { providerUserId: { in: providerIds }, status: "published" },
+    _avg: { rating: true }, _count: { rating: true },
+  });
+  return new Map(groups.map((group) => [group.providerUserId, { rating: group._avg.rating, count: group._count.rating }]));
+}
+
+async function serializeBids(rows: BidRow[]): Promise<BidSummary[]> {
+  const stats = await bidReviewStats(rows);
+  return rows.map((row) => serializeBid(row, stats.get(row.providerUserId)));
+}
+
+function serializeBid(row: BidRow, review?: BidRating): BidSummary {
+  const founded = row.provider.providerProfile?.businessStartedYear;
   return {
     id: row.id,
     requestId: row.requestId,
@@ -223,6 +255,9 @@ function serializeBid(row: BidRow): BidSummary {
     providerName: row.provider.fullName,
     providerCompany: row.provider.providerProfile?.companyName ?? null,
     providerVerified: providerVerificationState(row.provider.providerProfile).verified,
+    providerRating: review?.rating ?? null,
+    providerReviewCount: review?.count ?? 0,
+    providerYearsInBusiness: founded != null && founded <= new Date().getUTCFullYear() ? new Date().getUTCFullYear() - founded : null,
     status: row.status,
     amountCents: row.amountCents,
     currency: row.currency,
@@ -238,6 +273,10 @@ function serializeBid(row: BidRow): BidSummary {
     validUntil: row.validUntil?.toISOString() ?? null,
     version: row.version,
     submittedAt: row.submittedAt.toISOString(),
+    poolQuote: parsePoolQuote(row.poolQuote),
+    poolTemplate: parsePoolTemplate(row.request?.poolTemplate),
+    tierCounts: poolTierCounts(row.request?.participations ?? []),
+    revisions: (row.revisions ?? []).map((revision) => ({ ...revision, submittedAt: revision.submittedAt.toISOString(), poolQuote: parsePoolQuote(revision.poolQuote) })),
   };
 }
 
@@ -257,6 +296,7 @@ type AgreementRow = {
   endDate: Date | null;
   status: AgreementSummary["status"];
   createdAt: Date;
+  poolSnapshot?: unknown;
   request: { title: string };
   community: { name: string };
   provider: { fullName: string; providerProfile: { companyName: string | null } | null };
@@ -271,6 +311,7 @@ const agreementInclude = {
 } satisfies Prisma.ServiceAgreementInclude;
 
 function serializeAgreement(row: AgreementRow): AgreementSummary {
+  const poolSnapshot = parsePoolAgreementSnapshot(row.poolSnapshot);
   return {
     id: row.id,
     requestId: row.requestId,
@@ -291,6 +332,7 @@ function serializeAgreement(row: AgreementRow): AgreementSummary {
     endDate: row.endDate?.toISOString() ?? null,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
+    poolSnapshot: poolSnapshot ? { ...poolSnapshot, homes: [] } : null,
   };
 }
 
@@ -344,6 +386,11 @@ export async function createHoaRequest(
   const requestId = randomUUID();
   const now = new Date();
 
+  const poolTemplate = parsePoolTemplate(input.poolTemplate);
+  if (input.poolTemplate && !poolTemplate) throw new HoaWorkflowError("The pool template is invalid.", 400);
+  if (poolTemplate && (normalizeServiceCategory(input.category) !== "pool_care" || input.kind !== "optional_group")) {
+    throw new HoaWorkflowError("The pool template requires an optional pool-care request.", 400);
+  }
   const isCompulsory = input.kind === "compulsory_recurring";
   const publishStatus = isCompulsory ? "open_for_bids" : "collecting_interest";
   const status = input.publish ? publishStatus : "draft";
@@ -390,8 +437,9 @@ export async function createHoaRequest(
         description: input.description,
         kind: input.kind,
         recurrenceLabel: input.recurrenceLabel,
-        recurrenceIntervalDays: input.recurrenceIntervalDays ?? null,
-        totalOccurrences: input.totalOccurrences,
+        recurrenceIntervalDays: poolTemplate ? null : input.recurrenceIntervalDays ?? null,
+        totalOccurrences: poolTemplate ? poolTemplate.serviceMonths * poolTemplate.visitsPerMonth : input.totalOccurrences,
+        ...(poolTemplate ? { poolTemplate } : {}),
         status,
         opensAt: input.publish ? now : null,
         enrollmentClosesAt: input.enrollmentClosesAt ? new Date(input.enrollmentClosesAt) : null,
@@ -448,7 +496,8 @@ type BiddingRequest = {
   participantsLockedAt: Date | null;
   updatedAt: Date;
   community: { type: "hoa" | "neighborhood" };
-  participations: Array<{ unitId: string | null; userId: string | null; response: string }>;
+  participations: Array<{ unitId: string | null; userId: string | null; response: string; poolTier?: string | null }>;
+  poolTemplate?: unknown;
 };
 
 function joinedHomeCount(request: BiddingRequest): number {
@@ -461,7 +510,8 @@ function joinedHomeCount(request: BiddingRequest): number {
 function biddingClaim(request: BiddingRequest, automaticAt?: Date): Prisma.HoaServiceRequestWhereUniqueInput {
   const joined = request.participations.filter((item) => item.response === "joined");
   // Reject a stale enrollment snapshot if a joined home changed before the claim.
-  const joinedSnapshot = joined.map(({ unitId, userId }) => ({ unitId, userId, response: "joined" as const }));
+  const joinedSnapshot = joined.map((home) => ({ unitId: home.unitId, userId: home.userId, response: "joined" as const,
+    ...(parsePoolTemplate(request.poolTemplate) ? { poolTier: home.poolTier ?? null } : {}) }));
   return {
     id: request.id,
     kind: "optional_group",
@@ -508,6 +558,11 @@ async function openRequestBidding(
     throw new HoaWorkflowError("Set a future bidding deadline to open bidding.", 400);
   }
   const lockedHomeCount = joinedHomeCount(request);
+  const poolTemplate = parsePoolTemplate(request.poolTemplate);
+  if (poolTemplate && request.participations.some((home) => home.response === "joined" &&
+    (!isPoolTier(home.poolTier) || !poolTemplate.tiers.includes(home.poolTier)))) {
+    throw new HoaWorkflowError("Every joining home must choose an applicable pool tier before bidding opens.", 409);
+  }
   if (lockedHomeCount === 0) throw new HoaWorkflowError("No homes joined this service.");
   if (request.minHomes != null && lockedHomeCount < request.minHomes) {
     throw new HoaWorkflowError(`Only ${lockedHomeCount} of the required ${request.minHomes} homes joined.`);
@@ -571,7 +626,7 @@ export async function reconcileNeighborhoodEnrollment(
     where: { id: requestId },
     include: {
       community: { select: { type: true, status: true, name: true } },
-      participations: { select: { unitId: true, userId: true, response: true } },
+      participations: { select: { unitId: true, userId: true, response: true, poolTier: true } },
     },
   });
   if (!request || request.community.type !== "neighborhood" || request.community.status !== "active" ||
@@ -643,7 +698,7 @@ export async function transitionHoaRequest(
     where: { id: requestId },
     include: {
       community: { select: { type: true } },
-      participations: { select: { unitId: true, userId: true, response: true } },
+      participations: { select: { unitId: true, userId: true, response: true, poolTier: true } },
       agreement: { select: { id: true, status: true, providerUserId: true } },
     },
   });
@@ -930,6 +985,7 @@ export async function respondToOptionalRequest(
       enrollmentClosesAt: true,
       participantsLockedAt: true,
       maxHomes: true,
+      poolTemplate: true,
       participations: { where: { response: "joined" }, select: { userId: true } },
     },
   });
@@ -947,27 +1003,50 @@ export async function respondToOptionalRequest(
   if (request.enrollmentClosesAt && request.enrollmentClosesAt <= new Date()) {
     throw new HoaWorkflowError("Sign-ups for this request have closed.");
   }
-  const alreadyJoined = request.participations.some((item) => item.userId === userId);
-  if (
-    input.response === "joined" &&
-    !alreadyJoined &&
-    request.maxHomes != null &&
-    request.participations.length >= request.maxHomes
-  ) {
-    throw new HoaWorkflowError("This service has reached its maximum number of homes.");
+  const poolTemplate = parsePoolTemplate(request.poolTemplate);
+  const poolTier = input.response === "joined" ? input.poolTier ?? null : null;
+  if (poolTemplate && input.response === "joined" && (!isPoolTier(poolTier) || !poolTemplate.tiers.includes(poolTier))) {
+    throw new HoaWorkflowError("Choose one of this request’s pool sizes before joining.", 400);
   }
-
-  await db.hoaRequestParticipation.upsert({
-    where: { requestId_unitId: { requestId, unitId: membership.unitId } },
-    create: {
-      id: randomUUID(),
-      requestId,
-      userId,
-      unitId: membership.unitId,
-      response: input.response,
-    },
-    update: { response: input.response, userId },
-  });
+  if (!poolTemplate && input.poolTier != null) throw new HoaWorkflowError("This request does not use pool tiers.", 400);
+  try {
+    await db.$transaction(async (tx) => {
+      // PostgreSQL's audience uniqueness is a partial index (unitId IS NOT
+      // NULL), so Prisma's native ON CONFLICT composite upsert cannot infer
+      // it. Serialize on the parent first, then write by primary identity.
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "HoaServiceRequest" WHERE "id" = ${requestId} FOR UPDATE`);
+      const live = await tx.hoaServiceRequest.findUnique({
+        where: { id: requestId },
+        select: { kind: true, status: true, participantsLockedAt: true, enrollmentClosesAt: true, maxHomes: true },
+      });
+      if (!live || live.kind !== "optional_group" || live.status !== "collecting_interest" || live.participantsLockedAt ||
+          (live.enrollmentClosesAt && live.enrollmentClosesAt <= new Date())) {
+        throw new HoaWorkflowError("Sign-ups for this request have closed or locked.", 409);
+      }
+      const existing = await tx.hoaRequestParticipation.findFirst({
+        where: { requestId, unitId: membership.unitId }, select: { id: true, response: true },
+      });
+      if (input.response === "joined" && existing?.response !== "joined" && live.maxHomes != null) {
+        const joinedCount = await tx.hoaRequestParticipation.count({ where: { requestId, response: "joined" } });
+        if (joinedCount >= live.maxHomes) throw new HoaWorkflowError("This service has reached its maximum number of homes.");
+      }
+      const data = { response: input.response, userId, ...(poolTemplate ? { poolTier } : {}) };
+      if (existing) {
+        await tx.hoaRequestParticipation.update({ where: { id: existing.id }, data });
+      } else {
+        await tx.hoaRequestParticipation.create({ data: { id: randomUUID(), requestId, unitId: membership.unitId, ...data } });
+      }
+      // Database authority and tier guards recheck membership, locking and
+      // wall-clock deadlines after any resident/authority lock waits.
+    });
+  } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
+    if (["P2025", "P2002"].includes((error as { code?: string }).code ?? "")) {
+      throw new HoaWorkflowError("This home's participation changed. Refresh before trying again.", 409);
+    }
+    throw error;
+  }
 }
 
 /* ── Provider: coverage areas ────────────────────────────────────────────── */
@@ -1384,7 +1463,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
             },
           },
         },
-        participations: { where: { response: "joined" }, select: { id: true } },
+        participations: { where: { response: "joined" }, select: { id: true, poolTier: true } },
         bids: { where: { providerUserId: userId }, include: bidInclude },
       },
     }),
@@ -1403,6 +1482,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
   ]);
 
   const feed: ProviderFeedItem[] = [];
+  const reviewStats = await bidReviewStats([...myBids, ...openRequests.flatMap((request) => request.bids)]);
   for (const request of openRequests) {
     const isNeighborhood = request.community.type === "neighborhood";
     const profile = request.community.hoaProfile;
@@ -1450,12 +1530,14 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
       recurrenceLabel: request.recurrenceLabel,
       totalOccurrences: request.totalOccurrences,
       homeCount: request.participations.length,
+      poolTemplate: parsePoolTemplate(request.poolTemplate),
+      tierCounts: poolTierCounts(request.participations),
       approximateDistanceMi: approximateDistanceMi(areas, location),
       budgetMinCents: request.budgetMinCents,
       budgetMaxCents: request.budgetMaxCents,
       startDate: request.startDate?.toISOString() ?? null,
       biddingClosesAt: request.biddingClosesAt?.toISOString() ?? null,
-      myBid: request.bids[0] ? serializeBid(request.bids[0]) : null,
+      myBid: request.bids[0] ? serializeBid(request.bids[0], reviewStats.get(request.bids[0].providerUserId)) : null,
     });
   }
 
@@ -1481,7 +1563,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
     serviceAreas: areas.map(serializeArea),
     categories: gate.trades,
     feed,
-    bids: myBids.map(serializeBid),
+    bids: myBids.map((bid) => serializeBid(bid, reviewStats.get(bid.providerUserId))),
     agreements: agreements.map(serializeAgreement),
     occurrencesByAgreement,
   };
@@ -1549,8 +1631,7 @@ export async function submitBid(
   const gate = await requireProvider(providerUserId);
   const now = new Date();
 
-  if (input.pricingBasis !== "total" || input.perHomeCents != null ||
-      !Number.isSafeInteger(input.amountCents) || input.amountCents < 0 || input.amountCents > MAX_BID_AMOUNT_CENTS) {
+  if (input.pricingBasis !== "total" || input.perHomeCents != null) {
     throw new HoaWorkflowError("Quote the total price for the whole job. Per-home and per-visit amounts are calculated for comparison.", 400);
   }
 
@@ -1563,8 +1644,10 @@ export async function submitBid(
       category: true,
       status: true,
       biddingClosesAt: true,
+      poolTemplate: true,
+      participantsLockedAt: true,
       community: { select: { type: true, status: true, name: true } },
-      participations: { where: { response: "joined" }, select: { id: true } },
+      participations: { where: { response: "joined" }, select: { id: true, poolTier: true } },
     },
   });
   if (!request || request.community.status !== "active") {
@@ -1575,6 +1658,23 @@ export async function submitBid(
   }
   if (request.biddingClosesAt && request.biddingClosesAt <= now) {
     throw new HoaWorkflowError("Bidding has closed on this request.");
+  }
+  const poolTemplate = parsePoolTemplate(request.poolTemplate);
+  const poolQuote = parsePoolQuote(input.poolQuote);
+  let amountCents: number;
+  if (poolTemplate) {
+    if (!poolQuote || !input.validUntil || !request.participantsLockedAt ||
+        request.participations.some((home) => !isPoolTier(home.poolTier) || !poolTemplate.tiers.includes(home.poolTier))) {
+      throw new HoaWorkflowError("Complete the structured pool quote and validity date against a locked set of pool sizes.", 400);
+    }
+    try { amountCents = calculatePoolTotal(poolTemplate, poolQuote, poolTierCounts(request.participations)); }
+    catch (error) { throw new HoaWorkflowError(error instanceof Error ? error.message : "The pool quote is invalid.", 400); }
+  } else {
+    if (input.poolQuote != null || typeof input.amountCents !== "number" || !Number.isSafeInteger(input.amountCents) ||
+        input.amountCents < 0 || input.amountCents > MAX_BID_AMOUNT_CENTS) {
+      throw new HoaWorkflowError("Quote the total price for the whole job. Pool tier rates require a pool-template request.", 400);
+    }
+    amountCents = input.amountCents;
   }
   const category = normalizeServiceCategory(request.category);
   if (category === null || !gate.trades.includes(category)) {
@@ -1611,14 +1711,20 @@ export async function submitBid(
   if (existing && !["submitted", "withdrawn", "draft"].includes(existing.status)) {
     throw new HoaWorkflowError("This bid has already been decided.");
   }
+  if (existing && ((poolTemplate && input.expectedBidVersion === undefined) ||
+      (input.expectedBidVersion !== undefined && existing.version !== input.expectedBidVersion))) {
+    throw new HoaWorkflowError("This quote changed since you opened it. Refresh before revising.", 409);
+  }
+  if (!existing && input.expectedBidVersion !== undefined) throw new HoaWorkflowError("This quote no longer exists. Refresh before submitting.", 409);
 
   const bidId = existing?.id ?? randomUUID();
   const data = {
     status: "submitted" as const,
-    amountCents: input.amountCents,
+    amountCents,
     pricingBasis: "total" as const,
     perHomeCents: null,
-    proposedStartDate: input.proposedStartDate ? new Date(input.proposedStartDate) : null,
+    proposedStartDate: poolQuote ? new Date(poolQuote.earliestStartDate) : input.proposedStartDate ? new Date(input.proposedStartDate) : null,
+    ...(poolQuote ? { poolQuote } : {}),
     estimatedDurationLabel: input.estimatedDurationLabel,
     scope: input.scope,
     exclusions: input.exclusions,
@@ -1673,7 +1779,7 @@ export async function submitBid(
   } catch (error) {
     const conflict = preparedWorkflowConflict(error);
     if (conflict) throw conflict;
-    if ((error as { code?: string }).code === "P2025") {
+    if (["P2025", "P2002"].includes((error as { code?: string }).code ?? "")) {
       throw new HoaWorkflowError("This bid or bidding window changed. Refresh before submitting again.", 409);
     }
     throw error;
@@ -1683,7 +1789,7 @@ export async function submitBid(
     where: { id: bidId },
     include: bidInclude,
   });
-  return serializeBid(row);
+  return (await serializeBids([row]))[0];
 }
 
 export async function withdrawBid(providerUserId: string, requestId: string): Promise<void> {
@@ -1744,11 +1850,14 @@ export async function listRequestBids(
       id: true,
       communityId: true,
       createdByUserId: true,
+      poolTemplate: true,
+      awardedAt: true,
       community: { select: { type: true } },
     },
   });
   if (!request) throw new HoaWorkflowError("That request does not exist.", 404);
 
+  let isManager = false;
   if (request.community.type === "hoa") {
     const [assignment, membership] = await Promise.all([
       db.communityStaffAssignment.findFirst({
@@ -1768,6 +1877,7 @@ export async function listRequestBids(
     if (!assignment && !membership) {
       throw new HoaWorkflowError("You do not have access to this request.", 403);
     }
+    isManager = Boolean(assignment);
   } else {
     const [manager, participation] = await Promise.all([
       findNeighborhoodManager(request.communityId),
@@ -1780,6 +1890,7 @@ export async function listRequestBids(
       manager?.userId === viewerUserId ||
       participation !== null ||
       request.createdByUserId === viewerUserId;
+    isManager = manager?.userId === viewerUserId;
     if (!permitted) {
       throw new HoaWorkflowError("You do not have access to this request.", 403);
     }
@@ -1790,7 +1901,7 @@ export async function listRequestBids(
     orderBy: { id: "asc" },
     include: bidInclude,
   });
-  return rows.map(serializeBid).sort(compareBidQuotes);
+  return (await serializeBids(rows)).map((row) => redactPoolBidIdentity(row, parsePoolTemplate(request.poolTemplate), Boolean(request.awardedAt), isManager)).sort(compareBidQuotes);
 }
 
 /* ── Award ───────────────────────────────────────────────────────────────── */
@@ -1891,7 +2002,7 @@ export async function awardBid(
       community: { select: { id: true, name: true, type: true, hoaProfile: { select: { minimumInsuranceCoverageCents: true, requiresAdditionalInsured: true } } } },
       participations: {
         where: { response: "joined" },
-        select: { unitId: true, userId: true },
+        select: { unitId: true, userId: true, poolTier: true },
       },
       agreement: { select: { id: true, bidId: true } },
     },
@@ -1904,6 +2015,10 @@ export async function awardBid(
   if (request.agreement) {
     if (request.agreement.bidId === input.bidId) return request.agreement.id;
     throw new HoaWorkflowError("A different bid has already been accepted for this request.");
+  }
+  const poolTemplate = parsePoolTemplate(request.poolTemplate);
+  if (poolTemplate && input.expectedBidVersion === undefined) {
+    throw new HoaWorkflowError("Review the current pool quote version before confirming this award.", 409);
   }
   if (!["open_for_bids", "bidding_closed"].includes(request.status)) {
     throw new HoaWorkflowError("This request is not ready for an award.");
@@ -1970,13 +2085,35 @@ export async function awardBid(
     throw new HoaWorkflowError("This request has no participating homes.");
   }
 
-  const startDate = bid.proposedStartDate ?? request.startDate ?? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
-  const occurrenceDates = computeOccurrenceDates({
+  let poolSnapshot: PoolAgreementSnapshot | null = null;
+  if (poolTemplate) {
+    const quote = parsePoolQuote(bid.poolQuote);
+    if (!quote || request.participations.some((home) => !isPoolTier(home.poolTier) || !poolTemplate.tiers.includes(home.poolTier))) {
+      throw new HoaWorkflowError("The current pool quote or locked pool sizes are incomplete.", 409);
+    }
+    const tierCounts = poolTierCounts(request.participations);
+    let amount: number;
+    try { amount = calculatePoolTotal(poolTemplate, quote, tierCounts); }
+    catch { throw new HoaWorkflowError("The pool pricing no longer matches the locked homes.", 409); }
+    if (amount !== bid.amountCents) throw new HoaWorkflowError("The pool quote total changed. Refresh before awarding.", 409);
+    poolSnapshot = {
+      version: 1, template: poolTemplate, quote, tierCounts, amountCents: amount,
+      homes: request.participations.map((home) => {
+        const tier = home.poolTier as import("@/lib/pool-bid-template").PoolTier;
+        const monthlyCents = quote.monthlyCents[tier]!;
+        return { unitId: home.unitId, userId: home.userId, tier, monthlyCents, termCents: monthlyCents * poolTemplate.serviceMonths };
+      }),
+    };
+  }
+  const startDate = poolTemplate
+    ? new Date(Math.max(bid.proposedStartDate?.getTime() ?? 0, request.startDate?.getTime() ?? 0, now.getTime() + 86_400_000))
+    : bid.proposedStartDate ?? request.startDate ?? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000);
+  const occurrenceDates = poolTemplate ? computePoolOccurrenceDates(startDate, poolTemplate) : computeOccurrenceDates({
     startDate,
     intervalDays: request.recurrenceIntervalDays,
     count: request.totalOccurrences,
   });
-  const endDate = occurrenceDates[occurrenceDates.length - 1] ?? startDate;
+  const endDate = poolTemplate ? computePoolTermEnd(startDate, poolTemplate) : occurrenceDates[occurrenceDates.length - 1] ?? startDate;
 
   const agreementId = randomUUID();
   const occurrenceRows = occurrenceDates.map((serviceDate, index) => ({
@@ -2067,6 +2204,7 @@ export async function awardBid(
           exclusions: bid.exclusions,
           cadenceLabel: bid.cadenceLabel,
           lockedHomeCount: targets.length,
+          ...(poolSnapshot ? { poolSnapshot } : {}),
           startDate,
           endDate,
         },
@@ -2738,8 +2876,8 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
         })
       : [];
     const bidsByRequest: Record<string, BidSummary[]> = {};
-    for (const bid of bids.sort(compareBidQuotes)) {
-      (bidsByRequest[bid.requestId] ??= []).push(serializeBid(bid));
+    for (const bid of await serializeBids(bids.sort(compareBidQuotes))) {
+      (bidsByRequest[bid.requestId] ??= []).push(bid);
     }
 
     const agreementIds = community.serviceAgreements.map((agreement) => agreement.id);
@@ -2815,6 +2953,7 @@ export async function getResidentHoaHub(userId: string): Promise<ResidentHoaHub>
         select: {
           id: true,
           name: true,
+          staffAssignments: { where: { userId, status: "active", role: { in: ["hoa_manager", "hoa_team"] } }, select: { id: true } },
           hoaRequests: {
             where: { status: { not: "draft" } },
             orderBy: { createdAt: "desc" },
@@ -2853,8 +2992,9 @@ export async function getResidentHoaHub(userId: string): Promise<ResidentHoaHub>
         })
       : [];
     const bidsByRequest: Record<string, BidSummary[]> = {};
-    for (const bid of bids.sort(compareBidQuotes)) {
-      (bidsByRequest[bid.requestId] ??= []).push(serializeBid(bid));
+    for (const bid of await serializeBids(bids.sort(compareBidQuotes))) {
+      const request = community.hoaRequests.find((row) => row.id === bid.requestId);
+      (bidsByRequest[bid.requestId] ??= []).push(redactPoolBidIdentity(bid, parsePoolTemplate(request?.poolTemplate), Boolean(request?.awardedAt), Boolean(community.staffAssignments?.length)));
     }
 
     // Only this resident's own visits — never another home's schedule.

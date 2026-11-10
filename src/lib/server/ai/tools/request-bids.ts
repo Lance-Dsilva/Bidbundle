@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { parsePoolTemplate } from "@/lib/pool-bid-template";
 
 import { db } from "@/lib/server/db";
 import { communityHref, resolveCommunityAccess } from "@/lib/server/ai/scope";
@@ -26,7 +27,7 @@ export const getRequestBids: ToolDefinition<Input> = {
   async run(scope, input) {
     const request = await db.hoaServiceRequest.findUnique({
       where: { id: input.requestId },
-      select: { id: true, title: true, communityId: true },
+      select: { id: true, title: true, communityId: true, poolTemplate: true, awardedAt: true },
     });
     if (!request) throw new AiToolError("That service request does not exist.", 404);
 
@@ -65,6 +66,8 @@ export const getRequestBids: ToolDefinition<Input> = {
     }
 
     const access = await resolveCommunityAccess(scope, request.communityId);
+    const hideNames = parsePoolTemplate(request.poolTemplate)?.hideProviderNamesUntilAward &&
+      !request.awardedAt && !access.isManagerOrAdmin;
 
     const bids = await db.serviceBid.findMany({
       where: { requestId: request.id, status: { in: ["submitted", "accepted", "rejected"] } },
@@ -86,7 +89,7 @@ export const getRequestBids: ToolDefinition<Input> = {
         title: request.title,
         bids: bids.map((bid) => ({
           id: bid.id,
-          providerName: bid.provider.fullName,
+          providerName: hideNames ? `Provider quote ${bid.id.slice(-6)}` : bid.provider.fullName,
           status: bid.status,
           amountCents: bid.amountCents,
           currency: bid.currency,

@@ -8,6 +8,7 @@ import type { ProviderFeedItem } from "@/lib/hoa-types";
 import { apiFetch } from "@/lib/api";
 import { serviceCategoryLabel } from "@/lib/service-categories";
 import { MAX_BID_AMOUNT_CENTS } from "@/lib/validation/hoa";
+import { calculatePoolTotal, poolQuoteSchema, POOL_TIER_LABELS, POOL_ROUTE_DAYS, type PoolQuote, type PoolTier } from "@/lib/pool-bid-template";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 
 /**
@@ -42,6 +43,8 @@ const input: CSSProperties = {
   color: "var(--ink-900)",
   outline: "none",
 };
+
+const poolInputStyle: CSSProperties = { ...input, outline: undefined };
 
 function money(cents: number | null): string {
   if (cents == null) return "—";
@@ -349,14 +352,20 @@ function FeedCard({
           <p className="mb-2 text-xs" style={{ color: "var(--ink-700)" }}>
             Your bid ({item.myBid.status}, version {item.myBid.version})
           </p>
-          <BidPrice bid={item.myBid} homeCount={item.homeCount} totalOccurrences={item.totalOccurrences} />
+          {item.poolTemplate && item.myBid.poolQuote ? <div className="space-y-1 text-xs">
+            <p><strong>{formatPoolMoney(item.myBid.amountCents, quoteCurrency)}</strong> whole-job total for {item.poolTemplate.serviceMonths} calendar months</p>
+            {item.poolTemplate.tiers.map((tier) => <p key={tier}>{POOL_TIER_LABELS[tier]}: {item.myBid!.poolQuote!.monthlyCents[tier] == null ? "Not quoted" : formatPoolMoney(item.myBid!.poolQuote!.monthlyCents[tier]!, quoteCurrency)} /home/month · {item.tierCounts?.[tier] ?? 0} locked homes</p>)}
+            <p>{item.myBid.poolQuote.chemicalsIncluded ? "Chemicals included" : "Chemicals not included"} · Equipment repairs excluded</p>
+            <p>Earliest start {item.myBid.poolQuote.earliestStartDate.slice(0, 10)} UTC · {item.myBid.poolQuote.cancellationNoticeDays} days’ cancellation notice</p>
+            {item.myBid.revisions?.length ? <details><summary className="min-h-9 cursor-pointer py-2 font-semibold">Bid update history</summary><ol className="space-y-1">{item.myBid.revisions.map((revision) => <li key={revision.version}>v{revision.version}: {formatPoolMoney(revision.amountCents, quoteCurrency)} whole-job total · {revision.submittedAt.slice(0, 10)}</li>)}</ol></details> : null}
+          </div> : <BidPrice bid={item.myBid} homeCount={item.homeCount} totalOccurrences={item.totalOccurrences} />}
           {item.myBid.pricingBasis !== "total" && item.myBid.status === "submitted" ? <LegacyBidNotice requestStatus="open_for_bids" /> : null}
         </div>
       ) : null}
 
       {canBid ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button disabled={writesBlocked} onClick={() => setOpen((current) => !current)} variant="warm">
+          <Button id={`${amountId}-bid-action`} disabled={writesBlocked} onClick={() => setOpen((current) => !current)} variant="warm">
             {item.myBid ? "Revise bid" : "Submit bid"}
           </Button>
           {item.myBid && item.myBid.status === "submitted" ? (
@@ -367,7 +376,8 @@ function FeedCard({
         </div>
       ) : null}
 
-      {open && canBid ? (
+      {open && canBid && item.poolTemplate ? <PoolQuoteForm key={`${item.requestId}:${item.myBid?.version ?? 0}`} item={item} disabled={writesBlocked} onSubmit={(body) => { actionFocus.current = document.getElementById(`${amountId}-bid-action`); onSubmit(body); }} /> : null}
+      {open && canBid && !item.poolTemplate ? (
         <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={handle}>
           <label className="block text-xs" style={{ color: "var(--ink-700)" }}>
             Whole-job total ({quoteCurrency.toUpperCase()})
@@ -453,4 +463,78 @@ function FeedCard({
 
     </article>
   );
+}
+
+function formatPoolMoney(cents: number, currency: string) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
+}
+
+/** A pool quote carries monthly inputs; the server owns its all-homes total. */
+export function PoolQuoteForm({ item, disabled, onSubmit }: { item: ProviderFeedItem; disabled: boolean; onSubmit: (body: Record<string, unknown>) => void }) {
+  const template = item.poolTemplate!;
+  const current = item.myBid?.poolQuote;
+  const [prices, setPrices] = useState<Partial<Record<PoolTier, string>>>(() => Object.fromEntries(template.tiers.map((tier) => [tier, current?.monthlyCents[tier] == null ? "" : (current.monthlyCents[tier]! / 100).toFixed(2)])));
+  const [error, setError] = useState<string | null>(null);
+  const id = useId();
+  const [total, setTotal] = useState<number | null>(() => {
+    try { return current ? calculatePoolTotal(template, current, item.tierCounts ?? {}) : null; } catch { return null; }
+  });
+
+  function readQuote(data: FormData): PoolQuote {
+    const monthlyCents = Object.fromEntries(template.tiers.map((tier) => [tier, readAmountCents(String(data.get(`pool-rate-${tier}`) ?? ""))]));
+    if (template.tiers.some((tier) => monthlyCents[tier] == null || monthlyCents[tier]! <= 0)) throw new Error("Enter a positive monthly price for every applicable tier, using up to two decimal places.");
+    const earliest = String(data.get("earliestStartDate") ?? "");
+    if (!earliest) throw new Error("Choose the earliest start date.");
+    if (data.get("chemicalsIncluded") !== "yes" && data.get("chemicalsIncluded") !== "no") throw new Error("State whether chemicals are included.");
+    if (!/^\d+$/.test(String(data.get("cancellationNoticeDays") ?? ""))) throw new Error("Enter the cancellation notice in whole days, including 0 if no notice is required.");
+    const parsed = poolQuoteSchema.safeParse({ monthlyCents, chemicalsIncluded: data.get("chemicalsIncluded") === "yes", equipmentRepairsExcluded: data.get("repairsExcluded") === "on", earliestStartDate: new Date(`${earliest}T00:00:00.000Z`).toISOString(), routeDay: data.get("routeDay"), cancellationNoticeDays: Number(data.get("cancellationNoticeDays")) });
+    if (!parsed.success) throw new Error("Check the pool quote prices, repair exclusion and cancellation terms.");
+    return parsed.data;
+  }
+
+  function refreshPreview(event: FormEvent<HTMLFormElement>) {
+    try { setTotal(calculatePoolTotal(template, readQuote(new FormData(event.currentTarget)), item.tierCounts ?? {})); }
+    catch { setTotal(null); }
+  }
+  const validity = item.myBid?.validUntil ? new Date(new Date(item.myBid.validUntil).getTime() - new Date(item.myBid.validUntil).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "";
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (disabled) return;
+    const data = new FormData(event.currentTarget);
+    setError(null);
+    try {
+      const valid = new Date(String(data.get("validUntil") ?? ""));
+      if (!Number.isFinite(valid.getTime()) || valid.getTime() <= Date.now()) throw new Error("Choose a future bid validity deadline.");
+      const quote = readQuote(data);
+      calculatePoolTotal(template, quote, item.tierCounts ?? {});
+      const scope = String(data.get("scope") ?? "").trim();
+      if (!scope) throw new Error("Describe the included work.");
+      onSubmit({ pricingBasis: "total", perHomeCents: null, poolQuote: quote,
+        scope, exclusions: String(data.get("exclusions") ?? "").trim() || null,
+        estimatedDurationLabel: null, cadenceLabel: null, proposedStartDate: quote.earliestStartDate,
+        validUntil: valid.toISOString(), expectedBidVersion: item.myBid?.version,
+      });
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Check the pool bid terms."); }
+  }
+
+  return <form className="mt-4 rounded-xl border border-[var(--border-warm)] p-4" onSubmit={submit} onChange={refreshPreview} aria-labelledby={`${id}-title`}>
+    <h3 id={`${id}-title`} className="text-sm font-semibold">Pool-cleaning bid</h3>
+    <p className="mt-1 text-xs leading-5 text-[var(--ink-500)]">{template.serviceMonths} calendar months · {template.visitsPerMonth} visits per month. Quote every applicable tier. Prices are monthly per home; the whole-job total is calculated from locked homes.</p>
+    <fieldset disabled={disabled} className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+      <legend className="sr-only">Pool quote terms</legend>
+      {template.tiers.map((tier) => <label className="block text-xs" key={tier}>{POOL_TIER_LABELS[tier]} — USD /home/month<input className="mt-1" style={poolInputStyle} inputMode="decimal" type="text" name={`pool-rate-${tier}`} required value={prices[tier] ?? ""} onChange={(event) => setPrices((existing) => ({ ...existing, [tier]: event.target.value }))} /><span className="mt-1 block text-[var(--ink-500)]">{item.tierCounts?.[tier] ?? 0} locked homes</span></label>)}
+      <div className="rounded-lg bg-[var(--cream-100)] p-3 text-sm sm:col-span-2" role="status" aria-live="polite"><span className="block text-xs">Derived whole-job total (all homes, full term)</span><strong>{total === null ? "Complete tier prices and quote terms to calculate" : formatPoolMoney(total, "usd")}</strong><p className="mt-1 text-xs text-[var(--ink-500)]">The server recalculates this total. No monthly amount is converted to a per-visit charge.</p></div>
+      <label className="text-xs">Chemicals included?<select style={poolInputStyle} className="mt-1" name="chemicalsIncluded" defaultValue={current ? current.chemicalsIncluded ? "yes" : "no" : ""} required><option value="" disabled>Choose yes or no</option><option value="yes">Yes — included</option><option value="no">No — excluded</option></select></label>
+      <label className="text-xs">Earliest start (UTC date)<input style={poolInputStyle} className="mt-1" name="earliestStartDate" type="date" required defaultValue={current?.earliestStartDate.slice(0, 10) ?? ""} /></label>
+      <label className="text-xs">Route-day preference<select style={poolInputStyle} className="mt-1" name="routeDay" defaultValue={current?.routeDay ?? "flexible"}>{POOL_ROUTE_DAYS.map((day) => <option key={day} value={day}>{({ flexible: "Flexible", mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" })[day]}</option>)}</select><span className="mt-1 block text-[var(--ink-500)]">Actual times are confirmed in the visit plan.</span></label>
+      <label className="text-xs">Cancellation notice (days)<input style={poolInputStyle} className="mt-1" name="cancellationNoticeDays" type="number" min={0} max={90} step={1} required defaultValue={current?.cancellationNoticeDays ?? ""} /></label>
+      <label className="text-xs">Bid valid until (your local time)<input style={poolInputStyle} className="mt-1" name="validUntil" type="datetime-local" required defaultValue={validity} /></label>
+      <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" name="repairsExcluded" required defaultChecked={current?.equipmentRepairsExcluded ?? false} />Equipment repairs are excluded</label>
+      <label className="text-xs sm:col-span-2">Included work<textarea className="mt-1" style={poolInputStyle} name="scope" rows={2} required maxLength={2000} defaultValue={item.myBid?.scope ?? ""} /></label>
+      <label className="text-xs sm:col-span-2">Other exclusions (optional)<input className="mt-1" style={poolInputStyle} name="exclusions" maxLength={2000} defaultValue={item.myBid?.exclusions ?? ""} /></label>
+      {error && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{error}</p>}
+      <div className="sm:col-span-2"><Button type="submit" disabled={disabled} variant="warm">{disabled ? "Please wait…" : item.myBid ? "Update pool bid" : "Submit pool bid"}</Button></div>
+    </fieldset>
+  </form>;
 }

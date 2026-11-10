@@ -6,6 +6,8 @@ type QuotePrice = {
   pricingBasis: "total" | "per_home" | "per_visit";
   homeCount?: number;
   totalOccurrences?: number;
+  poolQuote?: unknown;
+  poolSnapshot?: unknown;
 };
 
 function currencyAmount(cents: number, currency: string): string {
@@ -32,6 +34,12 @@ export function BidPrice({ bid, homeCount, totalOccurrences }: {
 
   const homes = homeCount ?? bid.homeCount;
   const visits = totalOccurrences ?? bid.totalOccurrences;
+  if (bid.poolQuote || bid.poolSnapshot) {
+    return <div className="space-y-1 text-xs" style={{ color: "var(--ink-700, #334e68)" }}>
+      <p><strong>{currencyAmount(bid.amountCents, bid.currency)}</strong> whole-job term total ({bid.currency.toUpperCase()})</p>
+      <p>Monthly prices vary by pool tier. See the tier comparison for each home&apos;s exact monthly and full-term price.</p>
+    </div>;
+  }
   const breakdown = calculateQuoteBreakdown(bid.amountCents, homes, visits);
   return (
     <div className="space-y-1 text-xs" style={{ color: "var(--ink-700, #334e68)" }}>

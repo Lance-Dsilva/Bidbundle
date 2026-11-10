@@ -104,6 +104,7 @@ const primaryButtonStyle: CSSProperties = {
 
 /** Every field the dialog may write, across both halves of the save. */
 export type BusinessForm = {
+  businessStartedYear: string;
   fullName: string;
   phone: string;
   address: string;
@@ -130,6 +131,7 @@ export function formFromProfile(
     address: profile.address ?? "",
     neighborhood: profile.neighborhood ?? "",
     companyName: provider.companyName ?? "",
+    businessStartedYear: provider.businessStartedYear?.toString() ?? "",
     bio: provider.bio ?? "",
     trades: Array.from(new Set(provider.trades.map((trade) => normalizeServiceCategory(trade) ?? trade))),
     workingDays: [...provider.workingDays],
@@ -396,6 +398,7 @@ export function ProviderBusinessDetailsDialog({
         },
         {
           companyName: form.companyName.trim() || null,
+          businessStartedYear: form.businessStartedYear.trim() ? Number(form.businessStartedYear) : null,
           bio: form.bio.trim() || null,
           trades: normalizeServiceTrades(trades),
           workingDays: form.workingDays,
@@ -548,6 +551,7 @@ export function ProviderBusinessDetailsDialog({
             />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {textField("companyName", "Company name", { ref: firstFieldRef })}
+              {textField("businessStartedYear", "Year business started (optional, self-reported)", { type: "number", placeholder: "2015" })}
               {textField("fullName", "Your name")}
               {textField("phone", "Phone", { type: "tel" })}
             </div>
