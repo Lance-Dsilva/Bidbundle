@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-/** The homepage's only client behavior: its phone and tablet navigation. */
+/** Shared public-page behavior; the audience key remounts controls on navigation. */
 export function LandingInteractions() {
   useEffect(() => {
     const shell = document.querySelector<HTMLElement>(".landing-shell");
@@ -15,6 +15,7 @@ export function LandingInteractions() {
       menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
       menu.hidden = !open;
     };
+    setOpen(false);
 
     const onToggle = () => setOpen(menuButton.getAttribute("aria-expanded") !== "true");
     const onKeyDown = (event: KeyboardEvent) => {

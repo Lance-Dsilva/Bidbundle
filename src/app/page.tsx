@@ -1,372 +1,49 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 
-import { BundleenCompanyIcon } from "@/components/brand/BundleenCompanyIcon";
-import { LandingInteractions } from "@/components/marketing/LandingInteractions";
-import pricingExample from "@/content/marketing/homepage-example.json";
-
-import "./landing.css";
+import { AudienceLanding } from "@/components/marketing/AudienceLanding";
 
 export const metadata: Metadata = {
-  title: "Bundleen — Home services, with your neighbors.",
+  title: "Bundleen for HOAs — Resident savings, stronger communities",
   description:
-    "Bundleen brings nearby homes into one service request so local providers can bid on grouped work. See how neighborhood services come together.",
+    "Bring optional home services to your HOA at no cost to the association. Help residents compare competing local provider bids and coordinate shared work.",
 };
 
-const homeownerCta = "/get-started?role=homeowner";
-const providerCta = "/get-started?role=provider";
-const managerCta = "/community-onboarding";
-
-const exampleMoney = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: pricingExample.currency,
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-});
-const exampleSavingsCents = pricingExample.soloMonthlyCents - pricingExample.groupMonthlyCents;
-const exampleSavingsPercent = Math.round(exampleSavingsCents / pricingExample.soloMonthlyCents * 100);
-
-const navigation = [
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#services", label: "Services" },
-  { href: "#hoa", label: "For HOAs" },
-  { href: "#providers", label: "For providers" },
-];
-
-const services = [
-  { icon: "leaf", title: "Lawn & garden", body: "Care for lawns and outdoor spaces." },
-  {
-    icon: "clean",
-    title: "Home cleaning",
-    body: "Cleaning for the spaces you use every day.",
-  },
-  {
-    icon: "calendar",
-    title: "Seasonal maintenance",
-    body: "Home upkeep as the seasons change.",
-  },
-];
-
-const steps = [
-  {
-    title: "Start with your address.",
-    body: "Add your address during onboarding to see whether your home is in an active Bundleen neighborhood.",
-  },
-  {
-    title: "Open or join a request.",
-    body: "Eligible non-HOA homeowners can open or join a request. Nearby homes join before enrollment closes.",
-  },
-  {
-    title: "Local providers bid.",
-    body: "When the request opens for bidding, local providers submit bids for the grouped work.",
-  },
-  {
-    title: "A provider is selected.",
-    body: "Your community’s authorized manager selects the provider. Participating homes then follow the service schedule and visits.",
-  },
-];
-
-const questions = [
-  {
-    question: "Do I need to be part of an HOA?",
-    answer:
-      "No. Eligible homeowners who are not part of an HOA can open or join requests. HOA residents join optional work through requests opened by their HOA manager.",
-  },
-  {
-    question: "Is Bundleen available at my address?",
-    answer:
-      "Add your address during onboarding to check whether your home is in an active Bundleen neighborhood and explore available requests.",
-  },
-  {
-    question: "Who chooses the service provider?",
-    answer:
-      "Your community’s authorized manager selects the provider after bidding. Participating homes then follow the service schedule.",
-  },
-  {
-    question: "Will I get a lower price?",
-    answer:
-      "Competing provider bids set the price for your group’s service needs. The number of participating homes helps shape those bids. Residents see the final price before they are charged.",
-  },
-];
-
-function Arrow({ diagonal = false }: { diagonal?: boolean }) {
-  return (
-    <svg aria-hidden="true" focusable="false">
-      <use href={diagonal ? "#landing-arrow-up" : "#landing-arrow"} />
-    </svg>
-  );
-}
-
-/** Server-rendered marketing content; the menu is the only client behavior. */
 export default function HomePage() {
   return (
-    <div className="landing-shell">
-      <Link className="skip-link" href="#main">Skip to content</Link>
-
-      <svg className="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <defs>
-          <symbol id="landing-leaf" viewBox="0 0 32 32">
-            <path d="M26 5C13 4 5 10 7 19c2 9 18 7 19-14ZM6 27l14-15M13 20v-7M13 20h7" />
-          </symbol>
-          <symbol id="landing-clean" viewBox="0 0 32 32">
-            <path d="m8 28 6-15h8l3 15ZM14 13V7h8v6M14 7h10M18 7V4h6M5 9v6M2 12h6M27 15v6M24 18h6" />
-          </symbol>
-          <symbol id="landing-calendar" viewBox="0 0 32 32">
-            <rect x="5" y="7" width="22" height="21" rx="3" />
-            <path d="M10 4v6M22 4v6M5 14h22m-17 6 4 4 8-7" />
-          </symbol>
-          <symbol id="landing-arrow" viewBox="0 0 24 24">
-            <path d="M4 12h15m-6-6 6 6-6 6" />
-          </symbol>
-          <symbol id="landing-arrow-up" viewBox="0 0 24 24">
-            <path d="M6 18 18 6M6 6h12v12" />
-          </symbol>
-        </defs>
-      </svg>
-
-      <header className="site-header">
-        <div className="shell header-inner">
-          <Link className="brand" href="/" aria-label="Bundleen home">
-            <BundleenCompanyIcon size={35} />
-            <span>Bundleen</span>
-          </Link>
-          <nav className="desktop-nav" aria-label="Main navigation">
-            {navigation.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
-          </nav>
-          <div className="header-actions">
-            <Link className="sign-in" href="/sign-in">Sign in</Link>
-            <Link className="button header-cta" href="#start">Get started <Arrow /></Link>
-            <button
-              className="menu-button"
-              type="button"
-              aria-controls="mobile-menu"
-              aria-expanded="false"
-              aria-label="Open menu"
-              data-menu-button=""
-            >
-              <span />
-              <span />
-            </button>
-          </div>
-        </div>
-        <nav
-          className="mobile-menu shell"
-          id="mobile-menu"
-          aria-label="Mobile navigation"
-          data-mobile-menu=""
-          hidden
-        >
-          {navigation.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
-          <Link href="/sign-in">Sign in</Link>
-        </nav>
-      </header>
-
-      <main id="main" tabIndex={-1}>
-        <section className="hero shell" aria-labelledby="hero-title">
-          <div className="hero-copy">
-            <p className="eyebrow"><span className="little-line" aria-hidden="true" /> A neighborhood approach</p>
-            <h1 id="hero-title">Home services, <em>with your neighbors.</em></h1>
-            <p className="hero-description">
-              Bring nearby homes into one service request. Compare local provider bids on the
-              grouped work.
-            </p>
-            <div className="hero-example" aria-labelledby="pricing-example-title">
-              <p className="example-label" id="pricing-example-title">Example · {pricingExample.service}</p>
-              <dl className="example-prices">
-                <div>
-                  <dt>On your own</dt>
-                  <dd><strong>{exampleMoney.format(pricingExample.soloMonthlyCents / 100)}</strong><span> /month per home</span></dd>
-                </div>
-                <div>
-                  <dt>With {pricingExample.participatingHomes} homes</dt>
-                  <dd><strong>{exampleMoney.format(pricingExample.groupMonthlyCents / 100)}</strong><span> /month per home</span></dd>
-                </div>
-              </dl>
-              <p className="example-savings">
-                Save {exampleMoney.format(exampleSavingsCents / 100)}/month per home — about {exampleSavingsPercent}% in this example.
-              </p>
-              <p className="example-request">
-                Illustrative request: {pricingExample.participatingHomes} homes joined · {pricingExample.providerBids} competing provider bids.
-              </p>
-              <p className="example-note">Example pricing. Your community’s price is set by real provider bids.</p>
-            </div>
-            <div className="hero-actions">
-              <Link className="button primary" href="#start">Get started <Arrow /></Link>
-              <Link className="quiet-link" href="#how-it-works">See how it works <Arrow diagonal /></Link>
-            </div>
-            <p className="hero-footnote">Availability varies by neighborhood.</p>
-          </div>
-          <figure className="hero-scene">
-            <Image
-              src="/marketing/homepage-v5/neighborhood-hero.png"
-              width={1536}
-              height={1024}
-              alt="Illustrative scene of a homeowner and a service professional outside a home."
-              priority
-              sizes="(max-width: 899px) 100vw, (max-width: 1279px) 900px, (max-width: 1440px) 65.5vw, 944px"
-            />
-          </figure>
-          <Link className="hero-scroll" href="#services">
-            <span>Explore service examples</span><span aria-hidden="true">↓</span>
-          </Link>
-        </section>
-
-        <section className="services shell" id="services" aria-labelledby="services-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Service examples</p>
-              <h2 id="services-title">Start with what<br />{" "}your home needs.</h2>
-            </div>
-            <p>A few ways neighbors can bring similar needs together.</p>
-          </div>
-          <ul className="service-list" role="list">
-            {services.map((service) => (
-              <li className="service" key={service.title}>
-                <svg className="service-icon" aria-hidden="true" focusable="false">
-                  <use href={`#landing-${service.icon}`} />
-                </svg>
-                <div><h3>{service.title}</h3><p>{service.body}</p></div>
-              </li>
-            ))}
-          </ul>
-          <p className="availability">Examples only. Services vary by neighborhood and local providers.</p>
-        </section>
-
-        <section className="shared-story shell" aria-labelledby="shared-title">
-          <figure className="garden-scene">
-            <Image
-              src="/marketing/homepage-v5/garden-care.png"
-              width={1536}
-              height={1024}
-              alt="Illustrative scene of a service professional tending a home garden."
-              sizes="(max-width: 760px) 100vw, (max-width: 1279px) 50vw, (max-width: 1440px) 49vw, 705px"
-            />
-          </figure>
-          <div className="story-copy">
-            <p className="eyebrow">The neighborhood advantage</p>
-            <h2 id="shared-title">More homes.<br />{" "}<em>One shared request.</em></h2>
-            <p>When nearby homes need the same service, they can join one request.</p>
-            <p>
-              One shared request lets providers plan nearby visits together and compete for the
-              group’s business. Neighbors can compare those bids together.
-            </p>
-            <Link className="quiet-link" href="#how-it-works">See how it works <Arrow /></Link>
-          </div>
-        </section>
-
-        <section className="process-section" id="how-it-works" aria-labelledby="process-title">
-          <div className="shell">
-            <div className="process-heading">
-              <p className="eyebrow">How it works</p>
-              <h2 id="process-title">From your home<br />{" "}to a shared plan.</h2>
-            </div>
-            <ol className="process-list" role="list">
-              {steps.map((step, index) => (
-                <li key={step.title}>
-                  <span className="step-number">0{index + 1} <span aria-hidden="true">—</span></span>
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                </li>
-              ))}
-            </ol>
-            <p className="process-note">
-              <strong>Part of an HOA?</strong> Your HOA manager opens the requests. Residents join
-              optional work through their community.
-            </p>
-          </div>
-        </section>
-
-        <section className="audiences shell" aria-labelledby="audiences-title">
-          <div className="audience-intro">
-            <p className="eyebrow">For HOA managers and providers</p>
-            <h2 id="audiences-title">Bring local<br />{" "}<em>work together.</em></h2>
-          </div>
-          <div className="audience-list">
-            <article id="hoa">
-              <p className="eyebrow">For HOA managers</p>
-              <h3>Plan services<br />{" "}for your community.</h3>
-              <p>
-                Open community requests and gather resident interest in optional work. Select a
-                provider after bidding, then follow scheduling and visits.
-              </p>
-              <Link className="quiet-link" href={managerCta}>Get started for my HOA <Arrow diagonal /></Link>
-            </article>
-            <article id="providers">
-              <p className="eyebrow">For local service providers</p>
-              <h3>More nearby homes.<br />{" "}One service request.</h3>
-              <p>
-                Bid on grouped service requests from nearby homes. Review the shared need and put
-                your business forward for the work.
-              </p>
-              <Link className="quiet-link" href={providerCta}>Get started as a provider <Arrow diagonal /></Link>
-            </article>
-          </div>
-        </section>
-
-        <section className="faq-section shell" aria-labelledby="faq-title">
-          <div>
-            <p className="eyebrow">Before you begin</p>
-            <h2 id="faq-title">Questions,<br />{" "}answered.</h2>
-          </div>
-          <div className="faq-list">
-            {questions.map(({ question, answer }) => (
-              <details key={question}>
-                <summary>{question}<span aria-hidden="true">+</span></summary>
-                <p>{answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <section className="start-section shell" id="start" aria-labelledby="start-title">
-          <div className="start-copy">
-            <p className="eyebrow">For your next home service</p>
-            <h2 id="start-title">Start with your<br />{" "}<em>neighborhood.</em></h2>
-            <p>Bring your next home service into a shared request.</p>
-          </div>
-          <div className="start-actions">
-            <Link className="button primary" href={homeownerCta}>I’m a homeowner <Arrow /></Link>
-            <p className="coverage-helper">
-              Your address is checked during onboarding. Availability varies by neighborhood.
-            </p>
-            <Link className="quiet-link" href={providerCta}>I’m a service provider <Arrow diagonal /></Link>
-            <Link className="quiet-link hoa-entry" href={managerCta}>I manage an HOA <Arrow diagonal /></Link>
-          </div>
-        </section>
-      </main>
-
-      <footer className="site-footer shell">
-        <div className="footer-top">
-          <Link className="brand" href="/" aria-label="Bundleen home">
-            <BundleenCompanyIcon size={32} />
-            <span>Bundleen</span>
-          </Link>
-          <p>Home services, with your neighbors.</p>
-          <nav aria-label="Footer">
-            <Link href="#how-it-works">How it works</Link>
-            <Link href="#hoa">For HOAs</Link>
-            <Link href="#providers">For providers</Link>
-          </nav>
-        </div>
-        <div className="footer-support">
-          <nav aria-label="Help">
-            <Link href="/help/how-bidding-works">How bidding works</Link>
-            <Link href="/help/hoa-onboarding">Getting set up</Link>
-            <Link href="/help/provider-verification">Provider verification</Link>
-          </nav>
-          <nav aria-label="Contact">
-            <a href="mailto:hello@bundleen.com">hello@bundleen.com</a>
-            <a href="mailto:support@bundleen.com">support@bundleen.com</a>
-          </nav>
-        </div>
-        <div className="footer-note">
-          <span>© 2026 Bundleen Corp.</span>
-          <span>AI-generated scenes are illustrative and do not show actual customers.</span>
-        </div>
-      </footer>
-
-      <LandingInteractions />
-    </div>
+    <AudienceLanding
+      audience="hoa"
+      eyebrow="For HOA boards and community managers"
+      title={<>Better prices. <em>Stronger communities.</em></>}
+      description="Bring optional home services to your residents at no cost to your HOA. Compare local provider bids and coordinate shared work in one place."
+      action={{ href: "/community-onboarding", label: "Bring Bundleen to your community" }}
+      pricingExample
+      benefitsTitle={<>More for residents.<br />{" "}One community approach.</>}
+      benefits={[
+        { icon: "leaf", title: "Resident savings", body: "Bring nearby homes into one request so providers can price the grouped work." },
+        { icon: "clean", title: "Competing local bids", body: "Compare proposals and review provider credentials before selecting the right fit." },
+        { icon: "calendar", title: "Clear coordination", body: "Keep resident participation, scheduling and visits connected to the community request." },
+      ]}
+      story={{
+        title: <>More homes.<br />{" "}<em>One shared request.</em></>,
+        paragraphs: [
+          "Your HOA brings the community together. Bundleen helps turn common service needs into requests that local providers can bid on.",
+          "Residents join optional work through their HOA. Your authorized manager compares bids and selects the provider for participating homes.",
+        ],
+        plannedTerms: "Reserve-fund revenue sharing is planned for the pilot, subject to your community’s proposal. Your association’s terms will be confirmed before any paid pilot begins.",
+      }}
+      steps={[
+        { title: "Introduce your community.", body: "Tell us about your HOA and its service needs through community onboarding." },
+        { title: "Invite your residents.", body: "Once your community is set up, share HOA invitations so residents can join the right community." },
+        { title: "Compare provider bids.", body: "Open requests, gather resident interest and review competing proposals and credentials." },
+        { title: "Coordinate the work.", body: "Your authorized manager selects a provider, then participating homes follow the schedule and visits." },
+      ]}
+      questions={[
+        { question: "Who is Bundleen for?", answer: "HOA boards and community managers bring Bundleen to the community. Residents then arrive through invitations from their HOA and choose which optional requests to join." },
+        { question: "Does the association pay to get started?", answer: "Bringing Bundleen to your HOA has no cost to the association. Optional service pricing comes from provider bids, with any paid pilot terms shared before residents commit." },
+        { question: "Who selects the provider?", answer: "Your community’s authorized manager compares the bids and reviews provider credentials before selecting a provider. Your HOA’s own approval requirements still apply." },
+        { question: "What sets the residents’ price?", answer: "Competing provider bids set the price for the group’s service needs. The number of participating homes helps shape those bids. Residents see the final price before they are charged." },
+      ]}
+      start={{ title: <>Bring your<br />{" "}<em>community together.</em></>, body: "Start a conversation about your HOA’s residents and the services they need." }}
+    />
   );
 }

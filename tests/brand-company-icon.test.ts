@@ -32,9 +32,11 @@ const CANONICAL = "public/bundleen/brand/bundleen-company-icon.svg";
  * `AuthShowcase` is one component behind nine routes — sign-in, get-started,
  * the profile step, and the admin/HOA invitation and sign-in pages — so the
  * brand mark on all of them moves together.
+ * `AudienceLanding` owns the shared header and footer on all three public
+ * audience pages: HOA, resident, and provider.
  */
 const BRAND_SURFACES = [
-  "src/app/page.tsx",
+  "src/components/marketing/AudienceLanding.tsx",
   "src/components/layout/HomeownerShell.tsx",
   "src/components/layout/ProviderShell.tsx",
   "src/components/layout/AppTopbar.tsx",

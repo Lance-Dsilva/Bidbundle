@@ -17,6 +17,8 @@ vi.mock("@/components/ai/BundleenAiWidget", () => ({ BundleenAiWidget: () => nul
 vi.mock("@clerk/nextjs", () => ({ UserButton: () => null }));
 import SignUpPage from "@/app/get-started/[[...sign-up]]/page";
 import HomePage from "@/app/page";
+import ResidentsPage from "@/app/residents/page";
+import ProvidersPage from "@/app/providers/page";
 import { AdminCrmShell } from "@/components/admin/AdminCrmShell";
 beforeEach(() => { vi.clearAllMocks(); state.auth.mockResolvedValue({ userId: null }); state.profile.mockResolvedValue(null); state.manager.mockResolvedValue(false); });
 afterEach(cleanup);
@@ -36,14 +38,25 @@ describe("staff-led community interest routing", () => {
     state.auth.mockResolvedValue({ userId: "verified-provider" }); state.profile.mockResolvedValue({ id: "provider", role: "provider" });
     await expect(SignUpPage({ searchParams: Promise.resolve({ role: "homeowner", intent: "other" }) })).rejects.toThrow("REDIRECT:/app/provider/dashboard");
   });
-  it("keeps V5 role entries distinct while routing manager interest to staff onboarding", () => {
-    render(<HomePage />);
-    const startLinks = screen.getAllByRole("link", { name: "Get started" });
-    expect(startLinks).toHaveLength(2);
-    for (const link of startLinks) expect(link).toHaveAttribute("href", "#start");
-    expect(screen.getByRole("link", { name: "I’m a homeowner" })).toHaveAttribute("href", "/get-started?role=homeowner");
-    for (const name of ["Get started for my HOA", "I manage an HOA"]) expect(screen.getByRole("link", { name })).toHaveAttribute("href", "/community-onboarding");
-    for (const name of ["Get started as a provider", "I’m a service provider"]) expect(screen.getByRole("link", { name })).toHaveAttribute("href", "/get-started?role=provider");
+  it.each([
+    { audience: "HOA", Page: HomePage, action: "Bring Bundleen to your community", href: "/community-onboarding" },
+    { audience: "resident", Page: ResidentsPage, action: "Open my community", href: "/app/homeowner/community" },
+    { audience: "provider", Page: ProvidersPage, action: "Apply as a provider", href: "/get-started?role=provider" },
+  ])("routes the $audience page to its supported entry point and preserves audience navigation", ({ Page, action, href }) => {
+    render(<Page />);
+    const navigation = within(screen.getByRole("navigation", { name: "Main navigation" }));
+    expect(navigation.getByRole("link", { name: "For residents" })).toHaveAttribute("href", "/residents");
+    expect(navigation.getByRole("link", { name: "For providers" })).toHaveAttribute("href", "/providers");
+    expect(navigation.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/sign-in");
+    const conversionLinks = screen.getAllByRole("link", { name: action });
+    expect(conversionLinks).toHaveLength(3);
+    for (const link of conversionLinks) expect(link).toHaveAttribute("href", href);
+    const start = document.getElementById("start");
+    expect(start).not.toBeNull();
+    const bottomLinks = within(start!).getAllByRole("link");
+    expect(bottomLinks).toHaveLength(1);
+    expect(bottomLinks[0]).toHaveAccessibleName(action);
+    expect(bottomLinks[0]).toHaveAttribute("href", href);
   });
   it("makes the staff queue discoverable in the customer navigation", () => {
     render(<AdminCrmShell userName="Ops" userEmail="ops@example.invalid" accessLevel="admin" isStaffAccount={false} permissions={[]}>Queue</AdminCrmShell>);
