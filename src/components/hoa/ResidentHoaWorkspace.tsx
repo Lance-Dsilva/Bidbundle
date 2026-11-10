@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { BidPrice } from "@/components/ui/BidPrice";
+import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import type { BidSummary, ResidentHoaHub, VisitSummary } from "@/lib/hoa-types";
 import { serviceCategoryLabel } from "@/lib/service-categories";
@@ -256,11 +257,7 @@ function BidList({ bids, winner }: { bids: BidSummary[]; winner: BidSummary | un
           >
             <div className="min-w-0">
               <strong className="text-[var(--ink-900)]">{bid.providerCompany ?? bid.providerName}</strong>
-              {bid.providerVerified ? (
-                <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">
-                  Verified
-                </span>
-              ) : null}
+              <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
               <BidPrice bid={bid} />
               {bid.proposedStartDate ? <p className="mt-1 text-[var(--muted)]">Starts {dateLabel(bid.proposedStartDate)}</p> : null}
             </div>

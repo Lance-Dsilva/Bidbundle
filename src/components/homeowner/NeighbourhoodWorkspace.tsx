@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { HomeAddressCompletion } from "@/components/homeowner/HomeAddressCompletion";
@@ -698,12 +699,8 @@ function BidRow({
         <div>
           <p className="text-sm font-semibold" style={{ color: "var(--ink-900)" }}>
             {bid.providerCompany ?? bid.providerName}
-            {bid.providerVerified ? (
-              <span className="ml-2 text-xs" style={{ color: "#15803d" }}>
-                verified
-              </span>
-            ) : null}
           </p>
+          <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
           <BidPrice bid={bid} />
           {bid.estimatedDurationLabel ? <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>{bid.estimatedDurationLabel}</p> : null}
           {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={requestStatus} /> : null}

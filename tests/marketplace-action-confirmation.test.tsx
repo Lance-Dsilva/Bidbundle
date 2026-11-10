@@ -11,6 +11,7 @@ import type { HomeownerBidView } from "@/lib/server/marketplace-reads";
 const state = vi.hoisted(() => ({ api: vi.fn(), mutation: vi.fn(), router: { refresh: vi.fn(), push: vi.fn() }, hub: null as NeighborhoodHub | null, bids: [] as HomeownerBidView[], provider: null as ProviderHoaWorkspace | null }));
 vi.mock("@/lib/api", () => ({ apiFetch: state.api, ApiError: class extends Error {} }));
 vi.mock("next/navigation", () => ({ useRouter: () => state.router }));
+vi.mock("@/components/hoa/ProviderPolicyEditor", () => ({ ProviderPolicyEditor: () => null }));
 // JSDOM has no native modal implementation. Emulate only opening/closing, not
 // inert backgrounds, native Escape dispatch, focus trapping or viewport layout.
 beforeAll(() => {

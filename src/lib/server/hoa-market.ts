@@ -1,5 +1,7 @@
 import "server-only";
 
+import { providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
+
 import { randomUUID } from "node:crypto";
 
 import { Prisma } from "@/generated/prisma/client";
@@ -188,7 +190,7 @@ type BidRow = {
   };
   provider: {
     fullName: string;
-    providerProfile: {
+    providerProfile: VerificationProfile & {
       companyName: string | null;
       licenseVerifiedAt: Date | null;
       insuranceVerifiedAt: Date | null;
@@ -207,7 +209,7 @@ const bidInclude = {
     select: {
       fullName: true,
       providerProfile: {
-        select: { companyName: true, licenseVerifiedAt: true, insuranceVerifiedAt: true },
+        select: { companyName: true, ...providerVerificationSelect },
       },
     },
   },
@@ -220,10 +222,7 @@ function serializeBid(row: BidRow): BidSummary {
     providerUserId: row.providerUserId,
     providerName: row.provider.fullName,
     providerCompany: row.provider.providerProfile?.companyName ?? null,
-    providerVerified: Boolean(
-      row.provider.providerProfile?.licenseVerifiedAt &&
-        row.provider.providerProfile.insuranceVerifiedAt,
-    ),
+    providerVerified: providerVerificationState(row.provider.providerProfile).verified,
     status: row.status,
     amountCents: row.amountCents,
     currency: row.currency,
@@ -1083,11 +1082,11 @@ type ProviderGate = {
  */
 async function requireProvider(
   userId: string,
-  options?: { allowPending?: boolean },
+  options?: { allowPending?: boolean; existingWork?: boolean },
 ): Promise<ProviderGate> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { role: true, providerProfile: true },
+    select: { role: true, providerProfile: { include: { licenseDocument: true, insuranceDocument: true } } },
   });
   if (!user || user.role !== "provider" || !user.providerProfile) {
     throw new HoaWorkflowError("Only provider accounts can do this.", 403);
@@ -1105,10 +1104,10 @@ async function requireProvider(
   } else if (profile.accountStatus !== "active") {
     gate.eligible = false;
     gate.ineligibleReason = "Your provider account is awaiting Bundleen activation.";
-  } else if (!profile.licenseVerifiedAt || !profile.insuranceVerifiedAt) {
+  } else if (!options?.existingWork && !providerVerificationState(profile).verified) {
     gate.eligible = false;
     gate.ineligibleReason =
-      "Bidding opens once Bundleen verifies your license and insurance.";
+      "Bidding opens once Bundleen approves current, unexpired license and insurance documents.";
   }
   if (!gate.eligible && !options?.allowPending) {
     throw new HoaWorkflowError(gate.ineligibleReason ?? "Provider account is not eligible.", 403);
@@ -1285,6 +1284,7 @@ async function eligibleProviderIntentsForRequest(input: {
         insuranceVerifiedAt: { not: null },
       },
       select: {
+        ...providerVerificationSelect,
         trades: true,
         notifyNewJobs: true,
         user: {
@@ -1308,6 +1308,7 @@ async function eligibleProviderIntentsForRequest(input: {
   const now = new Date();
 
   return providers
+    .filter((profile) => providerVerificationState(profile, now).verified)
     .filter((profile) =>
       providerCanSeeRequest({
         gate: {
@@ -1887,7 +1888,7 @@ export async function awardBid(
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     include: {
-      community: { select: { id: true, name: true, type: true } },
+      community: { select: { id: true, name: true, type: true, hoaProfile: { select: { minimumInsuranceCoverageCents: true, requiresAdditionalInsured: true } } } },
       participations: {
         where: { response: "joined" },
         select: { unitId: true, userId: true },
@@ -1938,10 +1939,19 @@ export async function awardBid(
   }
   const provider = await db.user.findUnique({
     where: { id: bid.providerUserId },
-    select: { id: true, email: true, providerProfile: { select: { accountStatus: true } } },
+    select: { id: true, email: true, providerProfile: { select: { accountStatus: true, ...providerVerificationSelect } } },
   });
   if (provider?.providerProfile?.accountStatus !== "active") {
     throw new HoaWorkflowError("That provider's account is no longer active.");
+  }
+
+  if (!providerVerificationState(provider.providerProfile, now).verified) {
+    throw new HoaWorkflowError("That provider needs current, approved license and insurance documents before an award.", 409);
+  }
+  const policy = request.community.hoaProfile;
+  if (!isNeighborhood && (!policy || (provider.providerProfile.insuranceCoverageCents ?? -1) < policy.minimumInsuranceCoverageCents ||
+    (policy.requiresAdditionalInsured && !provider.providerProfile.insuranceAdditionalInsured))) {
+    throw new HoaWorkflowError("That provider does not meet this HOA’s insurance coverage and additional-insured requirements.", 409);
   }
 
   // Resolve the service targets *before* anything is written. A neighbourhood
@@ -2197,7 +2207,7 @@ export async function saveDayPlan(
   occurrenceId: string,
   input: DayPlanInput,
 ): Promise<void> {
-  await requireProvider(providerUserId);
+  await requireProvider(providerUserId, { existingWork: true });
   const occurrence = await requireProviderOccurrence(providerUserId, occurrenceId);
   if (occurrence.status === "completed" || occurrence.status === "cancelled") {
     throw new HoaWorkflowError("This service day is closed.");
@@ -2374,7 +2384,7 @@ export async function updateVisitStatus(
   visitId: string,
   input: VisitStatusInput,
 ): Promise<void> {
-  await requireProvider(providerUserId);
+  await requireProvider(providerUserId, { existingWork: true });
   const visit = await db.serviceVisit.findUnique({
     where: { id: visitId },
     select: {

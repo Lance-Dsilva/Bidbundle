@@ -1,5 +1,7 @@
 import "server-only";
 
+import { providerVerificationSelect, providerVerificationState } from "@/lib/provider-verification";
+
 import { db } from "@/lib/server/db";
 import { AiToolError } from "@/lib/server/ai/errors";
 import { customerMessageWhere } from "@/lib/server/support";
@@ -139,8 +141,7 @@ export async function buildTicketAiContext(ticketId: string): Promise<TicketAiCo
             // Explicitly not licence numbers, policy numbers, or payout fields.
             select: {
               accountStatus: true,
-              licenseVerifiedAt: true,
-              insuranceVerifiedAt: true,
+              ...providerVerificationSelect,
             },
           })
         : Promise.resolve(null),
@@ -277,8 +278,7 @@ export async function buildTicketAiContext(ticketId: string): Promise<TicketAiCo
       memberOfCommunities: memberships,
       providerAccountStatus: providerProfile?.accountStatus ?? null,
       providerVerified: providerProfile
-        ? providerProfile.licenseVerifiedAt !== null &&
-          providerProfile.insuranceVerifiedAt !== null
+        ? providerVerificationState(providerProfile).verified
         : null,
       providerActiveServiceAreas: serviceAreaCount,
     },

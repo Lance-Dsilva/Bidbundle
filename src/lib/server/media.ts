@@ -345,9 +345,9 @@ export async function removeMedia(
 ): Promise<void> {
   const asset = await db.mediaAsset.findUnique({
     where: { id: mediaId },
-    select: { id: true, storagePath: true, status: true },
+    select: { id: true, storagePath: true, status: true, purpose: true },
   });
-  if (!asset || asset.status === "removed") return;
+  if (!asset || asset.status === "removed" || !["amenity_gallery", "amenity_review", "amenity_issue"].includes(asset.purpose)) return;
 
   await db.mediaAsset.update({
     where: { id: mediaId },
@@ -396,7 +396,7 @@ export type MediaAccess = {
 /** Loads exactly the facts {@link canViewMedia} needs to decide. */
 export async function loadMediaForAccess(mediaId: string): Promise<MediaAccess | null> {
   const asset = await db.mediaAsset.findFirst({
-    where: { id: mediaId, status: "active" },
+    where: { id: mediaId, status: "active", purpose: { in: ["amenity_gallery", "amenity_review", "amenity_issue"] } },
     select: {
       communityId: true,
       purpose: true,
@@ -410,11 +410,11 @@ export async function loadMediaForAccess(mediaId: string): Promise<MediaAccess |
       amenity: { select: { status: true } },
     },
   });
-  if (!asset) return null;
+  if (!asset || !asset.communityId || !["amenity_gallery", "amenity_review", "amenity_issue"].includes(asset.purpose)) return null;
 
   return {
     communityId: asset.communityId,
-    purpose: asset.purpose,
+    purpose: asset.purpose as MediaAccess["purpose"],
     amenityId: asset.amenityId,
     reviewId: asset.reviewId,
     issueId: asset.issueId,

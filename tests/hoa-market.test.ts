@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 /**
  * Marketplace service tests with a scripted database, in the same style as
@@ -178,7 +179,7 @@ describe("awardBid", () => {
       recurrenceIntervalDays: 14,
       totalOccurrences: 3,
       startDate: new Date("2026-09-01T00:00:00Z"),
-      community: { id: "hoa-1", name: "Cedar Park HOA", type: "hoa" },
+      community: { id: "hoa-1", name: "Cedar Park HOA", type: "hoa", hoaProfile: { minimumInsuranceCoverageCents: 0, requiresAdditionalInsured: false } },
       participations: [
         { unitId: "unit-1", userId: "resident-1" },
         { unitId: "unit-2", userId: null },
@@ -203,15 +204,14 @@ describe("awardBid", () => {
         fullName: "Green Crew",
         providerProfile: {
           companyName: "Green Crew LLC",
-          licenseVerifiedAt: new Date(),
-          insuranceVerifiedAt: new Date(),
+          ...approvedProviderVerification(),
         },
       },
     };
     state.providerUser = {
       id: "provider-1",
       email: "provider@example.com",
-      providerProfile: { accountStatus: "active" },
+      providerProfile: { accountStatus: "active", ...approvedProviderVerification() },
     };
     state.losingBids = [
       { id: "bid-2", provider: { id: "provider-2", email: "other@example.com" } },
@@ -305,6 +305,8 @@ describe("awardBid", () => {
       status: "awarded",
       agreement: { id: "agreement-1", bidId: "bid-1" },
     };
+    // An expired credential blocks new work, not retrieval of an accepted award.
+    state.providerUser = { ...state.providerUser!, providerProfile: { accountStatus: "active" } };
     await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).resolves.toBe(
       "agreement-1",
     );
@@ -332,6 +334,48 @@ describe("awardBid", () => {
       HoaWorkflowError,
     );
     expect(state.batches).toHaveLength(0);
+  });
+
+  it.each([
+    { licenseDocument: null },
+    { insuranceExpiresAt: null },
+    { licenseExpiresAt: new Date("2000-01-01") },
+    { insuranceVerifiedDocumentChecksum: "unreviewed-replacement" },
+  ])("refuses a new award for incomplete, expired or replaced evidence before any writes: %j", async (change) => {
+    state.providerUser!.providerProfile = { accountStatus: "active", ...approvedProviderVerification(), ...change };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("refuses approved insurance below this HOA's required coverage", async () => {
+    state.request!.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa",
+      hoaProfile: { minimumInsuranceCoverageCents: 200_000_000, requiresAdditionalInsured: false } };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("requires the HOA's additional-insured condition even for otherwise current approved insurance", async () => {
+    const credentials = approvedProviderVerification();
+    credentials.insuranceAdditionalInsured = false;
+    credentials.insuranceDocument.credentialAdditionalInsured = false;
+    state.providerUser!.providerProfile = { accountStatus: "active", ...credentials };
+    state.request!.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa",
+      hoaProfile: { minimumInsuranceCoverageCents: 100_000_000, requiresAdditionalInsured: true } };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("fails closed when the HOA's insurance policy cannot be read", async () => {
+    state.request!.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa", hoaProfile: null };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
+  it("permits a new award when current approved insurance meets both HOA conditions exactly", async () => {
+    state.request!.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa",
+      hoaProfile: { minimumInsuranceCoverageCents: 100_000_000, requiresAdditionalInsured: true } };
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).resolves.toBeTypeOf("string");
+    expect(state.batches).toHaveLength(1);
   });
 });
 

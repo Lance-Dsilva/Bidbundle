@@ -578,6 +578,9 @@ model HoaProfile {
   /// the unit inventory represents vacant and uninvited homes.
   totalHomes Int
 
+  minimumInsuranceCoverageCents Int @default(0)
+  requiresAdditionalInsured Boolean @default(false)
+
   referenceCode String?
   serviceNotes  String?
 
@@ -1362,6 +1365,17 @@ model ProviderProfile {
   licenseVerifiedByUserId   String?
   insuranceVerifiedAt       DateTime?
   insuranceVerifiedByUserId String?
+  licenseExpiresAt DateTime? @db.Date
+  insuranceExpiresAt DateTime? @db.Date
+  insuranceCoverageCents Int?
+  insuranceAdditionalInsured Boolean @default(false)
+  licenseVerifiedDocumentChecksum String?
+  insuranceVerifiedDocumentChecksum String?
+  licenseDocumentId String? @unique
+  licenseDocument MediaAsset? @relation("ProviderLicenseDocument", fields: [licenseDocumentId], references: [id], onDelete: SetNull)
+  insuranceDocumentId String? @unique
+  insuranceDocument MediaAsset? @relation("ProviderInsuranceDocument", fields: [insuranceDocumentId], references: [id], onDelete: SetNull)
+  documents MediaAsset[] @relation("ProviderDocuments")
 
   // ── Payout display metadata (server controlled) ───────────────────────
   // No account or routing number is ever accepted or stored. `payoutLast4` is
@@ -1891,6 +1905,14 @@ enum MediaPurpose {
   amenity_gallery
   amenity_review
   amenity_issue
+  provider_license
+  provider_insurance
+}
+
+enum CredentialReviewStatus {
+  pending
+  approved
+  rejected
 }
 
 enum MediaStatus {
@@ -2311,10 +2333,24 @@ model AmenityReviewResponse {
 /// re-checks authorization on every request. No storage credential is stored.
 model MediaAsset {
   id          String    @id @default(cuid())
-  communityId String
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   purpose MediaPurpose
+  providerProfileId String?
+  providerProfile ProviderProfile? @relation("ProviderDocuments", fields: [providerProfileId], references: [id], onDelete: Cascade)
+  licenseFor ProviderProfile? @relation("ProviderLicenseDocument")
+  insuranceFor ProviderProfile? @relation("ProviderInsuranceDocument")
+  credentialSnapshot Json?
+  credentialReviewStatus CredentialReviewStatus @default(pending)
+  credentialReviewReason String?
+  credentialReminder30At DateTime?
+  credentialReminder7At DateTime?
+  credentialReviewedAt DateTime?
+  credentialReviewedByUserId String?
+  credentialExpiresAt DateTime? @db.Date
+  credentialCoverageCents Int?
+  credentialAdditionalInsured Boolean?
 
   uploaderUserId String
   uploader       User   @relation("MediaUploader", fields: [uploaderUserId], references: [id], onDelete: Restrict)
@@ -2351,6 +2387,7 @@ model MediaAsset {
 
   coverOf Amenity? @relation("AmenityCover")
 
+  @@index([providerProfileId, purpose, status])
   @@index([amenityId, status, position])
   @@index([reviewId, status])
   @@index([issueId, status])

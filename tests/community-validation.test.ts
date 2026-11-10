@@ -141,6 +141,9 @@ describe("providerAdminUpdateSchema", () => {
       providerAdminUpdateSchema.safeParse({
         accountStatus: "suspended",
         license: "verify",
+        licenseDocumentId: "current-document",
+        licenseDocumentChecksum: "a".repeat(64),
+        licenseExpiresOn: "2099-01-01",
         expectedUpdatedAt: "2026-08-12T12:00:00.000Z",
       }).success,
     ).toBe(true);

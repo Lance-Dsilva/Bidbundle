@@ -63,6 +63,10 @@ export type ProviderProfile = {
   isInsuranceVerified: boolean;
   licenseVerifiedAt: string | null;
   insuranceVerifiedAt: string | null;
+  licenseExpiresOn?: string | null;
+  insuranceExpiresOn?: string | null;
+  insuranceCoverageCents?: number | null;
+  insuranceAdditionalInsured?: boolean;
 
   /** Display only. Bundleen stores no bank credentials. */
   payoutStatus: PayoutStatus;

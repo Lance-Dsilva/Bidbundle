@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
 import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
+import { ProviderCredentialsPanel } from "@/components/provider/ProviderCredentialsPanel";
+import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
 import { useProviderEarnings } from "@/hooks/useProviderEarnings";
 import { useProviderOverview } from "@/hooks/useProviderOverview";
@@ -290,9 +292,8 @@ export default function ProviderProfilePage() {
     provider.workingDays.length > 0 ? provider.workingDays.map((day) => DAY_LABELS[day]).join(", ") : null;
   const scheduleLabel = [workingDaysLabel, workingHours].filter(Boolean).join(" · ") || null;
 
-  // "Verified" here means an admin recorded it. A filled-in license number is
-  // a claim, and the badge deliberately does not react to one.
-  const anyVerified = provider.isLicenseVerified || provider.isInsuranceVerified;
+  // Both credentials must be approved against current evidence and unexpired.
+  const fullyVerified = provider.isLicenseVerified && provider.isInsuranceVerified;
 
   return (
     <div style={{ background: "var(--bg-app)", minHeight: "100vh" }}>
@@ -310,7 +311,7 @@ export default function ProviderProfilePage() {
             <IconEdit />
             Edit business details
           </button>
-          <span
+          {fullyVerified ? <VerifiedProviderBadge verified={fullyVerified} /> : <span
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -320,13 +321,13 @@ export default function ProviderProfilePage() {
               borderRadius: 999,
               fontSize: 12,
               fontWeight: 600,
-              background: anyVerified ? "var(--sage-50)" : "var(--cream-100)",
-              color: anyVerified ? "var(--sage-700)" : "var(--ink-700)",
+              background: "var(--cream-100)",
+              color: "var(--ink-700)",
             }}
           >
             <span style={{ width: 6, height: 6, borderRadius: 3, background: "currentColor" }} />
-            {anyVerified ? "Verified business" : "Verification pending"}
-          </span>
+            Verification pending
+          </span>}
         </div>
       </div>
 
@@ -475,6 +476,8 @@ export default function ProviderProfilePage() {
                 credentials.
               </p>
             </div>
+
+            <ProviderCredentialsPanel key={profile.id} onUpdated={reload} />
 
             {/* The canonical long-term home for coverage management. The HOA
                 workspace links here rather than duplicating the editor. */}

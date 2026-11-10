@@ -11,10 +11,12 @@ export const dynamic = "force-dynamic";
 type PageProps = { params: Promise<{ userId: string }> };
 
 export default async function AdminProviderDetailPage({ params }: PageProps) {
-  await requireRole(["admin"], "/app/admin/providers");
+  const user = await requireRole(["admin"], "/app/admin/providers");
 
   const { userId } = await params;
-  const provider = await getProviderDetail(userId);
+  // Operations staff keep provider-support access without receiving private
+  // document references or the controls reserved for credential reviewers.
+  const provider = await getProviderDetail(userId, { includeCredentials: !user.adminIsStaffAccount });
   if (!provider) notFound();
 
   return (

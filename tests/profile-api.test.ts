@@ -418,6 +418,14 @@ describe("PATCH /api/profile/provider", () => {
   it.each([
     ["licenseVerifiedAt", new Date().toISOString()],
     ["insuranceVerifiedAt", new Date().toISOString()],
+    ["licenseDocumentId", "another-providers-document"],
+    ["insuranceDocumentId", "another-providers-document"],
+    ["licenseVerifiedDocumentChecksum", "unreviewed-bytes"],
+    ["insuranceVerifiedDocumentChecksum", "unreviewed-bytes"],
+    ["licenseExpiresAt", "2099-01-01T00:00:00.000Z"],
+    ["insuranceExpiresAt", "2099-01-01T00:00:00.000Z"],
+    ["insuranceCoverageCents", 100_000_000],
+    ["insuranceAdditionalInsured", true],
     ["payoutStatus", "active"],
     ["payoutLast4", "4242"],
   ])("rejects self-granted %s", async (field, value) => {
@@ -441,9 +449,14 @@ describe("PATCH /api/profile/provider", () => {
     const update = state.calls.find(
       (call) => call.model === "providerProfile" && call.operation === "update",
     )!.args as { data: Record<string, unknown> };
-    expect(update.data).toMatchObject({ licenseVerifiedAt: null });
+    expect(update.data).toMatchObject({
+      licenseVerifiedAt: null, licenseVerifiedByUserId: null,
+      licenseVerifiedDocumentChecksum: null, licenseExpiresAt: null,
+    });
     // The insurance the provider did not touch stays checked.
     expect(update.data).not.toHaveProperty("insuranceVerifiedAt");
+    expect(update.data).not.toHaveProperty("insuranceVerifiedDocumentChecksum");
+    expect(update.data).not.toHaveProperty("insuranceCoverageCents");
 
     const audits = state.calls.filter((call) => call.model === "adminAuditLog");
     expect(audits).toHaveLength(1);
@@ -464,8 +477,14 @@ describe("PATCH /api/profile/provider", () => {
     const update = state.calls.find(
       (call) => call.model === "providerProfile" && call.operation === "update",
     )!.args as { data: Record<string, unknown> };
-    expect(update.data).toMatchObject({ insuranceVerifiedAt: null });
+    expect(update.data).toMatchObject({
+      insuranceVerifiedAt: null, insuranceVerifiedByUserId: null,
+      insuranceVerifiedDocumentChecksum: null, insuranceExpiresAt: null,
+      insuranceCoverageCents: null, insuranceAdditionalInsured: false,
+    });
     expect(update.data).not.toHaveProperty("licenseVerifiedAt");
+    expect(update.data).not.toHaveProperty("licenseVerifiedDocumentChecksum");
+    expect(update.data).not.toHaveProperty("licenseExpiresAt");
 
     const audits = state.calls.filter((call) => call.model === "adminAuditLog");
     expect(audits).toHaveLength(1);

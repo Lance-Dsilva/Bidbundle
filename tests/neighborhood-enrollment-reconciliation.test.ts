@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 // Scripted Prisma promises model the observable transaction boundary: writes
 // remain lazy until awaited, and a failed guarded claim rolls back the batch.
@@ -416,6 +417,7 @@ describe("serialized neighborhood responses", () => {
 
   it("rejects a late response without child writes after opening wins the parent claim", async () => {
     const now = Date.now();
+    state.providers = [provider(approvedProviderVerification())];
     state.rows = [request({ updatedAt: new Date(now), enrollmentClosesAt: new Date(now + 10000) })];
     state.beforeTransaction = async () => {
       await expect(reconcileNeighborhoodEnrollment("request-1", new Date(now + 10001))).resolves.toBe("opened");

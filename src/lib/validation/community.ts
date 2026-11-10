@@ -288,8 +288,16 @@ export const providerAdminUpdateSchema = z
     accountStatus: z.enum(PROVIDER_ACCOUNT_STATUSES, {
       message: "Choose a valid provider status.",
     }),
-    license: z.enum(["verify", "revoke"]),
-    insurance: z.enum(["verify", "revoke"]),
+    license: z.enum(["verify", "revoke", "reject"]),
+    insurance: z.enum(["verify", "revoke", "reject"]),
+    licenseDocumentId: z.string().min(1).max(100),
+    licenseDocumentChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+    licenseExpiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    insuranceDocumentId: z.string().min(1).max(100),
+    insuranceDocumentChecksum: z.string().regex(/^[a-f0-9]{64}$/),
+    insuranceExpiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    insuranceCoverageCents: z.number().int().min(0).max(2147483647),
+    insuranceAdditionalInsured: z.boolean(),
     /**
      * The provider row the administrator actually reviewed. Credential
      * actions are rejected if the provider changes the claim meanwhile.
@@ -303,6 +311,15 @@ export const providerAdminUpdateSchema = z
     message: "Send at least one change.",
   })
   .superRefine((value, context) => {
+    for (const kind of ["license", "insurance"] as const) {
+      if ((value[kind] === "verify" || value[kind] === "reject") && (!value[`${kind}DocumentId`] || !value[`${kind}DocumentChecksum`] || (value[kind] === "verify" && !value[`${kind}ExpiresOn`]))) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: "Review the current document and confirm its expiry date.", path: [kind] });
+      }
+      if (value[kind] === "reject" && !value.note) context.addIssue({ code: z.ZodIssueCode.custom, message: "Give a reason for rejecting this document.", path: ["note"] });
+    }
+    if (value.insurance === "verify" && (value.insuranceCoverageCents === undefined || value.insuranceAdditionalInsured === undefined)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Confirm insurance coverage and additional-insured status.", path: ["insuranceCoverageCents"] });
+    }
     if ((value.accountStatus || value.license || value.insurance) && !value.expectedUpdatedAt) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

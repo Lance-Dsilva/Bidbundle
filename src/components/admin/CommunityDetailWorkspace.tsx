@@ -33,6 +33,7 @@ import {
 } from "@/components/admin/CentreAddressFields";
 import { HoaManagerInvitationPanel } from "@/components/admin/HoaManagerInvitationPanel";
 import { HoaOnboardingPanel } from "@/components/admin/HoaOnboardingPanel";
+import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
 
 /** Thrown when an admin declines a confirmation dialog. Not an error. */
 class Cancelled extends Error {}
@@ -165,6 +166,8 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
           <HoaOnboardingPanel communityId={community.id} />
         </SectionCard>
       )}
+
+      {community.type === "hoa" && <ProviderPolicyEditor key={community.id} communityId={community.id} />}
 
       <SectionCard
         title={community.type === "neighborhood" ? "Neighborhood manager" : "HOA manager and team"}

@@ -1,3 +1,4 @@
+import type { ProviderAccountStatus } from "@/lib/validation/community";
 import type {
   AdminErrorBody,
   CommunityDetail,
@@ -188,11 +189,19 @@ export function revokeHoaManagerInvitation(communityId: string, invitationId: st
 /* ── Providers ───────────────────────────────────────────────────────────── */
 
 export type ProviderAdminPatchBody = Partial<{
-  accountStatus: "pending" | "active" | "suspended";
-  license: "verify" | "revoke";
-  insurance: "verify" | "revoke";
+  accountStatus: ProviderAccountStatus;
+  license: "verify" | "revoke" | "reject";
+  insurance: "verify" | "revoke" | "reject";
   expectedUpdatedAt: string;
   note: string | null;
+  licenseDocumentId: string;
+  licenseDocumentChecksum: string;
+  licenseExpiresOn: string;
+  insuranceDocumentId: string;
+  insuranceDocumentChecksum: string;
+  insuranceExpiresOn: string;
+  insuranceCoverageCents: number;
+  insuranceAdditionalInsured: boolean;
 }>;
 
 export function updateProvider(userId: string, body: ProviderAdminPatchBody) {

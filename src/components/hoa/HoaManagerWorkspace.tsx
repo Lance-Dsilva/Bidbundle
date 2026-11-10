@@ -5,6 +5,8 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
+import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
+import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 
 import type {
@@ -294,6 +296,8 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         <Stat label="Open requests" value={openRequests} />
         <Stat label="Awaiting award" value={bidsAwaiting} />
       </div>
+
+      <ProviderPolicyEditor key={community.id} communityId={community.id} onSaved={() => router.refresh()} />
 
       {/* ── Units & residents ─────────────────────────────────────────── */}
       <section id="residents" className="scroll-mt-6 rounded-2xl border border-[#dce7e4] bg-white p-5 shadow-sm sm:p-6">
@@ -759,12 +763,8 @@ function RequestCard({
                 <div className="min-w-0">
                   <p className="font-medium text-[#102a43]">
                     {bid.providerCompany ?? bid.providerName}
-                    {bid.providerVerified ? (
-                      <span className="ml-2 rounded-full bg-[#e8f7ee] px-2 py-0.5 text-[10px] font-bold uppercase text-[#16803c]">
-                        Verified
-                      </span>
-                    ) : null}
                   </p>
+                  <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
                   <BidPrice bid={bid} />
                   <p className="mt-1 text-xs text-[#64748b]">
                     {bid.cadenceLabel ? `${bid.cadenceLabel} · ` : ""}
