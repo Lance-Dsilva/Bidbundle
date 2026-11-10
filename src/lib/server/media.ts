@@ -439,6 +439,7 @@ export function canViewMedia(
   asset: MediaAccess,
   viewer: { communityId: string; userId: string; canManage: boolean },
 ): boolean {
+  if (!["amenity_gallery", "amenity_review", "amenity_issue"].includes(asset.purpose)) return false;
   if (asset.communityId !== viewer.communityId) return false;
 
   if (asset.purpose === "amenity_issue") {

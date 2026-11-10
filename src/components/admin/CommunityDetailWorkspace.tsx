@@ -35,6 +35,7 @@ import { HoaManagerInvitationPanel } from "@/components/admin/HoaManagerInvitati
 import { HoaOnboardingPanel } from "@/components/admin/HoaOnboardingPanel";
 import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
 import { ProviderBidInvitationPanel } from "@/components/admin/ProviderBidInvitationPanel";
+import { CategoryVisitProofPolicyPanel } from "@/components/admin/CategoryVisitProofPolicyPanel";
 
 /** Thrown when an admin declines a confirmation dialog. Not an error. */
 class Cancelled extends Error {}
@@ -170,6 +171,8 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
 
       {community.type === "hoa" && <ProviderPolicyEditor key={community.id} communityId={community.id} />}
       {community.type === "hoa" && <ProviderBidInvitationPanel key={`bids-${community.id}`} communityId={community.id} />}
+
+      <CategoryVisitProofPolicyPanel />
 
       <SectionCard
         title={community.type === "neighborhood" ? "Neighborhood manager" : "HOA manager and team"}

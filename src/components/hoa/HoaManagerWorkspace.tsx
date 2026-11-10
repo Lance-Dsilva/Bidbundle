@@ -10,6 +10,7 @@ import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
 import { PoolTemplateFields } from "@/components/hoa/PoolTemplateFields";
 import { PoolBidComparison } from "@/components/hoa/PoolBidComparison";
 import { poolTemplateSchema, POOL_TIER_LABELS, type PoolTemplate, type PoolTierCounts } from "@/lib/pool-bid-template";
+import { VisitPhotoPanel } from "@/components/hoa/VisitPhotoPanel";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 
 import type {
@@ -578,6 +579,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
                     )
                   }
                 />
+                <RequestCompletionGallery requestTitle={agreement.requestTitle} occurrences={community.occurrencesByAgreement[agreement.id] ?? []} reviewAverage={community.requests.find((request) => request.id === agreement.requestId)?.reviewAverage} reviewCount={community.requests.find((request) => request.id === agreement.requestId)?.reviewCount} />
                 {agreement.status === "completed" ? (
                   <ReviewForm
                     label="Review this provider for the HOA"
@@ -783,6 +785,7 @@ function RequestCard({
                     {bid.providerCompany ?? bid.providerName}
                   </p>
                   <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
+                  <p className="mt-1 text-xs text-[#64748b]">{bid.providerRating == null ? "No published ratings yet" : `${bid.providerRating.toFixed(1)}/5 · ${bid.providerReviewCount ?? 0} published reviews`}</p>
                   <BidPrice bid={bid} />
                   <p className="mt-1 text-xs text-[#64748b]">
                     {bid.cadenceLabel ? `${bid.cadenceLabel} · ` : ""}
@@ -882,6 +885,22 @@ function OccurrenceList({
   );
 }
 
+export function RequestCompletionGallery({ requestTitle, occurrences, reviewAverage, reviewCount }: {
+  requestTitle: string; occurrences: OccurrenceSummary[]; reviewAverage?: number | null; reviewCount?: number;
+}) {
+  const [visible, setVisible] = useState(12);
+  const completed = occurrences.flatMap((occurrence) => occurrence.visits).filter((visit) => visit.status === "completed" && (visit.photos?.length ?? 0) > 0);
+  return <section className="mt-4 rounded-xl border border-[#dce7e4] bg-[#f6faf9] p-3" aria-label={`Completion evidence for ${requestTitle}`}>
+    <h4 className="text-sm font-semibold text-[#102a43]">Request completion evidence</h4>
+    <p className="mt-1 text-xs text-[#64748b]">{reviewAverage != null && reviewCount ? `${reviewAverage.toFixed(1)}/5 from ${reviewCount} published ratings` : "No published ratings for this request yet."}</p>
+    {completed.length ? <details className="mt-3"><summary className="min-h-11 cursor-pointer py-2 text-xs font-semibold text-[#087264]">View private completion gallery ({completed.length} completed visits with photos)</summary>
+      <div className="mt-2 grid min-w-0 gap-3 lg:grid-cols-2">{completed.slice(0, visible).map((visit) => <article className="min-w-0 rounded-lg bg-white p-3" key={visit.id}><h5 className="text-xs font-semibold text-[#334e68]">{visit.stopLabel} · completed {visit.completedAt ? dateLabel(visit.completedAt) : "visit"}</h5><VisitPhotoPanel visitId={visit.id} photos={visit.photos ?? []} /></article>)}</div>
+      {completed.length > visible && <button className="mt-3 min-h-11 rounded-lg border border-[#dce7e4] px-3 text-xs font-semibold" type="button" onClick={() => setVisible((count) => count + 12)}>Show more completed visits</button>}
+    </details> : <p className="mt-2 text-xs text-[#64748b]">No completion photos are available yet. Existing visits may not require photos.</p>}
+    <p className="mt-2 text-xs leading-5 text-[#64748b]">These photos are private service evidence. Viewing or managing the request does not grant permission to publish a resident’s photos.</p>
+  </section>;
+}
+
 export function ReviewForm({
   label,
   onSubmit,
@@ -889,14 +908,14 @@ export function ReviewForm({
   label: string;
   onSubmit: (rating: number, comment: string) => void;
 }) {
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState<number | "">("");
   const [comment, setComment] = useState("");
   return (
     <form
       className="mt-3 rounded-lg bg-[#f6faf9] p-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (comment.trim()) onSubmit(rating, comment.trim());
+        if (typeof rating === "number" && rating >= 1 && rating <= 5) onSubmit(rating, comment.trim());
       }}
     >
       <p className="text-xs font-bold uppercase tracking-wide text-[#334e68]">{label}</p>
@@ -904,9 +923,11 @@ export function ReviewForm({
         <select
           aria-label="Rating"
           className="h-9 rounded-lg border border-[#d8e2e0] bg-white px-2 text-sm"
-          onChange={(event) => setRating(Number(event.currentTarget.value))}
+          onChange={(event) => setRating(event.currentTarget.value ? Number(event.currentTarget.value) : "")}
           value={rating}
+          required
         >
+          <option value="" disabled>Choose rating</option>
           {[5, 4, 3, 2, 1].map((value) => (
             <option key={value} value={value}>
               {value} star{value === 1 ? "" : "s"}
@@ -916,8 +937,9 @@ export function ReviewForm({
         <input
           className="h-9 min-w-0 flex-1 rounded-lg border border-[#d8e2e0] bg-white px-3 text-sm"
           onChange={(event) => setComment(event.currentTarget.value)}
-          placeholder="How did the work go?"
-          required
+          placeholder="How did the work go? (optional)"
+          aria-label="Review comment (optional)"
+          maxLength={2000}
           value={comment}
         />
         <button className="h-9 rounded-lg bg-[#0f8f83] px-4 text-xs font-semibold text-white" type="submit">

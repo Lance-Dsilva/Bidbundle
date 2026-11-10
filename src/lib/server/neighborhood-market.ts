@@ -596,7 +596,7 @@ async function visitsFor(input: {
     : null;
 
   return {
-    myVisits: own.map((visit) => serializeVisitForViewer(visit, true)),
+    myVisits: own.map((visit) => serializeVisitForViewer(visit, true, { viewerUserId: input.viewerUserId, canConsent: true, canReview: true })),
     occurrences: occurrences?.map(serializeOccurrenceForManager) ?? null,
   };
 }

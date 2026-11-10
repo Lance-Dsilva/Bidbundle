@@ -11,6 +11,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
   providerServiceArea: { findMany: async () => state.areas },
   communityStaffAssignment: { findFirst: async () => null, findMany: async () => [] },
   hoaRequestParticipation: { findMany: async () => [] },
+  review: { groupBy: async () => [] },
   serviceBid: {
     findUnique: async () => state.existing,
     create: (args: Row) => op("create", args), update: (args: Row) => op("update", args),

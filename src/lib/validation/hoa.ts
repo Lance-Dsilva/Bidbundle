@@ -459,7 +459,7 @@ export type VisitStatusInput = z.infer<typeof visitStatusSchema>;
 export const reviewCreateSchema = z
   .object({
     rating: z.number().int().min(1).max(5),
-    comment: z.string().trim().min(1, "Write a short review.").max(MAX_REVIEW_COMMENT_LENGTH),
+    comment: z.string().trim().max(MAX_REVIEW_COMMENT_LENGTH).default(""),
   })
   .strict();
 

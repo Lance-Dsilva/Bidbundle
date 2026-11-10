@@ -8,6 +8,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import { calculatePoolTotal, computePoolOccurrenceDates, computePoolTermEnd, isPoolTier, parsePoolTemplate, parsePoolQuote, parsePoolAgreementSnapshot, poolTierCounts, type PoolAgreementSnapshot } from "@/lib/pool-bid-template";
 import { redactPoolBidIdentity } from "@/lib/pool-bid-privacy";
+import { buildVisitReviewPromptData } from "@/lib/server/visit-review-prompts";
 import { normalizeServiceCategory, normalizeServiceTrades, serviceCategoryLabel } from "@/lib/service-categories";
 import type {
   AgreementSummary,
@@ -98,6 +99,9 @@ function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
   if (codes.includes("P1701")) return new HoaWorkflowError("This bid or bidding window changed. Refresh before trying again.", 409);
   if (codes.includes("P1702")) return new HoaWorkflowError("This quote or provider changed since you reviewed it. Refresh and review the current quote.", 409);
   if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
+  if (codes.includes("P1710")) return new HoaWorkflowError("This visit or its required after photo changed. Refresh and add the required proof before completing it.", 409);
+  if (codes.includes("P1711")) return new HoaWorkflowError("This visit's photo or provider access changed. Refresh before trying again.", 409);
+  if (codes.includes("P1712")) return new HoaWorkflowError("Photo consent or household access changed. Refresh before trying again.", 409);
   return null;
 }
 
@@ -118,6 +122,7 @@ type RequestRow = {
   recurrenceIntervalDays: number | null;
   totalOccurrences: number;
   poolTemplate?: unknown;
+  requiresAfterPhoto?: boolean;
   status: HoaRequestSummary["status"];
   opensAt: Date | null;
   enrollmentClosesAt: Date | null;
@@ -137,7 +142,7 @@ const requestInclude = {
   _count: { select: { bids: { where: { status: { in: ["submitted", "accepted", "rejected"] } } } } },
 } satisfies Prisma.HoaServiceRequestInclude;
 
-function serializeRequest(row: RequestRow, viewerUserId?: string): HoaRequestSummary {
+function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: ReviewStats): HoaRequestSummary {
   const joined = row.participations.filter((item) => item.response === "joined");
   const declined = row.participations.filter((item) => item.response === "declined");
   const viewerRow = viewerUserId
@@ -156,6 +161,9 @@ function serializeRequest(row: RequestRow, viewerUserId?: string): HoaRequestSum
     poolTemplate: parsePoolTemplate(row.poolTemplate),
     tierCounts: poolTierCounts(row.participations),
     viewerPoolTier: isPoolTier(viewerRow?.poolTier) ? viewerRow.poolTier : null,
+    requiresAfterPhoto: row.requiresAfterPhoto ?? false,
+    reviewAverage: reviews?.average ?? null,
+    reviewCount: reviews?.count ?? 0,
     status: row.status,
     opensAt: row.opensAt?.toISOString() ?? null,
     enrollmentClosesAt: row.enrollmentClosesAt?.toISOString() ?? null,
@@ -229,16 +237,14 @@ const bidInclude = {
   revisions: { orderBy: { version: "asc" }, select: { version: true, amountCents: true, currency: true, submittedAt: true, poolQuote: true } },
 } satisfies Prisma.ServiceBidInclude;
 
-type BidRating = { rating: number | null; count: number };
+type ReviewStats = { average: number | null; count: number };
 
-async function bidReviewStats(rows: BidRow[]): Promise<Map<string, BidRating>> {
-  const providerIds = [...new Set(rows.filter((row) => parsePoolQuote(row.poolQuote)).map((row) => row.providerUserId))];
-  if (providerIds.length === 0) return new Map();
-  const groups = await db.review.groupBy({
-    by: ["providerUserId"], where: { providerUserId: { in: providerIds }, status: "published" },
-    _avg: { rating: true }, _count: { rating: true },
-  });
-  return new Map(groups.map((group) => [group.providerUserId, { rating: group._avg.rating, count: group._count.rating }]));
+async function bidReviewStats(rows: BidRow[]): Promise<Map<string, ReviewStats>> {
+  const ids = [...new Set(rows.map((row) => row.providerUserId))];
+  if (ids.length === 0) return new Map();
+  const groups = await db.review.groupBy({ by: ["providerUserId"], where: { providerUserId: { in: ids }, status: "published" },
+    _avg: { rating: true }, _count: { rating: true } });
+  return new Map(groups.map((group) => [group.providerUserId, { average: group._avg.rating, count: group._count.rating }]));
 }
 
 async function serializeBids(rows: BidRow[]): Promise<BidSummary[]> {
@@ -246,7 +252,21 @@ async function serializeBids(rows: BidRow[]): Promise<BidSummary[]> {
   return rows.map((row) => serializeBid(row, stats.get(row.providerUserId)));
 }
 
-function serializeBid(row: BidRow, review?: BidRating): BidSummary {
+/** Aggregate ratings in SQL, without loading review text or identities into a dashboard. */
+async function requestReviewStats(requestIds: string[]): Promise<Map<string, ReviewStats>> {
+  if (requestIds.length === 0) return new Map();
+  const rows = await db.$queryRaw<Array<{ requestId: string; average: number | null; count: number }>>(Prisma.sql`
+    SELECT a."requestId", AVG(r."rating")::double precision AS average, COUNT(*)::integer AS count
+    FROM "Review" r
+    LEFT JOIN "ServiceVisit" v ON v.id = r."visitId"
+    LEFT JOIN "ServiceOccurrence" o ON o.id = v."occurrenceId"
+    JOIN "ServiceAgreement" a ON a.id = COALESCE(r."agreementId", o."agreementId")
+    WHERE r.status = 'published' AND a."requestId" IN (${Prisma.join(requestIds)})
+    GROUP BY a."requestId"`);
+  return new Map(rows.map((row) => [row.requestId, { average: row.average, count: row.count }]));
+}
+
+function serializeBid(row: BidRow, reviews?: ReviewStats): BidSummary {
   const founded = row.provider.providerProfile?.businessStartedYear;
   return {
     id: row.id,
@@ -255,8 +275,8 @@ function serializeBid(row: BidRow, review?: BidRating): BidSummary {
     providerName: row.provider.fullName,
     providerCompany: row.provider.providerProfile?.companyName ?? null,
     providerVerified: providerVerificationState(row.provider.providerProfile).verified,
-    providerRating: review?.rating ?? null,
-    providerReviewCount: review?.count ?? 0,
+    providerRating: reviews?.average ?? null,
+    providerReviewCount: reviews?.count ?? 0,
     providerYearsInBusiness: founded != null && founded <= new Date().getUTCFullYear() ? new Date().getUTCFullYear() - founded : null,
     status: row.status,
     amountCents: row.amountCents,
@@ -1529,6 +1549,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
       description: request.description,
       recurrenceLabel: request.recurrenceLabel,
       totalOccurrences: request.totalOccurrences,
+      requiresAfterPhoto: request.requiresAfterPhoto,
       homeCount: request.participations.length,
       poolTemplate: parsePoolTemplate(request.poolTemplate),
       tierCounts: poolTierCounts(request.participations),
@@ -2130,6 +2151,7 @@ export async function awardBid(
     targets.map((target) => ({
       id: randomUUID(),
       occurrenceId: occurrence.id,
+      requiresAfterPhoto: request.requiresAfterPhoto,
       updatedAt: now,
       ...visitDataForTarget(target),
     })),
@@ -2528,6 +2550,9 @@ export async function updateVisitStatus(
     select: {
       id: true,
       status: true,
+      updatedAt: true,
+      requiresAfterPhoto: true,
+      photos: { where: { purpose: "visit_after", status: "active" }, select: { id: true }, take: 1 },
       occurrenceId: true,
       unitId: true,
       serviceLabel: true,
@@ -2580,6 +2605,9 @@ export async function updateVisitStatus(
   if ((input.status === "skipped" || input.status === "blocked") && !input.completionNote) {
     throw new HoaWorkflowError("Explain why the visit was skipped or blocked.", 400);
   }
+  if (input.status === "completed" && visit.requiresAfterPhoto && visit.photos.length === 0) {
+    throw new HoaWorkflowError("Upload an after photo before completing this visit.", 409);
+  }
 
   const now = new Date();
   const resident = residentOfVisit(visit);
@@ -2590,9 +2618,12 @@ export async function updateVisitStatus(
       : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
-  await db.$transaction([
+  try {
+    await db.$transaction([
+    db.$executeRaw(Prisma.sql`SELECT bundleen_assert_visit_photo_provider(${providerUserId}, ${visit.id})`),
     db.serviceVisit.update({
-      where: { id: visit.id },
+      where: { id: visit.id, status: visit.status, updatedAt: visit.updatedAt,
+        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: "active" } } },
       data: {
         status: input.status,
         statusChangedAt: now,
@@ -2614,16 +2645,16 @@ export async function updateVisitStatus(
             {
               userId: resident.id,
               email: resident.email,
-              kind: (input.status === "completed" ? "review" : "visit") as "review" | "visit",
+              kind: "visit" as const,
               title:
                 input.status === "completed"
-                  ? `Service completed at ${stopLabel} — share your review`
+                  ? `Service completed at ${stopLabel}`
                   : input.status === "en_route"
                     ? `Your provider is on the way`
                     : `Service ${input.status} at ${stopLabel}`,
               body:
                 input.status === "completed"
-                  ? `“${visit.occurrence.agreement.request.title}” is complete at ${stopLabel}. Tell your neighbours how the provider did.`
+                  ? `“${visit.occurrence.agreement.request.title}” is complete at ${stopLabel}. Open your visit to view the completion details and any before/after photos.`
                   : `“${visit.occurrence.agreement.request.title}” — ${stopLabel} is now ${input.status.replace("_", " ")}.`,
               linkPath: residentLinkPath,
               dedupeKey: `visit-status:${visit.id}:${input.status}`,
@@ -2631,7 +2662,16 @@ export async function updateVisitStatus(
           ]
         : [],
     )),
-  ]);
+    ...(input.status === "completed" && resident ? [db.outboxEvent.createMany({
+      data: [buildVisitReviewPromptData(visit.id, now, resident.id)], skipDuplicates: true,
+    })] : []),
+    ]);
+  } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
+    if ((error as { code?: string }).code === "P2025") throw new HoaWorkflowError("This visit changed before the status was saved. Refresh before trying again.", 409);
+    throw error;
+  }
 }
 
 /** Manager closes a service day once every visit is resolved. */
@@ -2738,6 +2778,8 @@ export async function createVisitReview(
       },
     });
   } catch (error) {
+    const conflict = preparedWorkflowConflict(error);
+    if (conflict) throw conflict;
     if ((error as { code?: string }).code === "P2002") {
       throw new HoaWorkflowError("You already reviewed this visit.");
     }
@@ -2879,6 +2921,7 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
     for (const bid of await serializeBids(bids.sort(compareBidQuotes))) {
       (bidsByRequest[bid.requestId] ??= []).push(bid);
     }
+    const requestRatings = await requestReviewStats(requestIds);
 
     const agreementIds = community.serviceAgreements.map((agreement) => agreement.id);
     const occurrences = agreementIds.length
@@ -2928,7 +2971,7 @@ export async function getHoaManagerDashboard(userId: string): Promise<HoaManager
         pendingInviteEmail: unit.invitations[0]?.email ?? null,
       })),
       invitations: community.invitations.map(serializeInvitation),
-      requests: community.hoaRequests.map((request) => serializeRequest(request)),
+      requests: community.hoaRequests.map((request) => serializeRequest(request, undefined, requestRatings.get(request.id))),
       bidsByRequest,
       agreements: community.serviceAgreements.map(serializeAgreement),
       occurrencesByAgreement,
@@ -2996,29 +3039,49 @@ export async function getResidentHoaHub(userId: string): Promise<ResidentHoaHub>
       const request = community.hoaRequests.find((row) => row.id === bid.requestId);
       (bidsByRequest[bid.requestId] ??= []).push(redactPoolBidIdentity(bid, parsePoolTemplate(request?.poolTemplate), Boolean(request?.awardedAt), Boolean(community.staffAssignments?.length)));
     }
+    const requestRatings = await requestReviewStats(requestIds);
 
     // Only this resident's own visits — never another home's schedule.
-    const myVisits = membership.unitId
-      ? await db.serviceVisit.findMany({
-          where: {
-            unitId: membership.unitId,
-            occurrence: { agreement: { communityId: community.id } },
-          },
-          orderBy: { createdAt: "desc" },
-          take: 20,
-          include: visitInclude,
-        })
-      : [];
+    // Recurring stops are materialized together, so createdAt cannot tell us
+    // which visit just completed or which one is next. Keep the rating/photo
+    // handoff visible while bounding each independent slice of the history.
+    const visitScope = {
+      unitId: membership.unitId,
+      occurrence: { agreement: { communityId: community.id } },
+    };
+    const visitSlices = membership.unitId ? await Promise.all([
+      db.serviceVisit.findMany({
+        where: { ...visitScope, status: "completed" },
+        orderBy: [{ completedAt: { sort: "desc", nulls: "last" } }, { id: "asc" }],
+        take: 20, include: visitInclude,
+      }),
+      db.serviceVisit.findMany({
+        where: { ...visitScope, status: { in: ["unscheduled", "scheduled", "en_route", "in_progress"] } },
+        orderBy: [{ scheduledDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+        take: 20, include: visitInclude,
+      }),
+      db.serviceVisit.findMany({
+        where: { ...visitScope, status: { in: ["skipped", "blocked", "cancelled"] } },
+        orderBy: [{ statusChangedAt: { sort: "desc", nulls: "last" } }, { id: "asc" }],
+        take: 10, include: visitInclude,
+      }),
+    ]) : [];
+    const seenVisitIds = new Set<string>();
+    const myVisits = visitSlices.flat().filter((visit) => {
+      if (seenVisitIds.has(visit.id)) return false;
+      seenVisitIds.add(visit.id);
+      return true;
+    });
 
     communities.push({
       id: community.id,
       name: community.name,
       unitId: membership.unitId,
       unitLabel: membership.unit?.label ?? null,
-      requests: community.hoaRequests.map((request) => serializeRequest(request, userId)),
+      requests: community.hoaRequests.map((request) => serializeRequest(request, userId, requestRatings.get(request.id))),
       bidsByRequest,
       agreements: community.serviceAgreements.map(serializeAgreement),
-      myVisits: myVisits.map((visit) => serializeVisit(visit, true)),
+      myVisits: myVisits.map((visit) => serializeVisit(visit, true, { includeAccessNotes: true, viewerUserId: userId, canConsent: true, canReview: true })),
       surveys: community.hoaSurveys.map((survey) => serializeSurvey(survey, userId)),
     });
   }

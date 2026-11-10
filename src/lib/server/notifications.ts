@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/amenity-reminders";
 import { getEmailProvider } from "@/lib/server/email";
 import { db } from "@/lib/server/db";
+import { resolveVisitReviewPrompt, VISIT_REVIEW_PROMPT_KIND } from "@/lib/server/visit-review-prompts";
 
 /**
  * Durable, idempotent notifications.
@@ -338,8 +339,6 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
   const result: OutboxDrainResult = { claimed: 0, delivered: 0, failed: 0 };
   if (candidates.length === 0) return result;
 
-  const provider = getEmailProvider();
-
   for (const event of candidates) {
     const claim = await db.outboxEvent.updateMany({
       where: { id: event.id, status: "pending", attempts: event.attempts },
@@ -359,7 +358,7 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
         if (!payload.to || !payload.subject || !payload.text) {
           throw new Error("outbox payload is incomplete");
         }
-        const delivery = await provider.send({
+        const delivery = await getEmailProvider().send({
           to: payload.to,
           subject: payload.subject,
           text: payload.text,
@@ -372,10 +371,16 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
         // the event without sending anything.
         const outcome = await resolveBookingReminder(event.payload, absoluteAppUrl, now);
         if (outcome.kind === "sent" && outcome.email) {
-          const delivery = await provider.send({
+          const delivery = await getEmailProvider().send({
             ...outcome.email,
             idempotencyKey: event.dedupeKey,
           });
+          providerMessageId = delivery.providerMessageId;
+        }
+      } else if (event.kind === VISIT_REVIEW_PROMPT_KIND) {
+        const outcome = await resolveVisitReviewPrompt(event.payload, absoluteAppUrl, now);
+        if (outcome.kind === "sent" && outcome.email) {
+          const delivery = await getEmailProvider().send({ ...outcome.email, idempotencyKey: event.dedupeKey });
           providerMessageId = delivery.providerMessageId;
         }
       } else {

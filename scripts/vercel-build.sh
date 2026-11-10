@@ -7,6 +7,9 @@ case "${VERCEL_ENV:-}" in
     exec ./node_modules/.bin/next build
     ;;
   production)
+    if [ "${VERIFY_PRIVATE_VISIT_STORAGE:-}" = "1" ]; then
+      node --conditions=react-server scripts/verify-visit-photo-storage.mjs
+    fi
     exec npm run build
     ;;
   *)

@@ -1,14 +1,4 @@
 {
   "buildCommand": "bash scripts/vercel-build.sh",
-  "git": {
-    "deploymentEnabled": {
-      "codex/issue-52-pool-bid-template": false
-    }
-  },
-  "crons": [
-    {
-      "path": "/api/jobs/outbox",
-      "schedule": "0 13 * * *"
-    }
-  ]
+  "crons": [{ "path": "/api/jobs/outbox", "schedule": "0 13 * * *" }]
 }

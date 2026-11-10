@@ -20,9 +20,9 @@ Admins may select eligible registered providers from the community detail screen
 
 ## Release boundary
 
-The additive migration `20261110120000_pool_bid_template` must be reviewed and approved before application to a shared database. Prior authorization for PR #64's five migrations does not cover this migration. No shared database has been migrated for issue 52.
+The latest explicit user instruction to deploy to production authorizes the combined release of [PR #65](https://github.com/Lance-Dsilva/Bidbundle/pull/65) and [PR #66](https://github.com/Lance-Dsilva/Bidbundle/pull/66), their necessary reviewed additive migrations, and configuration using the existing private Blob store. This current approval supersedes the earlier feature-branch approval hold; it is not an extension of PR #64's historical approval. Mobile PR #42 remains parked.
 
-Preview currently shares the existing database. The existing Preview build script already skips migrations, so compiling new Prisma fields would not make that database schema available at runtime. This branch therefore disables its automatic Git deployment using Vercel's [branch-specific deployment setting](https://vercel.com/docs/project-configuration/git-configuration). Other branches retain their current behavior. After approved schema setup, remove this exact branch rule before requesting a functional preview. Do not merge or deploy without the applicable release approval.
+The combined candidate is `codex/release-65-66`. Its branch deployment holds have been removed for the approved release. Preview still uses the existing database, and its normal build script skips migrations; deployment alone does not provide the new schema. Shared application of `20261110120000_pool_bid_template` and `20261110150000_visit_photo_proof`, the remote private-storage smoke check, and production verification are pending. Do not treat this document as evidence that those remote operations have completed.
 
 Use a disposable local PostgreSQL database for integration verification. The test configuration rejects remote/non-owned targets and does not load `.env` files. Never run destructive integration fixtures or manually drain global outbox workers against the shared database.
 
@@ -34,6 +34,10 @@ Use a disposable local PostgreSQL database for integration verification. The tes
 - Standalone TypeScript and `next build` passed. The build used synthetic auth configuration and Google Fonts network access; it did not run migrations. There is no standalone lint script in this repository.
 - Actual components were checked in a clearly labeled synthetic local browser fixture at desktop 1280px and mobile 390px: contained table scrolling, named manager/masked resident comparisons, price/rating sorting and exact household tier prices. Scripted provider form entry produced the expected $5,430 term total in about 39 seconds. This is automation evidence, not a measurement of human usability or authenticated deployed end-to-end testing.
 - Independent backend review and a separate review of the invitation/privacy/profile paths found no remaining blocker. Verification fixed the partial-unique-index join failure, required a reviewed pool bid version, translated enrollment races to 409, and corrected JSON containment precedence before the final database run.
+
+### Combined release verification
+
+After resolving both PRs together, the combined PostgreSQL suites passed **65/65**, and the unit suite passed **2,387/2,391** with the same four unchanged enrollment-reconciliation baseline failures. Standalone TypeScript and `next build` passed. These are combined candidate checks; the earlier feature-only results above are retained as historical evidence. Remote smoke checks and shared migrations remain pending.
 
 Reproduce unit/type/build checks with the normal dependency installation and generated Prisma client:
 
@@ -56,4 +60,6 @@ The configuration rejects other targets. Never substitute the application's shar
 
 ## Checkpoint
 
-Implementation is verified on `codex/issue-52-pool-bid-template`, based on `1abb87361375a7ef77a330c5d2a58df1300edc4d`. The issue remains open pending PR review, approved shared-schema setup, functional preview verification and the resolving merge. No production release is authorized for this issue. Local sanitized evidence was captured under `/private/tmp/bundleen-issue52-evidence`; the checks and release boundary above are retained in the repository so continuation does not require that local folder.
+The original feature implementation was verified on `codex/issue-52-pool-bid-template`, based on `1abb87361375a7ef77a330c5d2a58df1300edc4d`. The latest checkpoint is the user-approved combined release candidate `codex/release-65-66`, with both feature sets reconciled and the combined checks above passed. Next actions are the approved remote storage/schema operations, final merge/deployment checks and production verification. The issue remains open until its completion gates and resolving merge are confirmed; approval and local checks alone do not resolve it.
+
+Local sanitized feature evidence was captured under `/private/tmp/bundleen-issue52-evidence`; the contracts, checks and release boundary above are retained here so continuation does not require that local folder. Shared credentials remain in Vercel. Do not run destructive test fixtures or manually drain shared/global workers during release verification.
