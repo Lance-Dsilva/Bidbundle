@@ -208,6 +208,7 @@ const workingDaysField = z
  */
 export const providerProfileUpdateSchema = z
   .object({
+    businessStartedYear: z.number().int().min(1800).max(new Date().getUTCFullYear()).nullable().optional(),
     companyName: optionalText(MAX_COMPANY_NAME_LENGTH, "Company name is too long."),
     bio: optionalText(MAX_BIO_LENGTH, `Bio must be ${MAX_BIO_LENGTH} characters or fewer.`),
     trades: tradesField,

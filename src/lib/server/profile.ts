@@ -266,6 +266,7 @@ export const homeownerProfileSelect = {
 } as const;
 
 export const providerProfileSelect = {
+  businessStartedYear: true,
   ...providerVerificationSelect,
   companyName: true,
   bio: true,
@@ -350,6 +351,7 @@ export function serializeHomeownerProfile(row: HomeownerProfileRow): HomeownerPr
 }
 
 type ProviderProfileRow = VerificationProfile & {
+  businessStartedYear?: number | null;
   companyName: string | null;
   bio: string | null;
   trades: string[];
@@ -374,6 +376,7 @@ type ProviderProfileRow = VerificationProfile & {
 
 export function serializeProviderProfile(row: ProviderProfileRow): ProviderProfile {
   return {
+    businessStartedYear: row.businessStartedYear ?? null,
     companyName: row.companyName,
     bio: row.bio,
     trades: row.trades,

@@ -1,3 +1,5 @@
+import type { PoolQuote, PoolTemplate, PoolTier, PoolTierCounts, PoolAgreementSnapshot } from "@/lib/pool-bid-template";
+
 export type HoaRequestStatusValue =
   | "draft"
   | "collecting_interest"
@@ -168,6 +170,15 @@ export type BidSummary = {
   validUntil: string | null;
   version: number;
   submittedAt: string;
+  poolQuote?: PoolQuote | null;
+  poolTemplate?: PoolTemplate | null;
+  tierCounts?: PoolTierCounts;
+  /** Set by the server when resident-facing identifying fields are redacted. */
+  identityHidden?: boolean;
+  providerYearsInBusiness?: number | null;
+  providerRating?: number | null;
+  providerReviewCount?: number;
+  revisions?: Array<{ version: number; amountCents: number; submittedAt: string; poolQuote: PoolQuote | null }>;
 };
 
 export type HoaRequestSummary = {
@@ -194,6 +205,9 @@ export type HoaRequestSummary = {
   bidCount: number;
   viewerResponse: "joined" | "declined" | null;
   createdAt: string;
+  poolTemplate?: PoolTemplate | null;
+  tierCounts?: PoolTierCounts;
+  viewerPoolTier?: PoolTier | null;
 };
 
 export type AgreementSummary = {
@@ -216,6 +230,8 @@ export type AgreementSummary = {
   endDate: string | null;
   status: "active" | "completed" | "cancelled";
   createdAt: string;
+  /** Server must redact other households before returning a resident's snapshot. */
+  poolSnapshot?: PoolAgreementSnapshot | null;
 };
 
 export type VisitSummary = {
@@ -374,6 +390,8 @@ export type ProviderFeedItem = {
   biddingClosesAt: string | null;
   /** The caller's own bid. Competitors' amounts are never included. */
   myBid: BidSummary | null;
+  poolTemplate?: PoolTemplate | null;
+  tierCounts?: PoolTierCounts;
 };
 
 export type ProviderHoaWorkspace = {

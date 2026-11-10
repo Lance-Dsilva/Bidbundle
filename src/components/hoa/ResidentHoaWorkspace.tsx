@@ -1,13 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { BidPrice } from "@/components/ui/BidPrice";
 import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
 import { compareBidQuotes } from "@/lib/bid-pricing";
 import type { BidSummary, ResidentHoaHub, VisitSummary } from "@/lib/hoa-types";
 import { serviceCategoryLabel } from "@/lib/service-categories";
+import { PoolBidComparison } from "@/components/hoa/PoolBidComparison";
+import { POOL_TIER_LABELS, isPoolTier, type PoolTier } from "@/lib/pool-bid-template";
+import type { HoaRequestSummary } from "@/lib/hoa-types";
 
 async function post(path: string, body: unknown) {
   const response = await fetch(path, {
@@ -41,11 +44,13 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   if (hub.communities.length === 0) return null;
 
   const run = async (key: string, action: () => Promise<void>, successText?: string) => {
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(key);
     setError(null);
     setNotice(null);
@@ -56,6 +61,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong.");
     } finally {
+      inFlight.current = false;
       setBusy(null);
     }
   };
@@ -140,7 +146,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                       <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                         HOA compulsory · {request.recurrenceLabel} · every eligible home is included
                       </p>
-                    ) : (
+                    ) : request.poolTemplate ? <PoolParticipation key={`${request.id}:${request.viewerPoolTier ?? "none"}:${request.viewerResponse}`} request={request} joinOpen={joinOpen} busy={busy !== null} onRespond={(response, poolTier) => void run(`pool-${request.id}`, () => post(`/api/hoa/requests/${request.id}/join`, { response, ...(response === "joined" ? { poolTier } : {}) }), response === "joined" ? "Your pool tier is saved. Prices will come from provider bids." : "Your response is saved.")} /> : (
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                         <span className="text-xs text-[var(--muted)]">
                           {request.joinedCount} joined
@@ -185,7 +191,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                       </div>
                     )}
 
-                    {bids.length > 0 ? <BidList bids={bids} winner={winner} /> : null}
+                    {request.poolTemplate ? <PoolBidComparison template={request.poolTemplate} tierCounts={request.tierCounts} viewerPoolTier={request.viewerPoolTier} bids={bids} /> : bids.length > 0 ? <BidList bids={bids} winner={winner} /> : null}
                   </article>
                 );
               })}
@@ -241,6 +247,30 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
       ))}
     </div>
   );
+}
+
+export function PoolParticipation({ request, joinOpen, busy, onRespond }: {
+  request: HoaRequestSummary; joinOpen: boolean; busy: boolean;
+  onRespond: (response: "joined" | "declined", poolTier?: PoolTier) => void;
+}) {
+  const [tier, setTier] = useState(request.viewerPoolTier ?? "");
+  const template = request.poolTemplate!;
+  return <div className="mt-3 rounded-xl bg-[var(--canvas)] p-3">
+    <p className="text-xs text-[var(--muted)]">{template.serviceMonths} calendar months · {template.visitsPerMonth} visits/month · {request.joinedCount} homes joined{request.enrollmentClosesAt ? ` · enrollment closes ${dateLabel(request.enrollmentClosesAt)}` : ""}</p>
+    {joinOpen ? <form className="mt-3 space-y-3" onSubmit={(event) => { event.preventDefault(); if (!busy && isPoolTier(tier) && template.tiers.includes(tier)) onRespond("joined", tier); }}>
+      <label className="block text-xs font-semibold text-[var(--ink-700)]">Your pool tier
+        <select className="mt-1 block min-h-11 w-full rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 text-sm" required value={tier} disabled={busy} onChange={(event) => setTier(event.target.value as PoolTier)}>
+          <option value="" disabled>Select the tier matching your pool</option>
+          {template.tiers.map((value) => <option key={value} value={value}>{POOL_TIER_LABELS[value]}</option>)}
+        </select>
+      </label>
+      <p className="text-xs leading-5 text-[var(--muted)]">Use the tier definitions in your HOA’s request. Ask your manager if you are unsure. Your tier and participating homes lock when bidding opens; prices are set by provider bids.</p>
+      <div className="flex flex-wrap gap-2">
+        <button className="min-h-11 rounded-lg bg-[var(--teal-800)] px-4 text-xs font-semibold text-white disabled:opacity-50" type="submit" disabled={busy || !tier || (request.viewerResponse === "joined" && tier === request.viewerPoolTier)}>{request.viewerResponse === "joined" ? "Save pool tier" : "Join with this tier"}</button>
+        <button className="min-h-11 rounded-lg border border-[var(--line)] px-4 text-xs font-semibold disabled:opacity-50" type="button" disabled={busy || request.viewerResponse === "declined"} onClick={() => onRespond("declined")}>{request.viewerResponse === "declined" ? "Declined" : "Decline request"}</button>
+      </div>
+    </form> : <p className="mt-2 text-xs font-semibold text-[var(--teal-800)]">{request.viewerResponse === "joined" && request.viewerPoolTier ? `Your tier: ${POOL_TIER_LABELS[request.viewerPoolTier]}` : request.viewerResponse === "declined" ? "You declined this request." : "You have not joined this request."}{request.participantsLockedAt ? " Participation is locked." : " Enrollment is closed."}</p>}
+  </div>;
 }
 
 function BidList({ bids, winner }: { bids: BidSummary[]; winner: BidSummary | undefined }) {
