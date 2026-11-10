@@ -120,20 +120,18 @@ type RedisCredentials = {
  * resources cannot accidentally be combined.
  */
 function getRedisCredentials(): RedisCredentials | null {
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return {
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    };
+  // Keep each resource's REST URL and token together. The dedicated limiter
+  // store takes precedence over unrelated general-purpose KV integrations.
+  const pairs = [
+    [process.env.RATE_LIMIT_KV_REST_API_URL, process.env.RATE_LIMIT_KV_REST_API_TOKEN],
+    [process.env.UPSTASH_REDIS_REST_URL, process.env.UPSTASH_REDIS_REST_TOKEN],
+    [process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN],
+  ];
+  for (const [configuredUrl, configuredToken] of pairs) {
+    const url = configuredUrl?.trim();
+    const token = configuredToken?.trim();
+    if (url && token) return { url, token };
   }
-
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    return {
-      url: process.env.KV_REST_API_URL,
-      token: process.env.KV_REST_API_TOKEN,
-    };
-  }
-
   return null;
 }
 
