@@ -44,7 +44,7 @@ export type HoaInvitationSummary = {
   id: string;
   email: string;
   inviteeName: string | null;
-  role: "hoa_manager" | "hoa_team" | "homeowner";
+  role: "hoa_manager" | "hoa_team" | "hoa_board" | "homeowner";
   status: "pending" | "accepted" | "revoked";
   unitId: string | null;
   unitLabel: string | null;

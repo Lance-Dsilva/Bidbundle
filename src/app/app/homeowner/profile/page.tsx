@@ -239,6 +239,7 @@ export default function HomeownerProfilePage() {
           <p style={{ margin: 0, color: "var(--ink-500)", fontSize: 14 }}>Profile, neighborhood, notifications.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
+          <a href="/app/board" className="rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800">Board review</a>
           <ThemeToggle compact />
           {/* Status, not decoration: this reflects the verification the server
               recorded, so an unverified account says so. */}

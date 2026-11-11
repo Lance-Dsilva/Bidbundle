@@ -170,6 +170,7 @@ enum AdminAuditTargetType {
 }
 
 enum CommunityInvitationRole {
+  hoa_board
   hoa_manager
   hoa_team
   homeowner
@@ -451,6 +452,13 @@ model User {
   visitPhotosConsented     MediaAsset[]            @relation("VisitPhotoConsenter")
   visitPhotoConsentsChanged MediaAsset[]           @relation("VisitPhotoConsentActor")
   visitPhotoPoliciesUpdated CategoryVisitPolicy[]
+  boardMemberships CommunityBoardMember[] @relation("BoardMemberUser")
+  boardInvitations CommunityBoardMember[] @relation("BoardMemberInviter")
+  boardPolicies CommunityBoardPolicy[]
+  boardRounds BoardReviewRound[]
+  boardVotes BoardProposalVote[]
+  boardComments BoardDiscussionMessage[]
+  boardAuditEvents BoardAuditEvent[]
 }
 
 /// Email allow-list for the private Bundleen operations portal.
@@ -551,6 +559,10 @@ model Community {
 
   @@index([type, status])
   @@index([status, name])
+  boardMembers CommunityBoardMember[]
+  boardPolicy CommunityBoardPolicy?
+  boardRounds BoardReviewRound[]
+  boardAuditEvents BoardAuditEvent[]
 }
 
 /// Legal and onboarding detail for one official HOA. Exactly one row per
@@ -841,6 +853,7 @@ model HoaServiceRequest {
   @@index([createdByUserId, createdAt])
   @@index([status, biddingClosesAt])
   @@index([status, enrollmentClosesAt])
+  boardRounds BoardReviewRound[]
 }
 
 /// One unit's relationship to one request: a resident's explicit join/decline
@@ -2636,4 +2649,89 @@ model CommunityInterest {
 
   @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
   @@index([createdAt, id])
+}
+
+
+/// Read/vote authority only; neither global role nor residency is changed.
+model CommunityBoardMember {
+ id String @id @default(cuid())
+ communityId String
+ community Community @relation(fields:[communityId],references:[id],onDelete:Restrict)
+ userId String
+ user User @relation("BoardMemberUser",fields:[userId],references:[id],onDelete:Restrict)
+ status String @default("active")
+ invitedByUserId String?
+ invitedBy User? @relation("BoardMemberInviter",fields:[invitedByUserId],references:[id],onDelete:Restrict)
+ joinedAt DateTime @default(now())
+ revokedAt DateTime?
+ @@unique([communityId,userId])
+ @@index([userId,status])
+}
+model CommunityBoardPolicy {
+ communityId String @id
+ community Community @relation(fields:[communityId],references:[id],onDelete:Restrict)
+ rule String @default("manager_only")
+ quorumN Int?
+ version Int @default(1)
+ updatedByUserId String
+ updatedBy User @relation(fields:[updatedByUserId],references:[id],onDelete:Restrict)
+ updatedAt DateTime @default(now()) @updatedAt
+}
+model BoardReviewRound {
+ id String @id @default(cuid())
+ communityId String
+ community Community @relation(fields:[communityId],references:[id],onDelete:Restrict)
+ requestId String
+ request HoaServiceRequest @relation(fields:[requestId],references:[id],onDelete:Restrict)
+ openedByUserId String
+ openedBy User @relation(fields:[openedByUserId],references:[id],onDelete:Restrict)
+ policyVersion Int
+ rule String
+ quorumN Int?
+ threshold Int
+ electorate Json
+ proposals Json
+ deadline DateTime
+ status String @default("open")
+ awardedBidId String?
+ closedAt DateTime?
+ createdAt DateTime @default(now())
+ votes BoardProposalVote[]
+ comments BoardDiscussionMessage[]
+ @@index([requestId,createdAt])
+}
+model BoardProposalVote {
+ id String @id @default(cuid())
+ roundId String
+ round BoardReviewRound @relation(fields:[roundId],references:[id],onDelete:Restrict)
+ bidId String
+ voterUserId String
+ voter User @relation(fields:[voterUserId],references:[id],onDelete:Restrict)
+ decision String
+ comment String?
+ createdAt DateTime @default(now())
+ @@unique([roundId,bidId,voterUserId])
+}
+model BoardDiscussionMessage {
+ id String @id @default(cuid())
+ roundId String
+ round BoardReviewRound @relation(fields:[roundId],references:[id],onDelete:Restrict)
+ authorUserId String
+ author User @relation(fields:[authorUserId],references:[id],onDelete:Restrict)
+ body String
+ createdAt DateTime @default(now())
+ @@index([roundId,createdAt])
+}
+model BoardAuditEvent {
+ id String @id @default(cuid())
+ communityId String
+ community Community @relation(fields:[communityId],references:[id],onDelete:Restrict)
+ actorUserId String
+ actor User @relation(fields:[actorUserId],references:[id],onDelete:Restrict)
+ kind String
+ requestId String?
+ roundId String?
+ data Json
+ createdAt DateTime @default(now())
+ @@index([communityId,createdAt])
 }

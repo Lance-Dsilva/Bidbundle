@@ -1,0 +1,11 @@
+import { z } from "zod";
+import { BOARD_RULES } from "@/lib/board-types";
+const id = z.string().min(1).max(64);
+export const boardPolicySchema = z.object({ rule: z.enum(BOARD_RULES), quorumN: z.number().int().min(1).max(100).nullable().optional(), expectedVersion: z.number().int().min(0) }).strict().refine(v => v.rule === "board_quorum_n" ? v.quorumN != null : v.quorumN == null, "Supply N only for the at-least-N-approvals rule.");
+export const boardOpenSchema = z.object({ bidIds: z.array(id).min(1).max(20).refine(v => new Set(v).size === v.length, "Choose each bid once."), deadline: z.string().datetime({ offset: true }) }).strict();
+export const boardVoteSchema = z.object({ bidId: id, decision: z.enum(["approve", "reject"]), comment: z.string().trim().max(2000).nullable().optional() }).strict();
+export const boardCommentSchema = z.object({ body: z.string().trim().min(1).max(4000) }).strict();
+export type BoardPolicyInput = z.infer<typeof boardPolicySchema>;
+export type BoardOpenInput = z.infer<typeof boardOpenSchema>;
+export type BoardVoteInput = z.infer<typeof boardVoteSchema>;
+export type BoardCommentInput = z.infer<typeof boardCommentSchema>;

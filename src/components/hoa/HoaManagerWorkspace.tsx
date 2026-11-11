@@ -308,6 +308,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
             one bid, and track the provider&apos;s schedule through completion.
           </p>
         </div>
+        <a href="/app/board" className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-900">Board review & approvals</a>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

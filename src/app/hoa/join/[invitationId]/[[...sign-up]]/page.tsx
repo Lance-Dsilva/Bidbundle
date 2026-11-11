@@ -46,7 +46,9 @@ export default async function HoaInvitationPage({ params }: PageProps) {
                 ? "HOA manager invitation"
                 : invitation.role === "hoa_team"
                   ? "HOA team invitation"
-                  : "HOA resident invitation"}
+                  : invitation.role === "hoa_board"
+                    ? "HOA board invitation"
+                    : "HOA resident invitation"}
             </p>
             <ClerkFormGate context="invitation">
               <SignUp
