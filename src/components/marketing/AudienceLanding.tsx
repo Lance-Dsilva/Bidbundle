@@ -28,6 +28,7 @@ type AudienceLandingProps = {
 };
 
 const navigation = [
+  { href: "/", label: "For HOA boards" },
   { href: "/residents", label: "For residents" },
   { href: "/providers", label: "For providers" },
   { href: "/sign-in", label: "Sign in" },
