@@ -8,7 +8,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "codex/issue-59-vendor-sourcing": false
+      "codex/issue-59-vendor-sourcing": false,
+      "codex/issue-60-board-approval": false
     }
   }
 }

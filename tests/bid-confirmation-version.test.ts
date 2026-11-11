@@ -35,6 +35,8 @@ function plan(model: string, args: Row): Op {
 }
 vi.mock("@/lib/server/db", () => ({ db: {
   hoaServiceRequest: { findUnique: async () => structuredClone(state.request), update: (args: Row) => plan("request", args) },
+  // These legacy fixtures model manager-only/no-board communities.
+  boardReviewRound: { findFirst: async () => null },
   community: { findUnique: async () => ({ type: state.request.community && (state.request.community as Row).type, status: "active", centerLatitude: 30.4, centerLongitude: -97.7 }) },
   communityMembership: { findMany: async () => [] },
   hoaRequestParticipation: { findMany: async () => [] },
@@ -51,7 +53,12 @@ vi.mock("@/lib/server/db", () => ({ db: {
   serviceVisit: { createMany: (args: Row) => plan("visits", args) },
   adminAuditLog: { create: (args: Row) => plan("audit", args) },
   $queryRaw: (query: unknown) => plan("parentLock", { query }),
-  $executeRaw: (query: unknown) => plan("authority", { query }),
+  $executeRaw: (query: unknown) => {
+    const sql = Array.isArray(query) ? query.join("") : String((query as { sql?: string }).sql ?? query);
+    // A read-only eligibility probe must not fire the simulated writer race.
+    if (sql.includes("bundleen_assert_board_award")) return Promise.resolve(1);
+    return plan(sql.includes("bundleen_finalize_board_award") ? "boardFinalization" : "authority", { query });
+  },
   $transaction: async (ops: Op[]) => {
     // Snapshot after any independently committed competing action, before this
     // batch executes. A losing claim rolls back only this batch's effects.

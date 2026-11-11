@@ -33,6 +33,8 @@ vi.mock("@/lib/server/db", () => ({
       update: op("hoaServiceRequest", "update"),
       updateMany: op("hoaServiceRequest", "updateMany"),
     },
+    // These legacy fixtures model manager-only/no-board communities.
+    boardReviewRound: { findFirst: async () => null },
     community: {
       findUnique: async () => state.community,
     },
@@ -85,7 +87,11 @@ vi.mock("@/lib/server/db", () => ({
     homeownerProfile: {
       findMany: async () => state.emailOptOutUserIds.map((userId) => ({ userId })),
     },
-    $executeRaw: (query: unknown) => ({ model: "managerAuthority", action: "assert", args: { query } }),
+    $executeRaw: (query: unknown) => {
+      const sql = Array.isArray(query) ? query.join("") : String((query as { sql?: string }).sql ?? query);
+      if (sql.includes("bundleen_assert_board_award")) return Promise.resolve(1);
+      return { model: sql.includes("bundleen_finalize_board_award") ? "boardFinalization" : "managerAuthority", action: "assert", args: { query } };
+    },
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;

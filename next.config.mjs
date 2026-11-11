@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingIncludes: {
+    "/api/board/requests/*/rounds/*/minutes": ["./src/assets/fonts/board-minutes/**/*"],
+  },
   async headers() {
     return ["/bid/:path*", "/vendor-unsubscribe/:path*", "/sign-in/:path*", "/get-started/:path*"].map(source => ({
       source,
