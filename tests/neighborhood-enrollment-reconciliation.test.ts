@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 // Scripted Prisma promises model the observable transaction boundary: writes
@@ -101,6 +101,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
     id: "hood-1", type: "neighborhood", status: "active", name: "Oakwood",
     centerLatitude: 30.4, centerLongitude: -97.72, hoaProfile: null,
   }) },
+  providerCommunityApproval: { findMany: async () => [], findUnique: async () => null },
   providerProfile: { findMany: async (args: Row) => structuredClone(state.providers.filter((row) => matches(row, args.where))) },
   hoaRequestParticipation: {
     findFirst: async (args: Row) => structuredClone(state.rows.flatMap((row) => (row.participations as Row[]).map((part) => ({ ...part, requestId: row.id }))).find((part) => matches(part, args.where)) ?? null),
@@ -154,8 +155,9 @@ function request(overrides: Row = {}): Row {
 }
 function provider(overrides: Row = {}): Row {
   return {
+    ...approvedProviderVerification(),
     accountStatus: "active", licenseVerifiedAt: new Date(), insuranceVerifiedAt: new Date(), trades: ["cleaning"], notifyNewJobs: true,
-    user: { id: "provider-1", email: "provider@example.test", providerServiceAreas: [{
+    user: { id: "provider-1", role: "provider", isVerified: true, email: "provider@example.test", providerServiceAreas: [{
       centerLatitude: 30.4, centerLongitude: -97.72, radiusMiles: 15, postalCodes: [],
     }] }, ...overrides,
   };
@@ -164,6 +166,9 @@ function notifications() { return state.committed.filter((write) => write.model 
 function audits() { return state.committed.filter((write) => write.model === "adminAuditLog"); }
 
 beforeEach(() => {
+  // The reconciliation clock and nested provider eligibility clock must agree.
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
   state.rows = [request()]; state.providers = [provider()]; state.committed = [];
   state.finds = []; state.updates = []; state.transactions = 0;
   state.failNextTransaction = null; state.beforeTransaction = null; state.managerAllowed = false;
@@ -171,12 +176,14 @@ beforeEach(() => {
   state.failChildOnce = false; state.afterRollback = null; state.childError = null;
 });
 
+afterEach(() => vi.useRealTimers());
+
 describe("automatic neighborhood enrollment reconciliation", () => {
   it("opens a no-manager request after enrollment, locks it and notifies eligible providers", async () => {
     await expect(reconcileNeighborhoodEnrollment("request-1", NOW)).resolves.toBe("opened");
     expect(state.rows[0]).toMatchObject({ status: "open_for_bids", participantsLockedAt: NOW, biddingClosesAt: new Date(+NOW + WEEK) });
     expect(notifications()).toHaveLength(1);
-    expect(notifications()[0].args.data).toMatchObject({ userId: "provider-1" });
+    expect(notifications()[0].args.data).toMatchObject({ userId: "provider-1", dedupeKey: "provider-bid-invite:request-1:provider-1", vendorOutreach: true });
     expect(audits().length).toBeGreaterThan(0);
     expect(audits().every((write) => !(write.args.data as Row).actor)).toBe(true);
     expect(JSON.stringify(audits())).toContain("deadline_reconciliation");
@@ -287,7 +294,7 @@ describe("automatic neighborhood enrollment reconciliation", () => {
     if (reason === "uninsured") state.providers = [provider({ insuranceVerifiedAt: null })];
     if (reason === "suspended") state.providers = [provider({ accountStatus: "suspended" })];
     if (reason === "wrong-trade") state.providers = [provider({ trades: ["plumbing"] })];
-    if (reason === "uncovered") state.providers = [provider({ user: { id: "far", email: "far@example.test", providerServiceAreas: [{ centerLatitude: 40, centerLongitude: -100, radiusMiles: 1, postalCodes: [] }] } })];
+    if (reason === "uncovered") state.providers = [provider({ user: { id: "far", role: "provider", isVerified: true, email: "far@example.test", providerServiceAreas: [{ centerLatitude: 40, centerLongitude: -100, radiusMiles: 1, postalCodes: [] }] } })];
     await reconcileNeighborhoodEnrollment("request-1", NOW);
     expect(state.rows[0].status).toBe("open_for_bids");
     expect(notifications()).toEqual([]);

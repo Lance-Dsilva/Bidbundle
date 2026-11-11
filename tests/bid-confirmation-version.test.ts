@@ -39,6 +39,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
   communityMembership: { findMany: async () => [] },
   hoaRequestParticipation: { findMany: async () => [] },
   communityStaffAssignment: { findMany: async () => [], findFirst: async () => null },
+  providerCommunityApproval: { findMany: async () => [], findUnique: async () => null },
   providerServiceArea: { findMany: async () => [{ centerLatitude: 30.4, centerLongitude: -97.7, radiusMiles: 5, postalCodes: [] }] },
   user: { findUnique: async () => ({ id: "provider", email: "provider@example.test", role: "provider", providerProfile: { trades: ["cleaning"], accountStatus: "active", ...approvedProviderVerification() } }) },
   serviceBid: {

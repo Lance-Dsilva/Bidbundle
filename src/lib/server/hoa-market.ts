@@ -9,6 +9,7 @@ import { compareBidQuotes } from "@/lib/bid-pricing";
 import { calculatePoolTotal, computePoolOccurrenceDates, computePoolTermEnd, isPoolTier, parsePoolTemplate, parsePoolQuote, parsePoolAgreementSnapshot, poolTierCounts, type PoolAgreementSnapshot } from "@/lib/pool-bid-template";
 import { redactPoolBidIdentity } from "@/lib/pool-bid-privacy";
 import { buildVisitReviewPromptData } from "@/lib/server/visit-review-prompts";
+import { requireInvitedBidGrant } from "@/lib/server/vendor-bid-grants";
 import { normalizeServiceCategory, normalizeServiceTrades, serviceCategoryLabel } from "@/lib/service-categories";
 import type {
   AgreementSummary,
@@ -1374,11 +1375,12 @@ async function eligibleProviderIntentsForRequest(input: {
   category: string;
   biddingClosesAt: Date | null;
 }): Promise<NotificationIntent[]> {
-  const [location, providers] = await Promise.all([
+  const [location, providers, approvals] = await Promise.all([
     hoaLocation(input.communityId),
     db.providerProfile.findMany({
       where: {
         accountStatus: "active",
+        user: { role: "provider", isVerified: true },
         licenseVerifiedAt: { not: null },
         insuranceVerifiedAt: { not: null },
       },
@@ -1403,13 +1405,15 @@ async function eligibleProviderIntentsForRequest(input: {
         },
       },
     }),
+    db.providerCommunityApproval.findMany({ where: { communityId: input.communityId }, select: { providerUserId: true } }),
   ]);
   const now = new Date();
+  const approved = new Set(approvals.map(row => row.providerUserId));
 
   return providers
     .filter((profile) => providerVerificationState(profile, now).verified)
     .filter((profile) =>
-      providerCanSeeRequest({
+      (approved.has(profile.user.id) && normalizeServiceTrades(profile.trades).includes(input.category as never)) || providerCanSeeRequest({
         gate: {
           userId: profile.user.id,
           trades: normalizeServiceTrades(profile.trades),
@@ -1430,7 +1434,8 @@ async function eligibleProviderIntentsForRequest(input: {
       title: `New ${serviceCategoryLabel(input.category)} request near your service area`,
       body: `${input.communityName} opened “${input.title}” for provider bids.`,
       linkPath: "/app/provider/hoa",
-      dedupeKey: `provider-request-open:${input.requestId}:${profile.user.id}`,
+      dedupeKey: `provider-bid-invite:${input.requestId}:${profile.user.id}`,
+      vendorOutreach: true,
     }));
 }
 
@@ -1450,7 +1455,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
   const gate = await requireProvider(userId, { allowPending: true });
   const now = new Date();
 
-  const [areas, openRequests, myBids, agreements] = await Promise.all([
+  const [areas, openRequests, myBids, agreements, approvals] = await Promise.all([
     db.providerServiceArea.findMany({
       where: { providerUserId: userId, status: "active" },
       orderBy: { createdAt: "asc" },
@@ -1499,7 +1504,9 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
       take: 25,
       include: agreementInclude,
     }),
+    db.providerCommunityApproval.findMany({ where: { providerUserId: userId }, select: { communityId: true } }),
   ]);
+  const approvedCommunities = new Set(approvals.map(row => row.communityId));
 
   const feed: ProviderFeedItem[] = [];
   const reviewStats = await bidReviewStats([...myBids, ...openRequests.flatMap((request) => request.bids)]);
@@ -1523,7 +1530,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
           region: profile?.region ?? null,
         };
     if (
-      !providerCanSeeRequest({
+      !(gate.eligible && approvedCommunities.has(request.communityId) && gate.trades.includes(request.category as never)) && !providerCanSeeRequest({
         gate,
         areas,
         category: request.category,
@@ -1649,7 +1656,17 @@ export async function submitBid(
   requestId: string,
   input: BidSubmitInput,
 ): Promise<BidSummary> {
-  const gate = await requireProvider(providerUserId);
+  return submitBidCore(providerUserId, requestId, input);
+}
+
+/** Called only after the invitation service proves the exact verified-email claim. */
+export async function submitInvitedBid(providerUserId: string, requestId: string, invitationId: string, input: BidSubmitInput): Promise<BidSummary> {
+  await requireInvitedBidGrant(providerUserId, requestId, invitationId);
+  return submitBidCore(providerUserId, requestId, input, invitationId);
+}
+
+async function submitBidCore(providerUserId: string, requestId: string, input: BidSubmitInput, invitationId?: string): Promise<BidSummary> {
+  const gate = invitationId ? await requireInvitedBidGrant(providerUserId, requestId, invitationId) : await requireProvider(providerUserId);
   const now = new Date();
 
   if (input.pricingBasis !== "total" || input.perHomeCents != null) {
@@ -1713,7 +1730,8 @@ export async function submitBid(
     }),
     communityMatchLocation(request.communityId),
   ]);
-  if (!areas.some((area) => areaCoversLocation(area, location))) {
+  const approvedVendor = invitationId ? null : await db.providerCommunityApproval.findUnique({ where: { communityId_providerUserId: { communityId: request.communityId, providerUserId } } });
+  if (!invitationId && !approvedVendor && !areas.some((area) => areaCoversLocation(area, location))) {
     throw new HoaWorkflowError(
       request.community.type === "hoa"
         ? "This HOA is outside your service area."
@@ -1727,7 +1745,7 @@ export async function submitBid(
 
   const existing = await db.serviceBid.findUnique({
     where: { requestId_providerUserId: { requestId, providerUserId } },
-    select: { id: true, status: true, version: true },
+    select: { id: true, status: true, version: true, vendorInvitationId: true },
   });
   if (existing && !["submitted", "withdrawn", "draft"].includes(existing.status)) {
     throw new HoaWorkflowError("This bid has already been decided.");
@@ -1737,6 +1755,7 @@ export async function submitBid(
     throw new HoaWorkflowError("This quote changed since you opened it. Refresh before revising.", 409);
   }
   if (!existing && input.expectedBidVersion !== undefined) throw new HoaWorkflowError("This quote no longer exists. Refresh before submitting.", 409);
+  if (existing && invitationId && existing.vendorInvitationId !== invitationId) throw new HoaWorkflowError("This request already has a proposal under a different submission path.", 409);
 
   const bidId = existing?.id ?? randomUUID();
   const data = {
@@ -1783,8 +1802,9 @@ export async function submitBid(
             data: { ...data, version: { increment: 1 } },
           })
         : db.serviceBid.create({
-            data: { id: bidId, requestId, providerUserId, ...data },
+            data: { id: bidId, requestId, providerUserId, ...(invitationId ? { vendorInvitationId: invitationId } : {}), ...data },
           }),
+      ...(invitationId ? [db.vendorRequestInvitation.update({ where: { id: invitationId, claimedProviderUserId: providerUserId }, data: { submittedAt: now } })] : []),
       ...(await buildPreferenceAwareNotificationOps(
         recipients.map((recipient) => ({
           userId: recipient.userId,

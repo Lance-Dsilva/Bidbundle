@@ -38,6 +38,7 @@ import {
 } from "@/lib/onboarding-draft";
 import { SERVICE_RADIUS_DEFAULT_MILES } from "@/lib/provider-coverage";
 import { MAX_NAME_LENGTH, type PublicRole } from "@/lib/validation/auth";
+import { vendorBidReturnPath, vendorOnboardingPath } from "@/lib/vendor-bid-return";
 
 type NameErrors = Partial<Record<keyof SignUpName, string>>;
 type SignUpStage =
@@ -79,11 +80,17 @@ function AccountStepLoading() {
 const LOADER_CARD_CLASS =
   "auth-step-enter w-full rounded-2xl border border-[#e4e7ec] bg-white px-7 py-10 text-center shadow-[0_24px_60px_rgba(31,26,20,0.10)] sm:px-9";
 
-export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner" }: {
+export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner", returnTo = null, initialBusiness }: {
   alreadyVerified?: boolean;
   initialRole?: PublicRole;
+  returnTo?: string | null;
+  initialBusiness?: { businessName: string; licenseNumber: string | null; categories: string[] };
 }) {
   const router = useRouter();
+  const returnPath = vendorBidReturnPath(returnTo);
+  const signUpDestination = vendorOnboardingPath("/get-started", returnPath);
+  const profileDestination = vendorOnboardingPath("/get-started/profile", returnPath);
+  const signInDestination = vendorOnboardingPath("/sign-in", returnPath);
   const { signOut } = useClerk();
   const { user } = useUser();
   const [stage, setStage] = useState<SignUpStage>("name");
@@ -98,7 +105,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
   const [neighborhood, setNeighborhood] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [providerBusiness, setProviderBusiness] =
-    useState<ProviderBusinessDraft>(EMPTY_BUSINESS);
+    useState<ProviderBusinessDraft>({ ...EMPTY_BUSINESS, ...(initialBusiness ? { companyName: initialBusiness.businessName, licenseNumber: initialBusiness.licenseNumber ?? "", services: initialBusiness.categories } : {}) });
   const [providerCoverage, setProviderCoverage] = useState<ServiceAreaDraft | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [sessionAccepted, setSessionAccepted] = useState(false);
@@ -113,7 +120,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
   const stepNumber = stages.indexOf(progressStage) + 1;
 
   useEffect(() => {
-    router.prefetch("/get-started/profile");
+    router.prefetch(profileDestination);
     const draft = getOnboardingDraft();
     const savedName = draft?.name ?? getSignUpName();
     if (savedName) {
@@ -133,7 +140,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
       setStage("session");
     }
     setHydrated(true);
-  }, [alreadyVerified, router]);
+  }, [alreadyVerified, router, profileDestination]);
 
   useEffect(() => {
     if (!switchingAccount) return;
@@ -142,7 +149,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
     // settles. A hard navigation guarantees that the Server Component reads
     // the new signed-out cookie state and renders the actual signup flow.
     if (user === null) {
-      window.location.replace("/get-started");
+      window.location.replace(signUpDestination);
       return;
     }
 
@@ -152,7 +159,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
     }, 8_000);
 
     return () => window.clearTimeout(timeout);
-  }, [switchingAccount, user]);
+  }, [switchingAccount, user, signUpDestination]);
 
   const continueFromName = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -243,7 +250,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
     };
     saveOnboardingDraft(draft);
     setStage("account");
-    if (alreadyVerified) router.replace("/get-started/profile");
+    if (alreadyVerified) router.replace(profileDestination);
   };
 
   if (!hydrated) {
@@ -288,7 +295,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
                   setStage("homeowner_coverage");
                 } else {
                   saveOnboardingDraft({ ...draft, completionAuthorized: true });
-                  router.replace("/get-started/profile");
+                  router.replace(profileDestination);
                 }
               } else {
                 setStage("name");
@@ -306,8 +313,8 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
               setSwitchAccountError(null);
               clearOnboardingDraft();
               clearSignUpName();
-              void signOut({ redirectUrl: "/get-started" })
-                .then(() => window.location.replace("/get-started"))
+              void signOut({ redirectUrl: signUpDestination })
+                .then(() => window.location.replace(signUpDestination))
                 .catch(() => {
                   setSwitchingAccount(false);
                   setSwitchAccountError("We could not sign you out. Please try again.");
@@ -382,7 +389,7 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
 
         <p className="mt-6 text-center text-sm text-[#6b7280]">
           Already have an account?{" "}
-          <Link className="font-semibold text-[#0f8f83] hover:underline" href="/sign-in">
+          <Link className="font-semibold text-[#0f8f83] hover:underline" href={signInDestination}>
             Sign in
           </Link>
         </p>
@@ -528,9 +535,9 @@ export function NamedSignUp({ alreadyVerified = false, initialRole = "homeowner"
         <SignUp
           path="/get-started"
           routing="path"
-          signInUrl="/sign-in"
-          forceRedirectUrl="/get-started/profile"
-          fallbackRedirectUrl="/get-started/profile"
+          signInUrl={signInDestination}
+          forceRedirectUrl={profileDestination}
+          fallbackRedirectUrl={profileDestination}
           fallback={<AccountStepLoading />}
           initialValues={{ firstName: name.firstName, lastName: name.lastName }}
           appearance={{

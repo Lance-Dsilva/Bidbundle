@@ -48,6 +48,7 @@ class ResendEmailProvider implements EmailProvider {
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(8_000),
       headers,
       body: JSON.stringify({
         from: this.fromAddress,
