@@ -163,6 +163,11 @@ export async function recordAudit(
 /* ── Presentation ────────────────────────────────────────────────────────── */
 
 const ACTION_SUMMARIES: Record<AdminAuditAction, string> = {
+  vendor_lead_updated: "updated a vendor lead",
+  vendor_leads_imported: "imported vendor license records",
+  vendor_referral_added: "recorded a vendor referral",
+  vendor_invites_queued: "queued a reviewed vendor invitation batch",
+  vendor_invitation_claimed: "claimed a scoped vendor invitation",
   provider_bid_invited: "invited a verified provider to quote",
   community_created: "created the community",
   community_updated: "updated community details",

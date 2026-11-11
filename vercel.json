@@ -1,4 +1,14 @@
 {
   "buildCommand": "bash scripts/vercel-build.sh",
-  "crons": [{ "path": "/api/jobs/outbox", "schedule": "0 13 * * *" }]
+  "crons": [
+    {
+      "path": "/api/jobs/outbox",
+      "schedule": "0 13 * * *"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "codex/issue-59-vendor-sourcing": false
+    }
+  }
 }

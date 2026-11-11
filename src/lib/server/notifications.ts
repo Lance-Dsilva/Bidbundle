@@ -34,6 +34,8 @@ export type NotificationIntent = {
   email?: string | null;
   /** Security/transactional mail can bypass a homeowner's general mail opt-out. */
   emailPolicy?: "respect_preference" | "required";
+  /** Vendor invitations obey global outreach suppression at delivery. */
+  vendorOutreach?: boolean;
   kind: NotificationKind;
   title: string;
   body: string;
@@ -119,6 +121,7 @@ export function buildNotificationOps(intents: readonly NotificationIntent[]): Ba
       dedupeKey: `email:${intent.dedupeKey}`,
       payload: {
         to: intent.email as string,
+        ...(intent.vendorOutreach ? { vendorOutreach: true } : {}),
         subject: intent.title.slice(0, 200),
         text: `${intent.body.slice(0, 1_000)}\n\nOpen Bundleen: ${absoluteAppUrl(intent.linkPath)}`,
       },
@@ -354,16 +357,23 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
       let providerMessageId: string | null = null;
 
       if (event.kind === "notification_email") {
-        const payload = event.payload as { to?: string; subject?: string; text?: string };
+        const payload = event.payload as { to?: string; subject?: string; text?: string; vendorOutreach?: boolean; requestId?: string; providerUserId?: string };
         if (!payload.to || !payload.subject || !payload.text) {
           throw new Error("outbox payload is incomplete");
         }
-        const delivery = await getEmailProvider().send({
-          to: payload.to,
-          subject: payload.subject,
-          text: payload.text,
-          idempotencyKey: event.dedupeKey,
-        });
+        const message = { to: payload.to, subject: payload.subject, text: payload.text, idempotencyKey: event.dedupeKey };
+        const vendorInvitation = payload.vendorOutreach === true || (event.dedupeKey.startsWith("email:provider-bid-invite:") || event.dedupeKey.startsWith("email:provider-request-open:"));
+        const delivery = vendorInvitation
+          ? await (await import("@/lib/server/vendor-outreach")).dispatchRegisteredVendorEmail({ ...message, requestId: payload.requestId, providerUserId: payload.providerUserId })
+          : await getEmailProvider().send(message);
+        providerMessageId = delivery.providerMessageId;
+      } else if (event.kind === "vendor_outreach") {
+        const payload = event.payload as { invitationId?: unknown; slot?: unknown };
+        if (typeof payload.invitationId !== "string" || !payload.invitationId ||
+            typeof payload.slot !== "number" || !Number.isInteger(payload.slot) || payload.slot < 0 || payload.slot > 2) {
+          throw new Error("vendor outreach payload is incomplete");
+        }
+        const delivery = await (await import("@/lib/server/vendor-outreach")).dispatchVendorOutreach(payload.invitationId, payload.slot);
         providerMessageId = delivery.providerMessageId;
       } else if (event.kind === REMINDER_OUTBOX_KIND) {
         // A delayed reminder. The row's `nextAttemptAt` was its due time; the
@@ -385,6 +395,13 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
         }
       } else {
         throw new Error(`unknown outbox kind ${event.kind}`);
+      }
+
+      if (providerMessageId && event.kind === "notification_email" &&
+          ((event.payload as { vendorOutreach?: boolean }).vendorOutreach === true ||
+           event.dedupeKey.startsWith("email:provider-bid-invite:") || event.dedupeKey.startsWith("email:provider-request-open:"))) {
+        await db.outboxEvent.update({ where: { id: event.id }, data: { providerMessageId } });
+        await (await import("@/lib/server/vendor-webhook")).reconcileVendorWebhookEvents(providerMessageId);
       }
 
       await db.outboxEvent.update({

@@ -34,6 +34,7 @@ vi.mock("@/lib/server/db", () => ({
       status: state.open ? "open_for_bids" : "bidding_closed", biddingClosesAt: state.deadline,
       community: { type: "hoa", status: "active", name: "Test HOA" }, participations: [],
     }) },
+    providerCommunityApproval: { findMany: async () => [], findUnique: async () => null },
     providerServiceArea: { findMany: async () => [{
       centerLatitude: state.covered ? 30.4 : 40,
       centerLongitude: state.covered ? -97.72 : -100,

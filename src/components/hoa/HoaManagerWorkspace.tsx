@@ -1,5 +1,7 @@
 "use client";
 
+import { VendorReferralForm } from "@/components/vendors/VendorReferralForm";
+
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 
@@ -771,6 +773,7 @@ function RequestCard({
         ) : null}
       </div>
 
+      {["collecting_interest", "open_for_bids"].includes(request.status) && <VendorReferralForm requestId={request.id} />}
       {request.poolTemplate ? <PoolBidComparison template={request.poolTemplate} bids={bids} tierCounts={request.tierCounts} managerView busy={busy} canAward={["open_for_bids", "bidding_closed"].includes(request.status) && !accepted} onAward={(bid) => void onAward(request.id, bid.id)} /> : null}
       {!request.poolTemplate && bids.length > 0 ? (
         <div className="mt-4 rounded-xl bg-[#f6faf9] p-3">

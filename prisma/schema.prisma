@@ -112,6 +112,11 @@ enum AdminAuditAction {
   review_moderated
   provider_service_area_changed
   provider_bid_invited
+  vendor_lead_updated
+  vendor_leads_imported
+  vendor_referral_added
+  vendor_invites_queued
+  vendor_invitation_claimed
   support_ticket_assigned
   support_ticket_status_changed
   support_ticket_priority_changed
@@ -138,6 +143,8 @@ enum AdminAuditAction {
 }
 
 enum AdminAuditTargetType {
+  vendor_lead
+  vendor_invitation
   community
   membership
   staff_assignment
@@ -436,6 +443,11 @@ model User {
   amenityReviewsModerated  AmenityReview[]         @relation("AmenityReviewModerator")
   amenityReviewResponses   AmenityReviewResponse[] @relation("AmenityReviewResponder")
   mediaUploaded            MediaAsset[]            @relation("MediaUploader")
+  vendorLeadsCreated       VendorLead[] @relation("VendorLeadCreator")
+  vendorLeadsConverted     VendorLead[] @relation("VendorLeadProvider")
+  vendorReferrals          VendorLeadReferral[]
+  vendorInvitationsSent    VendorRequestInvitation[] @relation("VendorInviteSender")
+  vendorInvitationsClaimed VendorRequestInvitation[] @relation("VendorInviteProvider")
   visitPhotosConsented     MediaAsset[]            @relation("VisitPhotoConsenter")
   visitPhotoConsentsChanged MediaAsset[]           @relation("VisitPhotoConsentActor")
   visitPhotoPoliciesUpdated CategoryVisitPolicy[]
@@ -818,6 +830,8 @@ model HoaServiceRequest {
   agreement      ServiceAgreement?
   conversations  ServiceConversation[]
   providerInvitations ProviderBidInvitation[]
+  vendorInvitations VendorRequestInvitation[]
+  vendorReferrals VendorLeadReferral[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -906,6 +920,9 @@ model ServiceBid {
 
   providerUserId String
   provider       User   @relation("BidProvider", fields: [providerUserId], references: [id], onDelete: Cascade)
+  /// A separately claimed, exact-request lead proposal grant. Never an award approval.
+  vendorInvitationId String?
+  vendorInvitation VendorRequestInvitation? @relation(fields: [vendorInvitationId], references: [id], onDelete: Restrict)
 
   status ServiceBidStatus @default(submitted)
 
@@ -969,6 +986,132 @@ model ProviderBidInvitation {
   createdAt DateTime @default(now())
 
   @@unique([requestId, providerUserId])
+}
+
+model VendorLead {
+  id String @id @default(cuid())
+  businessName String
+  nameKey String
+  categories String[] @default([])
+  licenseNumber String?
+  licenseJurisdiction String @default("CA")
+  licenseClasses String[] @default([])
+  licenseStatus String @default("unknown")
+  licenseExpiresAt DateTime? @db.Date
+  workersCompOnFile Boolean?
+  bondOnFile Boolean?
+  phone String?
+  phoneNormalized String?
+  email String?
+  emailDigest String?
+  emailDomain String?
+  contactConfirmed Boolean @default(false)
+  website String?
+  city String?
+  region String?
+  postalCode String?
+  county String?
+  latitude Float?
+  longitude Float?
+  source String
+  status String @default("new")
+  convertedProviderUserId String?
+  convertedProvider User? @relation("VendorLeadProvider", fields: [convertedProviderUserId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  createdBy User? @relation("VendorLeadCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lastInvitedAt DateTime?
+  notes String?
+  invitations VendorRequestInvitation[]
+  referrals VendorLeadReferral[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([licenseJurisdiction, licenseNumber])
+  @@index([emailDigest])
+  @@index([phoneNormalized, nameKey])
+  @@index([status, updatedAt])
+}
+
+model VendorLeadReferral {
+  id String @id @default(cuid())
+  leadId String
+  lead VendorLead @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  requestId String
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  createdByUserId String
+  createdBy User @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  source String
+  createdAt DateTime @default(now())
+  @@unique([leadId, requestId, createdByUserId])
+}
+
+model VendorRequestInvitation {
+  id String @id @default(cuid())
+  leadId String
+  lead VendorLead @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  requestId String
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  invitedByUserId String
+  invitedBy User @relation("VendorInviteSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  recipientEmail String
+  emailDigest String
+  tokenNonce String
+  expiresAt DateTime
+  revokedAt DateTime?
+  claimedProviderUserId String?
+  claimedProvider User? @relation("VendorInviteProvider", fields: [claimedProviderUserId], references: [id], onDelete: Restrict)
+  claimedAt DateTime?
+  openedAt DateTime?
+  clickedAt DateTime?
+  proposalStartedAt DateTime?
+  submittedAt DateTime?
+  bids ServiceBid[]
+  messages VendorOutreachMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([leadId, requestId])
+  @@index([emailDigest])
+  @@index([requestId, createdAt])
+}
+
+model VendorEmailSuppression {
+  emailDigest String @id
+  reason String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VendorOutreachMessage {
+  id String @id @default(cuid())
+  invitationId String
+  invitation VendorRequestInvitation @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  slot Int
+  status String @default("pending")
+  dueAt DateTime
+  firstAttemptAt DateTime?
+  reservationDay String?
+  payload Json?
+  sentAt DateTime?
+  deliveredAt DateTime?
+  providerMessageId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([invitationId, slot])
+}
+
+model VendorOutreachBudget {
+  key String @id
+  used Int @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model VendorWebhookEvent {
+  id String @id
+  providerMessageId String
+  eventType String
+  occurredAt DateTime
+  processedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([providerMessageId, processedAt])
 }
 
 /// The accepted commercial terms, snapshotted at award time so later bid or
