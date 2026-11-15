@@ -2512,3 +2512,15 @@ model CommunityInterest {
   @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
   @@index([createdAt, id])
 }
+
+model StripeTestEvent {
+  id          String    @id
+  eventType   String
+  objectId    String
+  accountId   String?
+  occurredAt  DateTime
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([processedAt, receivedAt])
+}
