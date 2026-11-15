@@ -335,6 +335,9 @@ enum PayoutStatus {
 }
 
 model User {
+  /// Stripe sandbox customer, scoped to the original payer.
+  stripeTestCustomerId String? @unique
+
   id          String   @id @default(cuid())
   clerkUserId String   @unique
   email       String   @unique
