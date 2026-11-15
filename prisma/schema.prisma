@@ -1009,6 +1009,7 @@ model ServiceAgreement {
   status ServiceAgreementStatus @default(active)
 
   occurrences ServiceOccurrence[]
+  billingConsents VisitBillingConsent[]
   reviews     Review[]
 
   createdAt DateTime @default(now())
@@ -1065,6 +1066,19 @@ model ServiceOccurrence {
 /// The snapshot is the reason a later profile edit cannot rewrite historical
 /// work. The homeowner relation is retained for authorization — "is this my
 /// stop?" — never re-read to resolve where the crew should go.
+/// Final-price acceptance is separate from saving a Stripe payment method.
+model VisitBillingConsent {
+  agreementId String
+  agreement   ServiceAgreement @relation(fields: [agreementId], references: [id], onDelete: Restrict)
+  payerUserId String
+  unitId      String
+  termsToken  String
+  termsVersion String
+  acceptedAt  DateTime @default(now())
+
+  @@id([agreementId, payerUserId, unitId])
+}
+
 model ServiceVisit {
   id           String            @id @default(cuid())
   occurrenceId String
@@ -1104,6 +1118,10 @@ model ServiceVisit {
   completedAt     DateTime?
   /// Copied from the awarded request; later category policy edits do not rewrite work.
   requiresAfterPhoto Boolean @default(false)
+  /// Frozen quote allocation for eligible visits. A price alone does not authorize a charge.
+  allocatedVisitCents Int?
+  /// The resident who enrolled this unit. Occupancy changes never reassign payment.
+  billingPayerUserId String?
 
   reviews Review[]
   photos MediaAsset[] @relation("VisitPhotos")

@@ -22,6 +22,7 @@ vi.mock("@/lib/server/notifications", async (importActual) => ({
 }));
 
 import { createHoaRequest, respondToOptionalRequest, transitionHoaRequest, submitBid, awardBid, listRequestBids, getResidentHoaHub } from "@/lib/server/hoa-market";
+import { acceptVisitBillingOffer, getVisitBillingOffer } from "@/lib/server/visit-billing-consent";
 import { storeProviderCredential } from "@/lib/server/provider-credentials";
 import { updateProviderAdministration } from "@/lib/server/providers-admin";
 import { inviteProviderToBid, listProviderBidInvitations } from "@/lib/server/provider-bid-invitations";
@@ -395,7 +396,57 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     const dates=await first.serviceOccurrence.findMany({where:{agreementId:id},orderBy:{sequence:"asc"}});
     expect(dates.map(row=>row.serviceDate.toISOString().slice(0,10))).toEqual(["2028-01-31","2028-02-07","2028-02-14","2028-02-21","2028-02-29","2028-03-07","2028-03-15","2028-03-23","2028-03-31","2028-04-07","2028-04-15","2028-04-22"]);
     expect((await first.serviceAgreement.findUniqueOrThrow({where:{id}})).amountCents).toBe(120015);
-    expect(await first.serviceVisit.count({where:{occurrence:{agreementId:id}}})).toBe(36);
+    const visits = await first.serviceVisit.findMany({ where: { occurrence: { agreementId: id } } });
+    expect(visits).toHaveLength(36);
+    const totals = new Map<string, number>();
+    for (const visit of visits) {
+      expect(visit.allocatedVisitCents).not.toBeNull();
+      const unitId = visit.unitId!;
+      totals.set(unitId, (totals.get(unitId) ?? 0) + visit.allocatedVisitCents!);
+    }
+    expect([...totals.values()].sort((a, b) => a - b)).toEqual([30003, 30003, 60009]);
+    await expect(first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { allocatedVisitCents: 1 },
+    })).rejects.toThrow(/immutable/i);
+    const otherUnit = visits.find((visit) => visit.unitId !== visits[0].unitId)!;
+    await expect(first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { unitId: otherUnit.unitId },
+    })).rejects.toThrow(/immutable/i);
+    const otherRound = visits.find((visit) => visit.occurrenceId !== visits[0].occurrenceId)!;
+    await expect(first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { occurrenceId: otherRound.occurrenceId },
+    })).rejects.toThrow(/immutable/i);
+    const scheduled = await first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { estimatedMinutes: 45 },
+    });
+    expect(scheduled.estimatedMinutes).toBe(45);
+    expect(scheduled.allocatedVisitCents).toBe(visits[0].allocatedVisitCents);
+  });
+
+  it("records only the awarded payer’s acceptance of their own exact prices", async () => {
+    const fixture = await seed();
+    await open(fixture);
+    const agreementId = await award(fixture, await submit(fixture));
+    const standardPayer = fixture.residents[0].user.id;
+    const largePayer = fixture.residents[1].user.id;
+    const offer = await run(first, () => getVisitBillingOffer(standardPayer, agreementId));
+
+    expect(offer.totalCents).toBe(30003);
+    expect(offer.acceptedAt).toBeNull();
+    await expect(run(first, () => getVisitBillingOffer(fixture.manager.id, agreementId)))
+      .rejects.toMatchObject({ status: 404 });
+    await expect(run(first, () => acceptVisitBillingOffer(largePayer, agreementId, offer.termsToken)))
+      .rejects.toMatchObject({ status: 409 });
+
+    const accepted = await run(first, () => acceptVisitBillingOffer(standardPayer, agreementId, offer.termsToken));
+    expect(accepted.acceptedAt).toEqual(expect.any(String));
+    const retry = await run(second, () => acceptVisitBillingOffer(standardPayer, agreementId, offer.termsToken));
+    expect(retry).toEqual(accepted);
+    expect(await first.visitBillingConsent.count({ where: { agreementId } })).toBe(1);
   });
 
   it.each(["expired-proof","higher-policy"])("fails a new pool award closed for %s without partial award rows", async (reason) => {

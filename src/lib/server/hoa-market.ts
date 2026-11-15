@@ -1,3 +1,4 @@
+import { allocateVisitCents } from "@/lib/visit-billing";
 import "server-only";
 
 import { providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
@@ -2147,14 +2148,36 @@ export async function awardBid(
   // One valid visit per locked home per occurrence. `visitDataForTarget`
   // produces either `{ unitId }` or the homeowner id plus the frozen address —
   // exactly one target, which is what the database CHECK requires.
-  const visitRows = occurrenceRows.flatMap((occurrence) =>
-    targets.map((target) => ({
-      id: randomUUID(),
-      occurrenceId: occurrence.id,
-      requiresAfterPhoto: request.requiresAfterPhoto,
-      updatedAt: now,
-      ...visitDataForTarget(target),
-    })),
+  const snapshotBilling = request.community.type === "hoa" &&
+    request.kind === "optional_group" && bid.pricingBasis === "total";
+  const billingIndexByUnit = new Map(
+    targets.flatMap((target) => target.kind === "unit" ? [target.unitId] : [])
+      .sort()
+      .map((unitId, index) => [unitId, index] as const),
+  );
+  const poolTermByUnit = new Map(poolSnapshot?.homes.map((home) => [home.unitId, home.termCents]));
+  const visitRows = occurrenceRows.flatMap((occurrence, roundIndex) =>
+    targets.map((target) => {
+      let allocatedVisitCents: number | null = null;
+      if (snapshotBilling && target.kind === "unit") {
+        const poolTerm = poolTermByUnit.get(target.unitId);
+        if (poolSnapshot && poolTerm === undefined) {
+          throw new HoaWorkflowError("The pool quote does not cover every locked home.", 409);
+        }
+        allocatedVisitCents = poolTerm === undefined
+          ? allocateVisitCents(bid.amountCents, targets.length, occurrenceRows.length, billingIndexByUnit.get(target.unitId)!, roundIndex)
+          : allocateVisitCents(poolTerm, 1, occurrenceRows.length, 0, roundIndex);
+      }
+      return {
+        id: randomUUID(),
+        occurrenceId: occurrence.id,
+        requiresAfterPhoto: request.requiresAfterPhoto,
+        updatedAt: now,
+        ...visitDataForTarget(target),
+        allocatedVisitCents,
+        billingPayerUserId: snapshotBilling && target.kind === "unit" ? target.userId : null,
+      };
+    }),
   );
 
   const losingBids = await db.serviceBid.findMany({
