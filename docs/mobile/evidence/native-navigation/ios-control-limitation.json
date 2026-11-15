@@ -1,0 +1,32 @@
+{
+  "sourcePrepared": "7c997ee933ca598073ad402ea40a1df0fd299add",
+  "dateUtc": "2026-11-02",
+  "hostUnlock": "Human confirmed unlock; cua.getState returned native inventory successfully.",
+  "simulator": {
+    "name": "Bundleen-N04-iOS-Isolated",
+    "id": "94184537-A9E2-4DDE-AA7B-03A4947C0020",
+    "bootStatusExit": 0,
+    "bootSeconds": 31,
+    "cleanup": "Exact simulator shut down and deleted; booted inventory empty."
+  },
+  "attempts": [
+    {
+      "api": "cua.getApp",
+      "target": "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app",
+      "result": "No app state returned; root-agent interrupted the blocked turn after709.6seconds."
+    },
+    {
+      "api": "cua.getApp",
+      "target": "com.apple.iphonesimulator",
+      "precedingReset": "CUA kernel reset succeeded",
+      "requestedTimeoutMs": 20000,
+      "result": "No app state returned; root-agent interrupted after81.9seconds despite explicit timeout."
+    }
+  ],
+  "interpretation": "Tool output labels interruptions as by user; these were root-agent interruptions, not human input. Current limitation is supported Simulator control hanging, not a remaining host lock.",
+  "iosBuilds": 0,
+  "iosTestRuns": 0,
+  "iosGestures": 0,
+  "receiptAcks": 0,
+  "claim": "Prepared receipt-only protocol remains unexecuted. No iOS gesture or signed-out post-input pass."
+}

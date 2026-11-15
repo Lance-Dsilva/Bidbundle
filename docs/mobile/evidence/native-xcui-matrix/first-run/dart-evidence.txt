@@ -1,0 +1,30 @@
+2026-11-05 17:08:57.711 Df Runner[53356:49de60] (Flutter) flutter: {"event":"N04_DART_ready","marker":"N04|1793920135365721|53356|isolates/5204865184210587|100|1|requests|ready|0","devicePointerPropagation":true,"sequence":null,"invalid":null}
+2026-11-05 17:09:00.234 Df Runner[53356:49de60] (Flutter) flutter: {"event":"N04_DART_observed","marker":"N04|1793920135365721|53356|isolates/5204865184210587|100|1|requests|observed|1","devicePointerPropagation":true,"sequence":{"pointer":1,"startX":0.009950248756218905,"startY":0.5,"downCount":1,"moveCount":41,"upCount":1,"view":0,"endX":0.8499170812603649,"endY":0.5,"source":"DEVICE","completed":1},"invalid":null}
+2026-11-05 17:09:18.091 Df Runner[53356:49de60] (Flutter) flutter: {"event":"N04_DART_ready","marker":"N04|1793920135365721|53356|isolates/5204865184210587|100|2|inbox-detail|ready|0","devicePointerPropagation":true,"sequence":null,"invalid":null}
+2026-11-05 17:09:20.571 Df Runner[53356:49de60] (Flutter) flutter: {"event":"N04_DART_observed","marker":"N04|1793920135365721|53356|isolates/5204865184210587|100|2|inbox-detail|observed|1","devicePointerPropagation":true,"sequence":{"pointer":2,"startX":0.009950248756218905,"startY":0.5,"downCount":1,"moveCount":36,"upCount":1,"view":0,"endX":0.8499170812603649,"endY":0.5,"source":"DEVICE","completed":1},"invalid":null}
+2026-11-05 17:09:35.640 Df Runner[53356:49de60] (Flutter) flutter: {"event":"N04_DART_ready","marker":"N04|1793920135365721|53356|isolates/5204865184210587|100|3|inbox-list|ready|0","devicePointerPropagation":true,"sequence":null,"invalid":null}
+2026-11-05 17:09:38.079 Df Runner[53356:49de60] (Flutter) flutter: {"event":"N04_DART_failed","marker":"N04|1793920135365721|53356|isolates/5204865184210587|100|3|inbox-list|failed|1","devicePointerPropagation":true,"sequence":{"pointer":3,"startX":0.009950248756218905,"startY":0.5,"downCount":1,"moveCount":41,"upCount":1,"view":0,"endX":0.8499170812603649,"endY":0.5,"source":"DEVICE","completed":1},"invalid":null}
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter: The following TestFailure was thrown running a test:
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter: Expected: exactly one matching candidate
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter:   Actual: _TextWidgetFinder:<Found 0 widgets with text "Your account details. Editing is not
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter: available in this preview.": []>
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter:    Which: means none were found but one was expected
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter:
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter: When the exception was thrown, this was the stack:
+2026-11-05 17:09:38.170 Df Runner[53356:49de60] (Flutter) flutter: #4      main.<anonymous closure>.<anonymous closure> (file:///Users/lancedsilva/.codex/worktrees/bundleen-mobile/neighbid-claude-codex-starter/apps/mobile/integration_test/xcui_navigation_test.dart:366:11)
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: #5      main.<anonymous closure>.external (file:///Users/lancedsilva/.codex/worktrees/bundleen-mobile/neighbid-claude-codex-starter/apps/mobile/integration_test/xcui_navigation_test.dart:235:18)
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: <asynchronous suspension>
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: #6      main.<anonymous closure> (file:///Users/lancedsilva/.codex/worktrees/bundleen-mobile/neighbid-claude-codex-starter/apps/mobile/integration_test/xcui_navigation_test.dart:363:9)
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: <asynchronous suspension>
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: #7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: <asynchronous suspension>
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: #8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: <asynchronous suspension>
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: #9      TestWidgetsFlutterBinding._createTestCompletionHandler.<anonymous closure> (package:flutter_test/src/binding.dart:1707:12)
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: <asynchronous suspension>
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter:
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter: This was caught by the test expectation on the following line:
+2026-11-05 17:09:38.171 Df Runner[53356:49de60] (Flutter) flutter:   file:///Users/lancedsilva/.codex/worktrees/bundleen-mobile/neighbid-claude-codex-starter/apps/mobile/integration_test/xcui_navigation_test.dart line 366
+2026-11-05 17:09:38.172 Df Runner[53356:49de60] (Flutter) flutter: The test description was:
+2026-11-05 17:09:38.172 Df Runner[53356:49de60] (Flutter) flutter:   XCTest eight native edge drags, homeowner 100% and 200%
+2026-11-05 17:09:38.172 Df Runner[53356:49de60] (Flutter) flutter: ════════════════════════════════════════════════════════════════════════════════════════════════════

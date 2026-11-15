@@ -1,0 +1,68 @@
+{
+  "development": {
+    "CFBundleIdentifier": "com.bundleen.bundleen.development",
+    "CFBundleDisplayName": "Bundleen Dev",
+    "CFBundleIcons": {
+      "CFBundlePrimaryIcon": {
+        "CFBundleIconFiles": [
+          "AppIcon60x60"
+        ],
+        "CFBundleIconName": "AppIcon"
+      }
+    },
+    "CFBundleIcons~ipad": {
+      "CFBundlePrimaryIcon": {
+        "CFBundleIconFiles": [
+          "AppIcon60x60",
+          "AppIcon76x76"
+        ],
+        "CFBundleIconName": "AppIcon"
+      }
+    },
+    "iconFiles": [
+      {
+        "name": "AppIcon60x60@2x.png",
+        "bytes": 1897,
+        "sha256": "09a01fa09a1e49df76d791af0ce883c81a8980bcaf0354a7d358182cb8b84cd6"
+      },
+      {
+        "name": "AppIcon76x76@2x~ipad.png",
+        "bytes": 3608,
+        "sha256": "7f7d4cff26eef25de664c74d47937ab263718ac14e25bb04fc7c213ce5f648a0"
+      }
+    ]
+  },
+  "staging": {
+    "CFBundleIdentifier": "com.bundleen.bundleen.staging",
+    "CFBundleDisplayName": "Bundleen Staging",
+    "CFBundleIcons": {
+      "CFBundlePrimaryIcon": {
+        "CFBundleIconFiles": [
+          "AppIcon60x60"
+        ],
+        "CFBundleIconName": "AppIcon"
+      }
+    },
+    "CFBundleIcons~ipad": {
+      "CFBundlePrimaryIcon": {
+        "CFBundleIconFiles": [
+          "AppIcon60x60",
+          "AppIcon76x76"
+        ],
+        "CFBundleIconName": "AppIcon"
+      }
+    },
+    "iconFiles": [
+      {
+        "name": "AppIcon60x60@2x.png",
+        "bytes": 1897,
+        "sha256": "09a01fa09a1e49df76d791af0ce883c81a8980bcaf0354a7d358182cb8b84cd6"
+      },
+      {
+        "name": "AppIcon76x76@2x~ipad.png",
+        "bytes": 3608,
+        "sha256": "7f7d4cff26eef25de664c74d47937ab263718ac14e25bb04fc7c213ce5f648a0"
+      }
+    ]
+  }
+}

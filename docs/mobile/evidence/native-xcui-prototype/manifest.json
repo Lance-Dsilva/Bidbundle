@@ -1,0 +1,57 @@
+{
+  "compiledSource": "1f84897c31f663af27445423533d0d2c6458bd17",
+  "commandDocumentation": "6a55f892f8b504dda86abf0bfea167ec8514580b",
+  "result": "failed before gesture: ready predicate timeout",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "89496cd0eb18d3299494c4570e0f667a1e3ef7a5ef27967d5b695db9474dc2d0",
+      "bytes": 4274
+    },
+    {
+      "path": "actual-test-command-result.json",
+      "sha256": "1471f56023c98ed3aa810b1d0b044504df4d787603384393a358294f075849b4",
+      "bytes": 775
+    },
+    {
+      "path": "build-command-result.json",
+      "sha256": "a5366f3d5d0508464e062db10f0a5e63901a9c3b62e9ddf06669253de4fae5ed",
+      "bytes": 552
+    },
+    {
+      "path": "rejected-existing-output-command.json",
+      "sha256": "b551f4b47eacf829b678b1ba36591fae86b8605b78efdbeba2569da0af347237",
+      "bytes": 768
+    },
+    {
+      "path": "rejected-iteration-command.json",
+      "sha256": "6210d3127dfcfabb85cc50284e65bf8a7302231167170a8d6ced4de706871838",
+      "bytes": 801
+    },
+    {
+      "path": "synthetic-requests-detail-during-ready-wait.png",
+      "sha256": "339d5691a9d58020783b14d32a6a80b32841376654a9ba9befb9291ad2a29500",
+      "bytes": 259367
+    },
+    {
+      "path": "test-log-excerpt.txt",
+      "sha256": "55eac9788572ffe1fd34d1795785bfe2d5dc9576f325ef07f2d1f05c1fca3e1d",
+      "bytes": 4307
+    },
+    {
+      "path": "xcresult-activities.json",
+      "sha256": "74e0aae8bfa5f55ad04bd4c842faaf1e0189267d3aefcc5b021919260ea3712c",
+      "bytes": 13528
+    },
+    {
+      "path": "xcresult-tests.json",
+      "sha256": "c929729fe56957b5556b3188354763492c6ebbc800d493aec0bcd1a73dab0d5f",
+      "bytes": 1985
+    },
+    {
+      "path": "xctestrun-summary.json",
+      "sha256": "8a0c820f72abb3374ef5fb13f57d67af9b85001720e7026af85348be736b4fed",
+      "bytes": 747
+    }
+  ]
+}

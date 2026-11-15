@@ -1,0 +1,147 @@
+{
+  "harnessCommit": "4ac16367ed04206ea76cebecb15a72423c807bdb",
+  "synthetic": true,
+  "captureMethod": "IntegrationTestWidgetsFlutterBinding.takeScreenshot; Flutter/native app surface, not full OS screen",
+  "files": [
+    {
+      "path": "android/synthetic-homeowner-1x-conversation.png",
+      "sha256": "1ea80333d266d69910b381b8e63c3579a5c01200d269e8f0c4529bd0595971b4",
+      "bytes": 219647
+    },
+    {
+      "path": "android/synthetic-homeowner-1x-error.png",
+      "sha256": "67a7daff62922e0b0e7fb29ebfa5fee066ccb139eca78848299d1a5bfebd5da5",
+      "bytes": 96652
+    },
+    {
+      "path": "android/synthetic-homeowner-1x-request.png",
+      "sha256": "c56420ed134ac59f7b39c02b1037a162fa39966bf379b45437ffcf2701ae841a",
+      "bytes": 199046
+    },
+    {
+      "path": "android/synthetic-homeowner-1x-signed-out.png",
+      "sha256": "639a2db59177bc200357be79493264704f79058f934f0a509b37c2f4ea544fe1",
+      "bytes": 94588
+    },
+    {
+      "path": "android/synthetic-homeowner-2x-conversation.png",
+      "sha256": "f62d23fb5aaddbe7db3099e5712945a439e0b839f2ab1dcb384f5ca7a681173b",
+      "bytes": 270448
+    },
+    {
+      "path": "android/synthetic-homeowner-2x-error.png",
+      "sha256": "fe653cb3e580354b27ec1d63b1b9a11eb2bf48babe88706a4828d81bd141171b",
+      "bytes": 171456
+    },
+    {
+      "path": "android/synthetic-homeowner-2x-request.png",
+      "sha256": "8b68486db89a99f42d67adb7f2a1c426e0bb037e224c50d136bc1a4956d7264d",
+      "bytes": 197752
+    },
+    {
+      "path": "android/synthetic-homeowner-2x-signed-out.png",
+      "sha256": "33f8053e0f0aec11347bb21450b5cbddb22abf5cbdb2c7d7bd152ce03c2f9f14",
+      "bytes": 176911
+    },
+    {
+      "path": "android/synthetic-provider-1x-error.png",
+      "sha256": "7ed9bf7827d4907c5ea382566a90255422aebfaee3c4de3e14acbd1299fee3a1",
+      "bytes": 128145
+    },
+    {
+      "path": "android/synthetic-provider-1x-opportunities.png",
+      "sha256": "409c4fa1b8bbb5eafdc4e47043e28adc0c59ee5032ef769a52ca2f35319e3aae",
+      "bytes": 230598
+    },
+    {
+      "path": "android/synthetic-provider-1x-signed-out.png",
+      "sha256": "639a2db59177bc200357be79493264704f79058f934f0a509b37c2f4ea544fe1",
+      "bytes": 94588
+    },
+    {
+      "path": "android/synthetic-provider-2x-error.png",
+      "sha256": "e12c456c3810c2765159e66198209b43341a1c4f08ca7b2f60540aecb51f27ab",
+      "bytes": 242654
+    },
+    {
+      "path": "android/synthetic-provider-2x-opportunities.png",
+      "sha256": "e0f96f3849b0c679387b8c4ac8f432b4fc8209089629b9ca09cb4a896c81e3bc",
+      "bytes": 243267
+    },
+    {
+      "path": "android/synthetic-provider-2x-signed-out.png",
+      "sha256": "33f8053e0f0aec11347bb21450b5cbddb22abf5cbdb2c7d7bd152ce03c2f9f14",
+      "bytes": 176911
+    },
+    {
+      "path": "ios/synthetic-homeowner-1x-conversation.png",
+      "sha256": "a85bcd08d37e69ccb9585dc48f941a08e9cbc01e13c4d0d32771fbbd7f926315",
+      "bytes": 443751
+    },
+    {
+      "path": "ios/synthetic-homeowner-1x-error.png",
+      "sha256": "793d1c09fe5c224faf27b83c9dd84a85e52d8651a7eb53f7a176043071ab9f92",
+      "bytes": 267748
+    },
+    {
+      "path": "ios/synthetic-homeowner-1x-request.png",
+      "sha256": "864b4c91562c3bb0833b191a74235eaa92d82cadf84242cbb879b4c6594fb9cf",
+      "bytes": 359807
+    },
+    {
+      "path": "ios/synthetic-homeowner-1x-signed-out.png",
+      "sha256": "37af5c6f10b93893e970300311b0b012128c14f542eb651e74c83bf505483552",
+      "bytes": 258977
+    },
+    {
+      "path": "ios/synthetic-homeowner-2x-conversation.png",
+      "sha256": "18fb9cb0c47fe0c13eea07807ec0c34a72420b91535d16f18bda35949abaab33",
+      "bytes": 468507
+    },
+    {
+      "path": "ios/synthetic-homeowner-2x-error.png",
+      "sha256": "4627e72d4f3201bd49d3a0020f774dabc00dfeca9a2a9a9714cbf557fcfc09c9",
+      "bytes": 385537
+    },
+    {
+      "path": "ios/synthetic-homeowner-2x-request.png",
+      "sha256": "7a6741820a172b72524af48c25aca7b824b55579096107bf9630e88470a3560a",
+      "bytes": 381511
+    },
+    {
+      "path": "ios/synthetic-homeowner-2x-signed-out.png",
+      "sha256": "93cbc5b75b476509a86565285b06e32997379677342d7a13500e95f3cf641aed",
+      "bytes": 379469
+    },
+    {
+      "path": "ios/synthetic-provider-1x-error.png",
+      "sha256": "4eb7496043357b0fde6cbeaae75359c5d1f88c57ba83932811809987682a8684",
+      "bytes": 304228
+    },
+    {
+      "path": "ios/synthetic-provider-1x-opportunities.png",
+      "sha256": "2277497db647ae468a43cba98cd6a5d94742162a2cbd56d6b9a5bd560514562b",
+      "bytes": 457190
+    },
+    {
+      "path": "ios/synthetic-provider-1x-signed-out.png",
+      "sha256": "37af5c6f10b93893e970300311b0b012128c14f542eb651e74c83bf505483552",
+      "bytes": 258977
+    },
+    {
+      "path": "ios/synthetic-provider-2x-error.png",
+      "sha256": "a22fdddaa6fa12ea46fca965275d40e6034bc8a564e769e2cb6518bad0f7b430",
+      "bytes": 467775
+    },
+    {
+      "path": "ios/synthetic-provider-2x-opportunities.png",
+      "sha256": "3c0345bba6ed8c31d3c37486e11a36e2d5783efbdeae2c8856db895407d44f4c",
+      "bytes": 478659
+    },
+    {
+      "path": "ios/synthetic-provider-2x-signed-out.png",
+      "sha256": "93cbc5b75b476509a86565285b06e32997379677342d7a13500e95f3cf641aed",
+      "bytes": 379469
+    }
+  ]
+}

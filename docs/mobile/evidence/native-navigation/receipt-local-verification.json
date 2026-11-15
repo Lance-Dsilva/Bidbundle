@@ -1,0 +1,27 @@
+{
+  "basis": "Local working tree following7c997ee; final commit assigned by manager afterward",
+  "testsPassed": 474,
+  "receiptCases": 7,
+  "analyzer": "No issues found",
+  "formattedFiles": 66,
+  "formatChanges": 0,
+  "nativeIosRun": false,
+  "files": [
+    {
+      "path": "apps/mobile/integration_test/support/input_receipt_gate.dart",
+      "sha256": "1ea7689fd424aad9692be46458dbc6ff7dc2370440739769b68b52b76208f584"
+    },
+    {
+      "path": "apps/mobile/test/input_receipt_gate_test.dart",
+      "sha256": "a0a6a95128ef5e4a449ff0a1c6da007b4c29695d75618254e2094d34c5f4c986"
+    },
+    {
+      "path": "apps/mobile/integration_test/native_navigation_test.dart",
+      "sha256": "3686bfb838f3110b9c605797e9442d8e39ab36e8e1e83c0e24ac9b5627034ae5"
+    },
+    {
+      "path": "apps/mobile/tool/ack_native_navigation.dart",
+      "sha256": "5ad700dd8b0cd4e2cee2fdfd04b50489f3374a4b32698951ad6e0d3b01b42bb4"
+    }
+  ]
+}

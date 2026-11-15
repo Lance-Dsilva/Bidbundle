@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/private/tmp/bundleen-flutter-restored-20261106/bin/flutter",
+    "build",
+    "ios",
+    "--config-only",
+    "--simulator",
+    "--debug",
+    "--flavor",
+    "development",
+    "--target",
+    "integration_test/xcui_navigation_test.dart"
+  ],
+  "exitCode": 0,
+  "timedOut": false,
+  "wallElapsedSeconds": 7.8,
+  "monotonicElapsedSeconds": 7.8
+}
