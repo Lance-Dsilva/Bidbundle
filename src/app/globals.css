@@ -965,6 +965,8 @@ html[data-theme="dark"] .dash-nav-item { color: var(--ink-700); }
   color: #fff; background: linear-gradient(135deg, var(--teal-600), var(--teal-800));
   box-shadow: 0 16px 34px rgba(15,157,138,.32); cursor: pointer; transition: transform .2s ease;
 }
+.bb-ai-launcher[hidden] { display: none; }
+.bb-ai-send:focus-visible { outline: 3px solid var(--teal-600); outline-offset: 3px; }
 .bb-ai-launcher:hover { transform: translateY(-3px); }
 .bb-ai-launcher:focus-visible { outline: 3px solid var(--teal-600); outline-offset: 3px; }
 
@@ -984,7 +986,7 @@ html[data-theme="dark"] .dash-nav-item { color: var(--ink-700); }
 .bb-ai-backdrop { position: fixed; inset: 0; z-index: 84; background: rgba(31,26,20,.45); animation: bb-ai-backdrop-in .2s ease both; }
 .bb-ai-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 85;
-  height: min(88vh, 720px); overflow: hidden;
+  height: min(88vh, 720px); height: min(88dvh, 720px); overflow: hidden;
   border-radius: 22px 22px 0 0; background: var(--bg-card);
   box-shadow: 0 -16px 40px rgba(31,26,20,.2);
   padding-bottom: env(safe-area-inset-bottom);

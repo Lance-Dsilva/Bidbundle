@@ -14,7 +14,7 @@ const DEFAULT_SUGGESTIONS = [
 
 function IconSend() {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 2L11 13" />
       <path d="M22 2l-7 20-4-9-9-4z" />
     </svg>
@@ -23,7 +23,7 @@ function IconSend() {
 
 function IconClose() {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 6L6 18" />
       <path d="M6 6l12 12" />
     </svg>
@@ -111,7 +111,8 @@ export function BundleenAiPanel({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            height: 30,
+            height: 44,
+            minHeight: 44,
             padding: "0 12px",
             borderRadius: 999,
             fontSize: 12.5,
@@ -133,9 +134,12 @@ export function BundleenAiPanel({
             style={{
               display: "grid",
               placeItems: "center",
-              width: 30,
-              height: 30,
-              borderRadius: 999,
+              width: 44,
+              minWidth: 44,
+              height: 44,
+              minHeight: 44,
+              padding: 0,
+              borderRadius: 12,
               cursor: "pointer",
               background: "transparent",
               color: "var(--ink-500)",
@@ -240,6 +244,7 @@ export function BundleenAiPanel({
 
         {status === "error" && error && (
           <div
+            role="alert"
             style={{
               display: "flex",
               alignItems: "center",
@@ -247,9 +252,9 @@ export function BundleenAiPanel({
               gap: 12,
               padding: "12px 16px",
               borderRadius: 12,
-              background: "var(--terracotta-50)",
-              border: "1px solid var(--terracotta-100)",
-              color: "var(--terracotta-700, var(--terracotta-600))",
+              background: "var(--amber-50)",
+              border: "1px solid var(--amber-100)",
+              color: "var(--ink-900)",
               fontSize: 13.5,
             }}
           >
@@ -259,9 +264,10 @@ export function BundleenAiPanel({
               onClick={() => retry()}
               style={{
                 flexShrink: 0,
-                height: 30,
-                padding: "0 12px",
-                borderRadius: 999,
+                height: 44,
+                minHeight: 44,
+                padding: "0 14px",
+                borderRadius: 10,
                 fontSize: 12.5,
                 fontWeight: 700,
                 cursor: "pointer",
@@ -289,28 +295,32 @@ export function BundleenAiPanel({
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 6px 6px 14px", background: "var(--cream-100)", borderRadius: 22, border: "1px solid transparent" }}>
+        <form aria-label="Message Bundleen AI" onSubmit={(event) => { event.preventDefault(); handleSend(); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 6px 6px 14px", background: "var(--cream-100)", borderRadius: 18, border: "1px solid var(--border-warm)", minWidth: 0 }}>
           <input
             ref={composerRef}
             value={composer}
             onChange={(e) => setComposer(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSend();
-              }
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault();
             }}
+            aria-label="Message Bundleen AI"
             placeholder="Ask Bundleen AI anything…"
             disabled={busy}
-            style={{ flex: 1, border: 0, outline: 0, background: "transparent", fontSize: 14, color: "var(--ink-900)", padding: "10px 0" }}
+            style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: "transparent", fontSize: 16, color: "var(--ink-900)", padding: "10px 0" }}
           />
           <button
-            onClick={handleSend}
+            type="submit"
+            aria-label="Send message"
+            className="bb-ai-send"
             disabled={!composer.trim() || busy}
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
+              width: 44,
+              minWidth: 44,
+              height: 44,
+              minHeight: 44,
+              flexShrink: 0,
+              padding: 0,
+              borderRadius: 12,
               display: "grid",
               placeItems: "center",
               background: "var(--terracotta-600)",
@@ -322,7 +332,7 @@ export function BundleenAiPanel({
           >
             <IconSend />
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );

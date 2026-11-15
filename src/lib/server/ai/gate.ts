@@ -23,7 +23,15 @@ export async function requireAiChatMutation(): Promise<AiGate> {
   const gate = await requireAiUser();
   if (!gate.ok) return gate;
   const failure = await guardAiChat(gate.user.id);
-  if (failure) return { ok: false, response: guardFailureResponse(failure) };
+  if (failure) return {
+    ok: false,
+    response: failure.kind === "unavailable"
+      ? NextResponse.json(
+          { error: "Bundleen AI is temporarily unavailable. Please try again shortly." },
+          { status: 503, headers: { "Retry-After": "30", "Cache-Control": "private, no-store" } },
+        )
+      : guardFailureResponse(failure),
+  };
   return gate;
 }
 
