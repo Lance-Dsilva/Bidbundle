@@ -14,6 +14,7 @@ import { installMatchMediaStub } from "./stubs/match-media";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const NAVIGATION = [
+  ["For HOA boards", "/"],
   ["For residents", "/residents"],
   ["For providers", "/providers"],
   ["Sign in", "/sign-in"],
@@ -178,13 +179,13 @@ describe("audience content and progressive rendering", () => {
 });
 
 describe("navigation and mobile menu", () => {
-  it("uses the three shared destinations in desktop/mobile navigation and valid fragment targets", () => {
+  it("uses the four shared destinations in desktop/mobile navigation and valid fragment targets", () => {
     const { container } = render(<HomePage />);
     const mobile = mobileMenu().menu;
     expect(mobile.tagName).toBe("NAV");
     expect(mobile).toHaveAttribute("aria-label", "Mobile navigation");
     for (const navigation of [screen.getByRole("navigation", { name: "Main navigation" }), mobile]) {
-      expect(within(navigation).getAllByRole("link", { hidden: true })).toHaveLength(3);
+      expect(within(navigation).getAllByRole("link", { hidden: true })).toHaveLength(4);
       for (const [label, href] of NAVIGATION) {
         expect(within(navigation).getByRole("link", { name: label, hidden: true })).toHaveAttribute("href", href);
       }

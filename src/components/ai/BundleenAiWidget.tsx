@@ -50,6 +50,8 @@ export function BundleenAiWidget({ suggestions, subtitle }: BundleenAiWidgetProp
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  const panelId = useId();
+  const restoreLauncherFocus = useRef(false);
 
   useEffect(() => {
     const mql = window.matchMedia(MOBILE_QUERY);
@@ -60,12 +62,16 @@ export function BundleenAiWidget({ suggestions, subtitle }: BundleenAiWidgetProp
   }, []);
 
   const close = () => {
+    restoreLauncherFocus.current = true;
     setOpen(false);
-    launcherRef.current?.focus();
   };
 
   useEffect(() => {
     if (open) panelRef.current?.focus();
+    else if (restoreLauncherFocus.current) {
+      restoreLauncherFocus.current = false;
+      launcherRef.current?.focus();
+    }
   }, [open]);
 
   // Escape closes from anywhere while open.
@@ -126,6 +132,7 @@ export function BundleenAiWidget({ suggestions, subtitle }: BundleenAiWidgetProp
       {open ? (
         <div
           ref={panelRef}
+          id={panelId}
           role="dialog"
           aria-modal={isMobile || undefined}
           aria-labelledby={titleId}
@@ -140,6 +147,8 @@ export function BundleenAiWidget({ suggestions, subtitle }: BundleenAiWidgetProp
         ref={launcherRef}
         type="button"
         className="bb-ai-launcher"
+        hidden={open}
+        aria-controls={panelId}
         aria-label={open ? "Close Bundleen AI" : "Open Bundleen AI"}
         aria-haspopup="dialog"
         aria-expanded={open}

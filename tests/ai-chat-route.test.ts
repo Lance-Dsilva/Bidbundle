@@ -232,6 +232,15 @@ describe("POST /api/ai/chat — rate limiting", () => {
     state.guardFailure = { kind: "unavailable" };
     const response = await POST(chatRequest({ message: "hi" }));
     expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    const body = await response.json();
+    expect(body.error).toMatch(/AI.*temporarily unavailable/i);
+    expect(body.error).not.toMatch(/profile setup/i);
+    expect(state.createCalls).toHaveLength(0);
+    expect(state.conversations.size).toBe(0);
+    expect(state.messages).toHaveLength(0);
+    expect(state.toolCalls).toHaveLength(0);
   });
 });
 

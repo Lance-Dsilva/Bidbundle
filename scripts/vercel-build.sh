@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -eu
 
+if [ "${VERIFY_AI_RATE_LIMIT:-}" = "1" ]; then
+  node --conditions=react-server scripts/verify-ai-rate-limit.mjs
+fi
+
 case "${VERCEL_ENV:-}" in
   preview|development)
     # Compile without the migration step in the production package build script.
