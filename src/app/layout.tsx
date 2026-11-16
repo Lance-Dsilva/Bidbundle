@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { ReactNode } from "react";
 
+import { AnalyticsConsent } from "@/components/analytics/AnalyticsConsent";
+import { analyticsConfig } from "@/lib/server/product-analytics";
 import { AppShell } from "@/components/layout/AppShell";
 import { ScrollReveal } from "@/components/layout/ScrollReveal";
 import { PwaProvider } from "@/components/pwa/PwaProvider";
@@ -68,6 +70,7 @@ export default function RootLayout({
           />
           <ScrollReveal />
           <PwaProvider />
+          {analyticsConfig() && <AnalyticsConsent />}
           <ToastProvider>
             <AppShell>{children}</AppShell>
           </ToastProvider>

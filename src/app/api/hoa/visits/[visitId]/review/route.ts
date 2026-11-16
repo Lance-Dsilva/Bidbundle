@@ -1,3 +1,4 @@
+import { captureVisitProductEvent } from "@/lib/server/product-analytics";
 import { NextResponse } from "next/server";
 
 import {
@@ -26,6 +27,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
 
   try {
     await createVisitReview(gate.user.id, visitId, parsed.data);
+    await captureVisitProductEvent(visitId, "review_submitted", gate.user.id);
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     return hoaErrorResponse("visit review", error);
