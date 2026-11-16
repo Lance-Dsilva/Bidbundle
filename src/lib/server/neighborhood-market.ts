@@ -176,7 +176,7 @@ async function recordNeighborhoodResponse(
     // A monotonic timestamp also detects another response within one millisecond.
     if (request.requiresPriceCommitment || request.priceCommitment) {
       await db.$transaction(async(tx)=>{
-        const live=await tx.hoaServiceRequest.update({where:{id:requestId,updatedAt:request.updatedAt,status:"collecting_interest",participantsLockedAt:null},data:{updatedAt:new Date(Math.max(Date.now(),request.updatedAt.getTime()+1))},include:{priceCommitment:true}});
+        const live=await tx.hoaServiceRequest.update({where:{id:requestId,updatedAt:request.updatedAt,status:"collecting_interest",participantsLockedAt:null,community:{type:"neighborhood",status:"active"},enrollmentClosesAt:request.enrollmentClosesAt===null?null:{equals:request.enrollmentClosesAt,gt:new Date()}},data:{updatedAt:new Date(Math.max(Date.now(),request.updatedAt.getTime()+1))},include:{priceCommitment:true}});
         if(response==="joined" && !live.priceCommitment?.acceptedAt)throw new HoaWorkflowError("Provider acceptance required.",409);
         if(existing)await tx.hoaRequestParticipation.update({where:{id:existing.id},data:{response}});
         else await tx.hoaRequestParticipation.create({data:{id:randomUUID(),requestId,userId,unitId:null,response}});
