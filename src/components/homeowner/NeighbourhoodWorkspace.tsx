@@ -1,5 +1,6 @@
 "use client";
 
+import { PriceLadder } from "@/components/ui/PriceLadder";
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
@@ -247,9 +248,10 @@ function RequestCard({
   useEffect(() => {
     if (ownerSuccess === "cancel") heading.current?.focus();
   }, [ownerSuccess]);
-  const canEditOwn = request.isOwner && request.permissions.canEdit &&
+  const canCancelOwn = request.isOwner && request.permissions.canEdit &&
     ["draft", "collecting_interest"].includes(request.status) && request.participantsLockedAt === null &&
     request.bidCount === 0 && request.agreement === null;
+  const canEditOwn = canCancelOwn && !request.priceLadder && !request.priceLadderPending;
   const finishEditing = () => setEditing(false);
   const [confirmation, setConfirmation] = useState<{
     action: "cancel" | "owner_cancel" | "complete" | "award"; status: string; title: string; joinedCount: number; totalOccurrences: number; bid?: BidSummary;
@@ -260,12 +262,12 @@ function RequestCard({
   };
   const currentBid = confirmation?.bid ? request.bids?.find((bid) => bid.id === confirmation.bid?.id) : null;
   const validConfirmation = Boolean(confirmation &&
-    (confirmation.action === "owner_cancel" ? canEditOwn && confirmation.joinedCount === request.joinedCount : request.permissions.canManage) &&
+    (confirmation.action === "owner_cancel" ? canCancelOwn && confirmation.joinedCount === request.joinedCount : request.permissions.canManage) &&
     confirmation.status === request.status && confirmation.title === request.title &&
     (confirmation.action === "award"
       ? ["open_for_bids", "bidding_closed"].includes(request.status) &&
         confirmation.joinedCount === request.joinedCount && confirmation.totalOccurrences === request.totalOccurrences &&
-        currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+        currentBid?.status === "submitted" && (currentBid.pricingBasis === "total" || Boolean(currentBid.priceLadder?.length)) &&
         currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
         currentBid.providerUserId === confirmation.bid.providerUserId &&
         currentBid.homeCount === confirmation.bid.homeCount && currentBid.totalOccurrences === confirmation.bid.totalOccurrences && !request.bids?.some((bid) => bid.status === "accepted")
@@ -323,6 +325,8 @@ function RequestCard({
         </div>
       </dl>
 
+      {request.priceLadderPending ? <p role="status">Enrollment opens after a provider commits to a maximum price.</p> : null}
+      {request.priceLadder ? <PriceLadder tiers={request.priceLadder.tiers} joinedHomes={request.joinedCount} guaranteedPerHomeCents={request.priceLadder.guaranteedPerHomeCents} /> : null}
       {ownerSuccess ? (
         <p role="status" className="mt-3 text-sm font-medium" style={{ color: "var(--sage-700)" }}>
           {ownerSuccess === "edit" ? "Your request changes are saved." : "Your request is cancelled."}
@@ -330,9 +334,9 @@ function RequestCard({
       ) : null}
 
       {/* Owners can change their request only before its scope is locked. */}
-      {canEditOwn && !editing ? (
+      {canCancelOwn && !editing ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          <button ref={editButton} type="button" disabled={busy} onClick={() => { onPrepare(); setEditing(true); }}
+          <button ref={editButton} type="button" disabled={busy || !canEditOwn} onClick={() => { onPrepare(); setEditing(true); }}
             className="min-h-11 rounded-lg border px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-40"
             style={{ borderColor: "var(--border-warm)", color: "var(--ink-900)" }}>
             Edit request
@@ -373,7 +377,7 @@ function RequestCard({
             {request.viewerResponse === "joined" ? "You have joined" : "Join this request"}
           </Button>
           <Button
-            disabled={busy}
+            disabled={busy || request.isOwner}
             onClick={() =>
               void onAct({ kind: "respond", requestId: request.id, response: "declined" })
             }
@@ -723,10 +727,10 @@ function BidRow({
           <div className="mt-1"><VerifiedProviderBadge verified={bid.providerVerified} /></div>
           <BidPrice bid={bid} />
           {bid.estimatedDurationLabel ? <p className="mt-1 text-xs" style={{ color: "var(--ink-400)" }}>{bid.estimatedDurationLabel}</p> : null}
-          {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={requestStatus} /> : null}
+          {(bid.pricingBasis !== "total" && !bid.priceLadder?.length) && bid.status === "submitted" ? <LegacyBidNotice requestStatus={requestStatus} /> : null}
         </div>
         {canAward && bid.status === "submitted" ? (
-          <Button className="min-h-11" disabled={busy || bid.pricingBasis !== "total"} onClick={onAward} variant="warm">
+          <Button className="min-h-11" disabled={busy || (bid.pricingBasis !== "total" && !bid.priceLadder?.length)} onClick={onAward} variant="warm">
             Award this provider
           </Button>
         ) : (

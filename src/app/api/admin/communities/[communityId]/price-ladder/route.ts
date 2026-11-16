@@ -18,7 +18,7 @@ export async function POST(request: Request, context: { params: Promise<{ commun
 export async function GET(_request:Request,context:{params:Promise<{communityId:string}>}) {
  const gate=await requireAdminOwner();if(!gate.ok)return gate.response;
  try {const {communityId}=await context.params;const [requests,providers]=await Promise.all([
- db.hoaServiceRequest.findMany({where:{communityId,community:{type:"hoa",status:"active"},kind:"optional_group",status:{in:["draft","collecting_interest"]},participations:{none:{}},priceCommitment:{is:null}},select:{id:true,title:true},take:100}),
+ db.hoaServiceRequest.findMany({where:{communityId,community:{status:"active"},kind:"optional_group",status:{in:["draft","collecting_interest"]},participations:{none:{}},priceCommitment:{is:null}},select:{id:true,title:true},take:100}),
  db.user.findMany({where:{role:"provider",providerProfile:{accountStatus:"active"}},select:{id:true,fullName:true,providerProfile:{select:{companyName:true}}},take:100})
  ]);return NextResponse.json({requests,providers:providers.map(p=>({id:p.id,name:p.providerProfile?.companyName||p.fullName}))},{headers:{"Cache-Control":"private, no-store"}});}catch(e){return adminErrorResponse("price commitment choices",e);}
 }

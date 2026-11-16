@@ -1,4 +1,5 @@
 import "server-only";
+import { notifyPriceLadderUnlock } from "@/lib/server/price-ladder";
 
 import { randomUUID } from "node:crypto";
 
@@ -100,6 +101,8 @@ async function recordNeighborhoodResponse(
     where: { id: requestId },
     select: {
       id: true,
+      requiresPriceCommitment: true,
+      priceCommitment: { select: { acceptedAt: true, guaranteedPerHomeCents: true } },
       communityId: true,
       kind: true,
       status: true,
@@ -137,6 +140,7 @@ async function recordNeighborhoodResponse(
     );
   }
 
+  if (response === "joined" && (request.requiresPriceCommitment || request.priceCommitment) && !request.priceCommitment?.acceptedAt) throw new HoaWorkflowError("Enrollment opens after the provider accepts a maximum price.", 409);
   if (response === "joined") {
     const profile = await db.user.findUnique({
       where: { id: userId },
@@ -170,7 +174,15 @@ async function recordNeighborhoodResponse(
   try {
     // Serialize enrollment edits with opening/expiry on the same parent row.
     // A monotonic timestamp also detects another response within one millisecond.
-    await db.$transaction([
+    if (request.requiresPriceCommitment || request.priceCommitment) {
+      await db.$transaction(async(tx)=>{
+        const live=await tx.hoaServiceRequest.update({where:{id:requestId,updatedAt:request.updatedAt,status:"collecting_interest",participantsLockedAt:null},data:{updatedAt:new Date(Math.max(Date.now(),request.updatedAt.getTime()+1))},include:{priceCommitment:true}});
+        if(response==="joined" && !live.priceCommitment?.acceptedAt)throw new HoaWorkflowError("Provider acceptance required.",409);
+        if(existing)await tx.hoaRequestParticipation.update({where:{id:existing.id},data:{response}});
+        else await tx.hoaRequestParticipation.create({data:{id:randomUUID(),requestId,userId,unitId:null,response}});
+        await notifyPriceLadderUnlock(tx,requestId,live.priceCommitment?.guaranteedPerHomeCents??null);
+      });
+    } else await db.$transaction([
       db.hoaServiceRequest.update({
         where: {
           id: requestId,
@@ -254,6 +266,7 @@ export async function mutateOwnedNeighborhoodRequest(
     where: { id: requestId },
     select: {
       id: true,
+      priceCommitment: { select: { id: true } },
       communityId: true,
       createdByUserId: true,
       createdBy: { select: { role: true } },
@@ -282,6 +295,8 @@ export async function mutateOwnedNeighborhoodRequest(
     request.participantsLockedAt !== null || request.agreement || request.bids.length > 0) {
     throw new HoaWorkflowError("This request can no longer be edited or cancelled. Refresh to see its current status.", 409);
   }
+
+  if (input.action === "edit" && request.priceCommitment) throw new HoaWorkflowError("Provider-backed service terms cannot change. Cancel this request and create a new one.",409);
 
   const changedFields = input.action === "edit"
     ? (["title", "category", "description", "budgetMinCents", "budgetMaxCents"] as const)
@@ -373,6 +388,8 @@ export async function mutateOwnedNeighborhoodRequest(
 /* ── Reads ───────────────────────────────────────────────────────────────── */
 
 const requestSelect = {
+  requiresPriceCommitment: true,
+  priceCommitment: { include: { tiers: { orderBy: { minHomes: "asc" } } } },
   id: true,
   communityId: true,
   title: true,
@@ -431,7 +448,7 @@ function permissionsFor(input: {
 
   return {
     // The creator's home is already in; there is nothing for them to respond to.
-    canRespond: enrollmentOpen && !isOwner,
+    canRespond: enrollmentOpen && (!isOwner || row.requiresPriceCommitment) && (!(row.requiresPriceCommitment || row.priceCommitment) || Boolean(row.priceCommitment?.acceptedAt)),
     canManage: isManager,
     // Transparent comparison for everyone taking part, but never for a
     // neighbour who declined or never answered.
@@ -531,6 +548,8 @@ async function serializeRequest(input: {
 
   const category = row.category as ServiceCategory;
   return {
+    priceLadderPending: Boolean((row.requiresPriceCommitment || row.priceCommitment) && !row.priceCommitment?.acceptedAt),
+    priceLadder: row.priceCommitment?.acceptedAt ? { tiers: row.priceCommitment.tiers.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })), guaranteedPerHomeCents: row.priceCommitment.guaranteedPerHomeCents } : null,
     id: row.id,
     communityId: row.community.id,
     communityName: row.community.name,

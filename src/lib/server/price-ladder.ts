@@ -15,7 +15,7 @@ export async function commitPriceLadder(actorId: string, communityId: string, in
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "AdminAccessGrant" WHERE "userId"=${actorId} FOR SHARE`);
     const actor = await tx.user.findUnique({ where: { id: actorId }, include: { adminAccess: true } });
     if (actor?.role !== "admin" || !actor.isVerified || actor.adminAccess?.status !== "active" || actor.adminAccess.isStaffAccount || actor.adminAccess.level !== "owner" || actor.adminAccess.email !== actor.email.toLowerCase()) throw new HoaWorkflowError("Primary admin access required.", 403);
-    const request = await tx.hoaServiceRequest.findFirst({ where: { id: input.requestId, communityId, community: { status: "active", type: "hoa" } }, include: { _count: { select: { participations: true } } } });
+    const request = await tx.hoaServiceRequest.findFirst({ where: { id: input.requestId, communityId, community: { status: "active" } }, include: { _count: { select: { participations: true } } } });
     if (!request || request.kind !== "optional_group" || !["draft", "collecting_interest"].includes(request.status) || request.poolTemplate || request.participantsLockedAt || request._count.participations) throw new HoaWorkflowError("Choose an optional request before enrollment starts.", 409);
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "User" WHERE "id"=${input.providerUserId} FOR SHARE`);
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "ProviderProfile" WHERE "userId"=${input.providerUserId} FOR SHARE`);
@@ -32,7 +32,7 @@ export async function commitPriceLadder(actorId: string, communityId: string, in
 
 /** Same transaction and request lock as enrollment; durable per-tier delivery identity. */
 export async function notifyPriceLadderUnlock(tx: Prisma.TransactionClient, requestId: string, beforePrice: number | null) {
-  const commitment = await tx.priceLadderCommitment.findUnique({ where: { requestId }, include: { tiers: true } });
+  const commitment = await tx.priceLadderCommitment.findUnique({ where: { requestId }, include: { tiers: true, request: { select: { community: { select: { type: true } } } } } });
   if (!commitment || beforePrice == null || commitment.guaranteedPerHomeCents >= beforePrice) return;
   const tier = commitment.tiers.find((row) => row.perHomeCents === commitment.guaranteedPerHomeCents);
   if (!tier) throw new Error("Committed price has no corresponding tier");
@@ -43,12 +43,14 @@ export async function notifyPriceLadderUnlock(tx: Prisma.TransactionClient, requ
     const dedupeKey = ladderUnlockDedupeKey(commitment.id, tier.minHomes, user.id);
     const title = `Your group price just dropped to ${price}`;
     const body = `${price} per home for the full service term. This lower price is protected even if another home leaves.`;
-    await tx.notification.createMany({ data: [{ id: randomUUID(), userId: user.id, kind: "request", title, body, linkPath: "/app/homeowner/community", dedupeKey }], skipDuplicates: true });
+    await tx.notification.createMany({ data: [{ id: randomUUID(), userId: user.id, kind: "request", title, body, linkPath: commitment.request.community.type === "neighborhood" ? "/app/homeowner/neighbourhood" : "/app/homeowner/community", dedupeKey }], skipDuplicates: true });
     if (user.homeownerProfile?.notifyEmail !== false) await tx.outboxEvent.createMany({ data: [{ id: randomUUID(), kind: "notification_email", dedupeKey: `email:${dedupeKey}`, payload: { to: user.email, subject: title, text: body }, updatedAt: new Date() }], skipDuplicates: true });
   }
 }
 
-export async function acceptPriceLadder(providerUserId: string, commitmentId: string) {
+export async function acceptPriceLadder(providerUserId: string, commitmentId: string, proposedTiers?: unknown) {
+ let authoredTiers: ReturnType<typeof validatePriceLadder> | null = null;
+ try { authoredTiers = proposedTiers === undefined ? null : validatePriceLadder(proposedTiers); } catch(error) { throw new HoaWorkflowError(error instanceof Error ? error.message : "Invalid price tiers.",400); }
  return db.$transaction(async(tx)=>{
   const initial=await tx.priceLadderCommitment.findUnique({where:{id:commitmentId}});
   if(!initial || initial.providerUserId!==providerUserId) throw new HoaWorkflowError("Price commitment not found.",404);
@@ -57,10 +59,17 @@ export async function acceptPriceLadder(providerUserId: string, commitmentId: st
   await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "ProviderProfile" WHERE "userId"=${providerUserId} FOR SHARE`);
   const provider=await tx.user.findUnique({where:{id:providerUserId},include:{providerProfile:true}});
   if(provider?.role!=="provider" || provider.providerProfile?.accountStatus!=="active") throw new HoaWorkflowError("Active provider account required.",403);
-  const current=await tx.priceLadderCommitment.findUniqueOrThrow({where:{id:commitmentId},include:{request:true}});
-  if(current.acceptedAt) return {acceptedAt:current.acceptedAt.toISOString()};
+  const current=await tx.priceLadderCommitment.findUniqueOrThrow({where:{id:commitmentId},include:{request:true,tiers:{orderBy:{minHomes:"asc"}}}});
+  if(current.acceptedAt) {
+   if(authoredTiers && JSON.stringify(authoredTiers)!==JSON.stringify(current.tiers.map(({minHomes,perHomeCents})=>({minHomes,perHomeCents})))) throw new HoaWorkflowError("Accepted provider prices cannot change.",409);
+   return {acceptedAt:current.acceptedAt.toISOString(),tiers:current.tiers.map(({minHomes,perHomeCents})=>({minHomes,perHomeCents}))};
+  }
   if(!["draft","collecting_interest"].includes(current.request.status) || current.request.participantsLockedAt || (current.request.enrollmentClosesAt && current.request.enrollmentClosesAt<=new Date())) throw new HoaWorkflowError("Enrollment window has closed.",409);
-  const accepted=await tx.priceLadderCommitment.update({where:{id:commitmentId},data:{acceptedAt:new Date()}});
-  return {acceptedAt:accepted.acceptedAt!.toISOString()};
+  if(authoredTiers) {
+   await tx.serviceBidPriceTier.deleteMany({where:{commitmentId}});
+   await tx.serviceBidPriceTier.createMany({data:authoredTiers.map(t=>({id:randomUUID(),commitmentId,...t}))});
+  }
+  const accepted=await tx.priceLadderCommitment.update({where:{id:commitmentId},data:{acceptedAt:new Date(),...(authoredTiers?{guaranteedPerHomeCents:authoredTiers[0].perHomeCents}:{})}});
+  return {acceptedAt:accepted.acceptedAt!.toISOString(),tiers:authoredTiers??current.tiers.map(({minHomes,perHomeCents})=>({minHomes,perHomeCents}))};
  });
 }
