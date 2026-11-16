@@ -18,6 +18,7 @@ export function calculateQuoteBreakdown(
 }
 
 type ComparableQuote = {
+  priceLadder?: readonly unknown[];
   id?: string;
   pricingBasis: string;
   currency: string;
@@ -26,8 +27,8 @@ type ComparableQuote = {
 
 /** Group totals by currency without FX conversion; never rank legacy unit amounts as totals. */
 export function compareBidQuotes(a: ComparableQuote, b: ComparableQuote): number {
-  const aTotal = a.pricingBasis === "total";
-  const bTotal = b.pricingBasis === "total";
+  const aTotal = a.pricingBasis === "total" || Boolean(a.priceLadder?.length);
+  const bTotal = b.pricingBasis === "total" || Boolean(b.priceLadder?.length);
   if (aTotal !== bTotal) return aTotal ? -1 : 1;
   if (aTotal && bTotal) {
     const currencyOrder = a.currency.localeCompare(b.currency);

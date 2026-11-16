@@ -1,24 +1,31 @@
 # Issue 49: provider-backed price ladder
 
-Status: implementation in progress; not ready to merge or resolve.
+Status: draft, active implementation. Not resolved or ready for release.
 
-The owner chose enrollment only after a provider commits to a maximum price that can fall as more homes join. Prices in this implementation are integer cents per home for the complete service term, not per visit. The eventual agreement total is the per-home amount multiplied by the locked enrolled homes. Stripe must allocate that exact total across visits without a second occurrence multiplier.
+The owner chose enrollment only after a provider commits to a maximum price that can fall as more homes join. Tier prices are integer USD cents per home for the complete service term, not per visit. Agreement total is per-home amount multiplied by locked homes. Issue 43 must allocate this exact total across visits without a second occurrence multiplier.
 
-## Implemented foundation
+## Implemented HOA pilot
 
-- Strict ordered price tiers, beginning at one home so every enrollment has a backed maximum.
-- Threshold progress and exact remaining home counts.
-- Award calculation honors the lowest enrolled price cap even after neighbors withdraw. Provider commitment must explicitly cover this ratchet before this helper is used in production.
-- Accessible reusable ladder presentation and stable outbox dedupe keys.
-- 15 focused domain/UI tests and TypeScript pass.
+- Primary admin enters a proposed immutable provider scope and tier rows before any participation. The registered provider must explicitly accept the full-term prices and retained-discount policy in My bids before enrollment opens.
+- Provider identity, active profile and administrator identity are checked under row locks. Service term fields cannot change beneath the promise.
+- Database enrollment cap and downward-only group guarantee preserve the lower price after withdrawals. The provider explicitly agrees to this before enrollment.
+- Enrollment close materializes a per_home ServiceBid with tier rows and exact full-term total. Award guards permit only that committed provider/price and preserve the existing credential gate.
+- Resident and HOA manager request cards show count, tiers, unlock progress and protected price. Pending proposals cannot be joined.
+- Enrollment transaction queues per-tier/per-recipient deduplicated in-app/email intents, respecting email preference.
+- Admin pilot uses actual request/provider choices. No production data or keys used.
 
-The component is not yet mounted: showing an unenforced price promise would be misleading.
+## Verification
 
-## Next implementation gates
+- 51 focused domain/UI/read/form tests passed; TypeScript passed.
+- Full unit suite: 2465 passed; four unchanged neighborhood-reconciliation baseline failures.
+- All 35 migrations applied from scratch to dedicated loopback issue49_test_v3. Three real PostgreSQL tests passed: exact-provider acceptance; caps/withdrawals/deduplicated notices; locked full-term bid; immutable service terms and tiers.
+- Initial build blocked by sandbox Google Font DNS; network-enabled build being checked.
+- Independent reviewer found mutable request terms; fixed and added real-database regression.
 
-1. Add ServiceBid tier rows and a single immutable selected provider commitment per request, with provider/authorized admin entry and audit. Existing SQL guards reject bids before participant lock and all per-home awards. Add a narrowly scoped ladder lifecycle without weakening legacy whole-job/pool guards.
-2. Require provider commitment before optional ladder enrollment, store each household's join-time maximum under the request lock, and prevent commitment changes or withdrawal once enrollment begins. Preserve lower unlocked prices on opt-out.
-3. Resolve the immutable reached price during audience close/award, snapshot exact per-home amount and total, and integrate with issue 43 allocation and explicit payer consent.
-4. Mount ladder on request cards/HOA dashboard and issue 48 share page, sourcing only the selected persisted commitment. Add provider/admin form and authorized endpoints.
-5. Enqueue each tier unlock once per commitment/tier/recipient in the enrollment transaction; verify concurrent join, leave/rejoin, and retry behavior on disposable PostgreSQL.
-6. Run real signed-in preview and sandbox charging checks. The shared database has not been migrated and no release was deployed.
+## Remaining code and completion gates
+
+- Extend provider-authored pricing beyond admin-entered HOA pilot proposals, and neighborhood creation/enrollment (existing neighborhood creator auto-enrollment precedes a provider commitment).
+- Issue 48 public share integration consumes accepted commitment tiers/count/guaranteed price only, not private metadata.
+- Current-head end-to-end award with credential fixture and issue 43 signed-in sandbox charge verification; concurrency/authority negative tests and live UI check.
+- Reconcile integration with PRs 71–73: schema additions and hoa-market award sections overlap. Migration replaces the older bid-mutation function; preserve newer guards while integrating.
+- No shared database migration, merge or deployment performed. Keep issue open until all acceptance gates pass.

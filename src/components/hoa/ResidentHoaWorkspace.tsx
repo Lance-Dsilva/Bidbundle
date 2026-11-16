@@ -1,5 +1,6 @@
 "use client";
 
+import { PriceLadder } from "@/components/ui/PriceLadder";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -146,6 +147,8 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                     </div>
                     <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{request.description}</p>
 
+                    {request.priceLadderPending ? <p role="status" className="mt-3 text-sm">Enrollment opens after the provider accepts the maximum price.</p> : null}
+                    {request.priceLadder ? <PriceLadder tiers={request.priceLadder.tiers} joinedHomes={request.joinedCount} guaranteedPerHomeCents={request.priceLadder.guaranteedPerHomeCents} /> : null}
                     {request.kind === "compulsory_recurring" ? (
                       <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                         HOA compulsory · {request.recurrenceLabel} · every eligible home is included
@@ -162,7 +165,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                           <span className="flex gap-2">
                             <button
                               className="h-9 rounded-xl bg-[var(--teal-800)] px-4 text-xs font-semibold text-white disabled:opacity-60"
-                              disabled={busy !== null || request.viewerResponse === "joined"}
+                              disabled={busy !== null || request.viewerResponse === "joined" || request.priceLadderPending}
                               onClick={() =>
                                 void run(`join-${request.id}`, () =>
                                   post(`/api/hoa/requests/${request.id}/join`, { response: "joined" }),

@@ -2,7 +2,7 @@
 export type PriceLadderTier = { minHomes: number; perHomeCents: number };
 export const MAX_PRICE_LADDER_TIERS = 20;
 export const MAX_LADDER_HOMES = 10_000;
-export const MAX_LADDER_CENTS = 100_000_000;
+export const MAX_LADDER_CENTS = 50_000_000;
 
 export function validatePriceLadder(value: unknown): PriceLadderTier[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_PRICE_LADDER_TIERS) {
