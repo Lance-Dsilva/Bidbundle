@@ -2570,6 +2570,7 @@ model StripeTestPayment {
   stripePaymentIntentId String? @unique
   stripeChargeId String? @unique
   stripeTransferId String? @unique
+  transferAttemptedAt DateTime?
   status String @default("pending")
   failureCode String?
   createdAt DateTime @default(now())

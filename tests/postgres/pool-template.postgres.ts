@@ -504,6 +504,10 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
     await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);
+    const attemptAt = new Date();
+    await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAttemptedAt: attemptAt, stripeTransferId: `tr_${visit.id}` } });
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAttemptedAt: new Date(+attemptAt + 1) } })).rejects.toThrow(/immutable/i);
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripeTransferId: "tr_other" } })).rejects.toThrow(/immutable/i);
   });
 
   it.each(["expired-proof","higher-policy"])("fails a new pool award closed for %s without partial award rows", async (reason) => {
