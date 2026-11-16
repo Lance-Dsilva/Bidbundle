@@ -16,11 +16,14 @@ After reporting, the resident may attach up to eight JPEG/PNG/WebP photos of at 
 
 Only the original reporting resident with current access, assigned active provider, or verified nonstaff active administrator can read. Managers and other residents are denied. Uploads recheck access and the eight-photo cap under a claim lock after network transport; failed attachments delete only their own generated object. Download access is rechecked after private Blob transport and all responses, including denials, use private/no-store and nosniff headers.
 
+## Provider quality review signals
+
+The admin quality page shows a bounded 30-day completed-visit cohort and its claim rate. Both counts use visit completion time, preventing a mixed ticket-date denominator. The default review signal is strictly above 20% with at least five completed visits, configurable through SERVICE_QUALITY_FLAG_RATE_BPS and SERVICE_QUALITY_FLAG_MIN_VISITS. This is informational only and never suspends accounts or holds funds automatically.
+
 ## Unfinished acceptance gates
 
 - Binding to #43's actual payment and frozen payer; completed/paid eligibility and provider transfer hold/reversal.
 - Durable no-charge redo scheduling and Stripe full/partial refund execution/reconciliation.
-- Claim-rate metrics and provider threshold flags.
 - Public guarantee copy on the homepage/residents/request and final resident terms. Do not publish a financial promise before the execution workflow is working.
 - Live authenticated UI/end-to-end checks and reviewed migration rollout.
 

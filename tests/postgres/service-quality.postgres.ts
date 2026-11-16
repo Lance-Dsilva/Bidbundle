@@ -1,3 +1,4 @@
+import { serviceQualityMetrics } from "@/lib/server/service-quality-metrics";
 import sharp from "sharp";
 import { storeQualityPhoto, listQualityPhotos } from "@/lib/server/service-quality-photos";
 import { randomUUID } from "node:crypto";
@@ -80,6 +81,8 @@ describe("service quality transactions on migrated PostgreSQL", () => {
     const input = { reason: "incomplete" as const, description: "The agreed service was incomplete." };
     const [one,two] = await Promise.all([reportServiceQuality(f.residents[0].user.id,f.ownVisit.id,input),reportServiceQuality(f.residents[0].user.id,f.ownVisit.id,input)]);
     expect(one.id).toBe(two.id);
+    const metrics = await serviceQualityMetrics(f.admin.id);
+    expect(metrics.providers.find(row=>row.providerUserId===f.provider.id)).toMatchObject({claims:1,completedVisits:1,claimRateBps:10000,reviewSuggested:false});
     expect(await first.serviceQualityClaim.count({where:{visitId:f.ownVisit.id}})).toBe(1);
     expect(await first.supportTicket.count({where:{relatedVisitId:f.ownVisit.id}})).toBe(1);
     expect(await first.notification.count({where:{dedupeKey:{startsWith:`quality:${one.id}:`}}})).toBe(2);
