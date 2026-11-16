@@ -502,6 +502,7 @@ model AdminAccessGrant {
 /// `neighborhood` by a CHECK constraint in the migration — Prisma cannot
 /// express a conditional requirement.
 model Community {
+  publicShare CommunityPublicShare?
   id     String          @id @default(cuid())
   name   String
   type   CommunityType
@@ -767,6 +768,7 @@ model CommunityInvitation {
 /// requests are visible to every active resident; optional group requests use
 /// participation rows to record who chose to join.
 model HoaServiceRequest {
+  publicShare RequestPublicShare?
   id          String    @id @default(cuid())
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -2523,4 +2525,20 @@ model ServiceBidPriceTier {
   perHomeCents Int
   @@unique([commitmentId, minHomes])
   @@index([bidId])
+}
+
+/// Manager-controlled capability URLs. Never index or enumerate these links.
+model CommunityPublicShare {
+  communityId String @id
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  token String @unique
+  createdAt DateTime @default(now())
+}
+model RequestPublicShare {
+  requestId String @id
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  token String @unique
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

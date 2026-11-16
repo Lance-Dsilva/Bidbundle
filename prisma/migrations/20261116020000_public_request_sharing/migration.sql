@@ -1,0 +1,12 @@
+CREATE TABLE "CommunityPublicShare" (
+  "communityId" TEXT PRIMARY KEY REFERENCES "Community"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "token" TEXT NOT NULL UNIQUE CHECK ("token" ~ '^[A-Za-z0-9_-]{32}$'),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE "RequestPublicShare" (
+  "requestId" TEXT PRIMARY KEY REFERENCES "HoaServiceRequest"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "token" TEXT NOT NULL UNIQUE CHECK ("token" ~ '^[A-Za-z0-9_-]{32}$'),
+  "enabled" BOOLEAN NOT NULL DEFAULT TRUE,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
