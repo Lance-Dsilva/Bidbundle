@@ -813,6 +813,8 @@ model HoaServiceRequest {
   participantsLockedAt DateTime?
   awardedAt            DateTime?
 
+  requiresPriceCommitment Boolean @default(false)
+  priceCommitment PriceLadderCommitment?
   participations HoaRequestParticipation[]
   bids           ServiceBid[]
   agreement      ServiceAgreement?
@@ -841,6 +843,7 @@ model HoaRequestParticipation {
   unitId    String?
   unit      CommunityUnit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
+  maximumPriceCents Int?
   response  ParticipationResponse @default(joined)
   /// Resident-selected applicable pool size, frozen with the audience.
   poolTier  String?
@@ -930,6 +933,7 @@ model ServiceBid {
   withdrawnAt DateTime?
   decidedAt   DateTime?
 
+  priceTiers ServiceBidPriceTier[]
   agreement ServiceAgreement?
   revisions ServiceBidRevision[]
 
@@ -2493,4 +2497,31 @@ model CommunityInterest {
 
   @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
   @@index([createdAt, id])
+}
+
+/// Immutable pilot provider commitment entered by an authorized admin before enrollment.
+model PriceLadderCommitment {
+  id String @id
+  requestId String @unique
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  providerUserId String
+  actorUserId String
+  scope String
+  guaranteedPerHomeCents Int
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  tiers ServiceBidPriceTier[]
+}
+
+/// Full-term cents per home. Linked to the materialized ServiceBid when enrollment closes.
+model ServiceBidPriceTier {
+  id String @id
+  commitmentId String
+  commitment PriceLadderCommitment @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+  bidId String?
+  bid ServiceBid? @relation(fields: [bidId], references: [id], onDelete: Restrict)
+  minHomes Int
+  perHomeCents Int
+  @@unique([commitmentId, minHomes])
+  @@index([bidId])
 }

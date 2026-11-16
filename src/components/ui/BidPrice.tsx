@@ -1,6 +1,8 @@
 import { calculateQuoteBreakdown } from "@/lib/bid-pricing";
 
 type QuotePrice = {
+  priceLadder?: import("@/lib/price-ladder").PriceLadderTier[];
+  perHomeCents?: number | null;
   amountCents: number;
   currency: string;
   pricingBasis: "total" | "per_home" | "per_visit";
@@ -23,6 +25,7 @@ export function BidPrice({ bid, homeCount, totalOccurrences }: {
   homeCount?: number;
   totalOccurrences?: number;
 }) {
+  if (bid.priceLadder?.length && bid.pricingBasis === "per_home" && bid.perHomeCents != null) return <div className="space-y-1 text-xs"><p><strong>{currencyAmount(bid.perHomeCents, bid.currency)}</strong> per home for the full service term</p><p>{currencyAmount(bid.amountCents, bid.currency)} total for the locked enrolled homes. Provider-backed group price.</p></div>;
   if (bid.pricingBasis !== "total") {
     return (
       <div className="space-y-1 text-xs" style={{ color: "var(--ink-700, #334e68)" }}>

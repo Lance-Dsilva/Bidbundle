@@ -148,6 +148,7 @@ export type UnitImportResult = {
 };
 
 export type BidSummary = {
+  priceLadder?: import("@/lib/price-ladder").PriceLadderTier[];
   id: string;
   requestId: string;
   providerUserId: string;
@@ -182,6 +183,8 @@ export type BidSummary = {
 };
 
 export type HoaRequestSummary = {
+  priceLadderPending?: boolean;
+  priceLadder?: { tiers: import("@/lib/price-ladder").PriceLadderTier[]; guaranteedPerHomeCents: number } | null;
   id: string;
   communityId: string;
   title: string;
@@ -214,6 +217,7 @@ export type HoaRequestSummary = {
 };
 
 export type AgreementSummary = {
+  priceLadder?: import("@/lib/price-ladder").PriceLadderTier[];
   id: string;
   requestId: string;
   requestTitle: string;
