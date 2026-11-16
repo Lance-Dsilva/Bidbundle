@@ -1,0 +1,7 @@
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+export function VendorUnsubscribe({ token }: { token: string }) {
+  const [busy,setBusy] = useState(false); const [done,setDone] = useState(false); const [error,setError] = useState<string|null>(null);
+  return <main className="mx-auto max-w-xl space-y-5 px-5 py-16"><Link href="/" className="font-semibold text-[#0f756c]">Bundleen</Link><h1 className="text-3xl font-semibold">Vendor invitation preferences</h1>{done ? <p role="status">You’re unsubscribed from vendor invitation emails across all community requests. Account security and service messages are unchanged.</p> : <><p>Stop all Bundleen vendor invitation emails for the business email associated with this link. No sign-in or email entry is needed.</p><button className="min-h-11 rounded bg-[#0f756c] px-4 font-semibold text-white disabled:opacity-50" disabled={busy} onClick={async () => { if(busy)return;setBusy(true);setError(null);try{const response=await fetch(`/api/vendor-unsubscribe/${encodeURIComponent(token)}`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'List-Unsubscribe=One-Click'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not update your preference.');setDone(true);}catch(caught){setError(caught instanceof Error?caught.message:'Could not update your preference.');}finally{setBusy(false);}}}>{busy?'Updating…':'Stop all vendor invitation emails'}</button></>}{error&&<p role="alert" className="text-sm text-red-700">{error}</p>}</main>;
+}

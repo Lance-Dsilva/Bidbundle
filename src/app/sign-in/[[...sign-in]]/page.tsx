@@ -1,9 +1,11 @@
+import { vendorBidReturnPath, vendorOnboardingPath } from "@/lib/vendor-bid-return";
 import { SignIn } from "@clerk/nextjs";
 
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { ClerkFormGate } from "@/components/auth/ClerkFormGate";
 
-export default function SignInPage() {
+export default async function SignInPage({ searchParams }: { searchParams?: Promise<{ returnTo?: string | string[] }> }) {
+  const returnTo = vendorBidReturnPath((await searchParams)?.returnTo);
   return (
     <div className="signup-layout bg-white">
       <AuthShowcase
@@ -34,7 +36,8 @@ export default function SignInPage() {
             <SignIn
               path="/sign-in"
               routing="path"
-              signUpUrl="/get-started"
+              signUpUrl={vendorOnboardingPath("/get-started", returnTo)}
+              forceRedirectUrl={returnTo ?? undefined}
               fallbackRedirectUrl="/auth/continue"
               appearance={{
                 variables: {

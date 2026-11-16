@@ -97,6 +97,7 @@ vi.mock("@/lib/server/db", () => ({
     notification: { createMany: op("notification", "createMany") },
     outboxEvent: { createMany: op("outboxEvent", "createMany") },
     hoaProfile: { findUnique: async () => null },
+    providerCommunityApproval: { findMany: async () => [], findUnique: async () => null },
     providerServiceArea: { findMany: async () => [] },
     providerProfile: { findMany: async () => [] },
     homeownerProfile: { findMany: async () => [] },

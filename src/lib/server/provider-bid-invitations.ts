@@ -103,7 +103,7 @@ export async function inviteProviderToBid(actorId: string, communityId: string, 
       }),
       db.providerBidInvitation.create({ data: { id: randomUUID(), requestId, providerUserId: providerId, invitedByUserId: actorId } }),
       ...buildNotificationOps([{
-        userId: providerId, email: provider.notifyNewJobs ? provider.user.email : null, kind: "request",
+        vendorOutreach: true, userId: providerId, email: provider.notifyNewJobs ? provider.user.email : null, kind: "request",
         title: `Invitation to quote: ${request.title}`,
         body: `${request.community.name} invites you to submit a pool-service quote. Review the locked tier counts and service terms in Bundleen.`,
         linkPath: "/app/provider/hoa", dedupeKey: `provider-bid-invite:${requestId}:${providerId}`,

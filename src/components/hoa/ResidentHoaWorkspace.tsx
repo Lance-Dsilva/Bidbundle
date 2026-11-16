@@ -1,5 +1,7 @@
 "use client";
 
+import { VendorReferralForm } from "@/components/vendors/VendorReferralForm";
+
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -195,6 +197,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                       </div>
                     )}
 
+                    {["collecting_interest", "open_for_bids"].includes(request.status) && <VendorReferralForm requestId={request.id} />}
                     {request.poolTemplate ? <PoolBidComparison template={request.poolTemplate} tierCounts={request.tierCounts} viewerPoolTier={request.viewerPoolTier} bids={bids} /> : bids.length > 0 ? <BidList bids={bids} winner={winner} /> : null}
                   </article>
                 );
