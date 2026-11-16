@@ -1,3 +1,4 @@
+import { captureProductEvent } from "@/lib/server/product-analytics";
 import { NextResponse } from "next/server";
 
 import {
@@ -27,6 +28,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
 
   try {
     const result = await importUnits(gate.user.id, communityId, parsed.data);
+    if (parsed.data.commit) await captureProductEvent({ userId: gate.user.id, event: "hoa_roster_imported", eventId: communityId, properties: { communityId, role: gate.user.role } });
     return NextResponse.json({ result });
   } catch (error) {
     return adminErrorResponse("unit import", error);

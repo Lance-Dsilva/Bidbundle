@@ -1,3 +1,4 @@
+import { captureRequestProductEvent } from "@/lib/server/product-analytics";
 import { NextResponse } from "next/server";
 
 import {
@@ -29,6 +30,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
 
   try {
     const agreementId = await awardBid(gate.user.id, requestId, parsed.data);
+    await captureRequestProductEvent(gate.user.id, "request_awarded", requestId, agreementId, gate.user.role);
     return NextResponse.json({ agreementId }, { status: 201 });
   } catch (error) {
     return hoaErrorResponse("bid award", error);

@@ -1,0 +1,13 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const { session } = vi.hoisted(() => ({ session: { isSignedIn: true, user: { id: "u1" } } }));
+vi.mock("@clerk/nextjs", () => ({ useUser: () => session }));
+import { AnalyticsConsent } from "@/components/analytics/AnalyticsConsent";
+beforeEach(() => { session.isSignedIn = true; session.user.id = "u1"; });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+it("does not query or collect for signed-out visitors", () => { session.isSignedIn = false; const fetch = vi.fn(); vi.stubGlobal("fetch", fetch); render(<AnalyticsConsent />); expect(fetch).not.toHaveBeenCalled(); });
+it("requires an explicit choice and sends no automatic opt-in", async () => { const fetch = vi.fn().mockResolvedValue(Response.json({ allowed: false, decided: false })); vi.stubGlobal("fetch", fetch); render(<AnalyticsConsent />); await screen.findByText("Allow analytics"); expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][1].method).toBeUndefined(); });
+it("allows declining and reopening settings", async () => { const fetch = vi.fn().mockResolvedValue(Response.json({ allowed: false, decided: false })); vi.stubGlobal("fetch", fetch); render(<AnalyticsConsent />); fireEvent.click(await screen.findByText("Decline analytics")); await screen.findByText("Analytics preferences"); expect(fetch.mock.calls[1][1].body).toBe('{"allowed":false}'); fireEvent.click(screen.getByText("Analytics preferences")); expect(screen.getByText("Allow analytics")).toBeTruthy(); });
+it("does not claim a failed preference write succeeded", async () => { const fetch = vi.fn().mockResolvedValueOnce(Response.json({ allowed: false, decided: false })).mockResolvedValueOnce(new Response("", { status: 503 })); vi.stubGlobal("fetch", fetch); render(<AnalyticsConsent />); fireEvent.click(await screen.findByText("Allow analytics")); expect(await screen.findByRole("alert")).toHaveTextContent("could not be saved"); expect(screen.queryByText("Analytics preferences")).toBeNull(); });
+it("isolates consent UI when the signed-in account changes", async () => { const fetch = vi.fn().mockResolvedValueOnce(Response.json({ allowed: true, decided: true })).mockResolvedValueOnce(Response.json({ allowed: false, decided: false })); vi.stubGlobal("fetch", fetch); const view = render(<AnalyticsConsent />); await screen.findByText("Analytics preferences"); session.user.id = "u2"; view.rerender(<AnalyticsConsent />); await screen.findByText("Allow analytics"); await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2)); });
