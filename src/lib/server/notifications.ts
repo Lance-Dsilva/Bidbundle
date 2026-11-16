@@ -375,6 +375,8 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
         }
         const delivery = await (await import("@/lib/server/vendor-outreach")).dispatchVendorOutreach(payload.invitationId, payload.slot);
         providerMessageId = delivery.providerMessageId;
+      } else if (event.kind === "board_vote_reminder") {
+        await (await import("@/lib/server/board-review")).resolveBoardReminder(event.payload);
       } else if (event.kind === REMINDER_OUTBOX_KIND) {
         // A delayed reminder. The row's `nextAttemptAt` was its due time; the
         // booking is re-read now so a cancelled or moved reservation resolves

@@ -90,6 +90,7 @@ function ProviderChrome({
           ))}
           {/* One cross-role support surface. Same route for homeowners, HOA
               managers, and providers; the layout picks the shell. */}
+          <Link className="dash-nav-item" href="/app/board"><Icon name="clipboard" size={20} /><span>Board review</span></Link>
           <Link className={`dash-nav-item${pathname.startsWith("/app/support") ? " is-active" : ""}`} href="/app/support">
             <Icon name="chat" size={20} /><span>Support</span>
           </Link>

@@ -1,4 +1,5 @@
 import "server-only";
+import { assertBoardAwardReady, boardWorkflowError } from "@/lib/server/board-review";
 
 import { providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
 
@@ -90,6 +91,8 @@ function assertPreparedManager(userId: string, requestId: string, via: string) {
 
 /** Only our named SQL guard codes become a retryable workflow conflict. */
 function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
+  const boardConflict = boardWorkflowError(error);
+  if (boardConflict) return boardConflict;
   const object = (value: unknown): Record<string, unknown> | null =>
     typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
   const entry = object(error);
@@ -2207,6 +2210,7 @@ export async function awardBid(
       }));
 
   try {
+    await assertBoardAwardReady(userId, request.id, bid.id, bid.version);
     await db.$transaction([
       // Claim the complete bid/audience snapshot before touching any child.
       db.hoaServiceRequest.update({
@@ -2251,6 +2255,7 @@ export async function awardBid(
           endDate,
         },
       }),
+      db.$executeRaw`SELECT bundleen_finalize_board_award(${request.id},${bid.id},${userId})`,
       db.serviceOccurrence.createMany({ data: occurrenceRows }),
       db.serviceVisit.createMany({ data: visitRows }),
       db.adminAuditLog.create({

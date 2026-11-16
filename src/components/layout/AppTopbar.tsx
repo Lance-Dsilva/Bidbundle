@@ -29,6 +29,7 @@ export function AppTopbar() {
         </Link>
 
         <nav className="bb-nav-links" aria-label="Application navigation">
+          <Link href="/app/board" className={pathname === "/app/board" ? "active" : ""}>Board review</Link>
           {tabs.map((tab) => (
             <Link key={tab.href} href={tab.href} className={isTabActive(tab, pathname) ? "active" : ""}>
               {tab.label}

@@ -26,8 +26,8 @@ export class HoaWorkflowError extends Error {
   }
 }
 
-type InvitationRole = "hoa_manager" | "hoa_team" | "homeowner";
-type HoaStaffInvitationRole = Exclude<InvitationRole, "homeowner">;
+type InvitationRole = "hoa_manager" | "hoa_team" | "hoa_board" | "homeowner";
+type HoaStaffInvitationRole = "hoa_manager" | "hoa_team";
 
 function isHoaStaffInvitationRole(role: InvitationRole): role is HoaStaffInvitationRole {
   return role === "hoa_manager" || role === "hoa_team";
@@ -282,7 +282,12 @@ async function createInvitation(input: {
   ]);
 
   if (existingInvitation?.status === "accepted") {
-    throw new HoaWorkflowError("That invitation has already been accepted.");
+    const boardMember = input.role === "hoa_board" && existingUser
+      ? await db.communityBoardMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId: existingUser.id } } })
+      : null;
+    if (input.role !== "hoa_board" || boardMember?.status === "active") {
+      throw new HoaWorkflowError("That invitation has already been accepted.");
+    }
   }
   if (
     existingInvitation?.status === "pending" &&
@@ -498,6 +503,18 @@ export async function listHoaManagerInvitations(
   return rows.map(serializeInvitation);
 }
 
+/** Board membership is scoped and never converts a resident into staff. */
+export async function inviteHoaBoard(input: { actorUserId: string; actorEmail: string; communityId: string; email: string; fullName: string; requestUrl: string }) {
+  const access = await (await import("@/lib/server/board-review")).requireBoardViewer(input.actorUserId, input.communityId);
+  if (!access.canManage) throw new HoaWorkflowError("Only the HOA manager can invite board members.", 403);
+  return createInvitation({ ...input, role: "hoa_board", unitId: null });
+}
+export async function revokeHoaBoardInvitation(input: { actorUserId: string; communityId: string; invitationId: string }) {
+  const access = await (await import("@/lib/server/board-review")).requireBoardViewer(input.actorUserId, input.communityId);
+  if (!access.canManage) throw new HoaWorkflowError("Only the HOA manager can revoke board invitations.", 403);
+  return revokeInvitation({ ...input, role: "hoa_board" });
+}
+
 /** A scoped HOA manager invites a resident to one specific home. */
 export async function inviteHoaResident(input: {
   actorUserId: string;
@@ -609,7 +626,7 @@ export async function acceptHoaInvitation(input: {
   email: string;
   emailVerified: boolean;
   fullName: string;
-}): Promise<"staff" | "resident"> {
+}): Promise<"staff" | "resident" | "board"> {
   if (!input.emailVerified) {
     throw new HoaWorkflowError("Verify your email before accepting this invitation.", 403);
   }
@@ -632,6 +649,7 @@ export async function acceptHoaInvitation(input: {
   });
 
   if (!invitation) throw new HoaWorkflowError("This invitation does not exist.", 404);
+  if (invitation.role === "hoa_board") return (await import("@/lib/server/hoa-board-invitations")).acceptBoardInvitation(input);
   if (invitation.status === "accepted") {
     if (
       invitation.email !== email ||

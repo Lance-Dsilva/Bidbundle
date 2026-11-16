@@ -44,6 +44,8 @@ function op(model: string, action: string) {
 
 vi.mock("@/lib/server/db", () => ({
   db: {
+    // These legacy fixtures model manager-only/no-board communities.
+    boardReviewRound: { findFirst: async () => null },
     community: { findUnique: async () => state.community },
     communityStaffAssignment: {
       findFirst: async (args: { where?: { role?: unknown } }) => {
@@ -101,7 +103,12 @@ vi.mock("@/lib/server/db", () => ({
     providerServiceArea: { findMany: async () => [] },
     providerProfile: { findMany: async () => [] },
     homeownerProfile: { findMany: async () => [] },
-    $executeRaw: (query: unknown) => op("managerAuthority", "assert")({ query }),
+    $executeRaw: (query: unknown) => {
+      const sql = Array.isArray(query) ? query.join("") : String((query as { sql?: string }).sql ?? query);
+      // Board eligibility reads are not a write to the neighborhood fixture.
+      if (sql.includes("bundleen_assert_board_award")) return Promise.resolve(1);
+      return op(sql.includes("bundleen_finalize_board_award") ? "boardFinalization" : "managerAuthority", "assert")({ query });
+    },
     $transaction: async (ops: Op[]) => {
       state.batches.push(ops);
       return ops;
