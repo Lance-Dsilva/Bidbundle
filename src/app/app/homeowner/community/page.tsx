@@ -54,7 +54,7 @@ export default async function HomeownerCommunityPage() {
         </div>
       ) : null}
 
-      <ResidentHoaWorkspace hub={residentHoa} />
+      <ResidentHoaWorkspace hub={residentHoa} qualityReportingEnabled={process.env.SERVICE_QUALITY_INTAKE === "1"} />
 
       {neighborhoodManagement.map(({ community, roleLabels, members }) => {
         const active = members;

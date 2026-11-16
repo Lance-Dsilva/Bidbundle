@@ -1106,6 +1106,7 @@ model ServiceVisit {
   requiresAfterPhoto Boolean @default(false)
 
   reviews Review[]
+  qualityClaim ServiceQualityClaim?
   photos MediaAsset[] @relation("VisitPhotos")
 
   createdAt DateTime @default(now())
@@ -1477,6 +1478,7 @@ enum SupportTicketCategory {
   bidding
   scheduling
   provider_issue
+  service_quality
   community
   technical
   other
@@ -1572,6 +1574,7 @@ model SupportTicket {
   messages SupportTicketMessage[]
   events   SupportTicketEvent[]
   aiDrafts SupportTicketAiDraft[]
+  qualityClaim ServiceQualityClaim?
 
   createdAt DateTime @default(now())
   /// Also the optimistic-concurrency token: admin mutations pass the value they
@@ -2493,4 +2496,24 @@ model CommunityInterest {
 
   @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
   @@index([createdAt, id])
+}
+
+/// An intake record, not proof that a redo/refund was executed.
+model ServiceQualityClaim {
+  id String @id @default(cuid())
+  visitId String @unique
+  visit ServiceVisit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  ticketId String @unique
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  requesterUserId String
+  providerUserId String
+  reason String
+  resolution String @default("reported")
+  resolutionNote String?
+  resolutionRequestedBy String?
+  resolutionRequestedAt DateTime?
+  providerResponse String?
+  providerRespondedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([providerUserId, createdAt])
 }

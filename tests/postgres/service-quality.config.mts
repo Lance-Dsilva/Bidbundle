@@ -1,0 +1,11 @@
+import { resolve } from "node:path";
+import { defineConfig } from "vitest/config";
+const raw = process.env.TEST_DATABASE_URL;
+if (!raw) throw new Error("Explicit isolated issue50 test URL required");
+const url = new URL(raw);
+if (url.hostname !== "127.0.0.1" || !url.port || url.pathname !== "/quality_test" || url.username !== "quality_test" || url.search || url.hash) throw new Error("Only owned issue50 loopback database allowed");
+process.env.DATABASE_URL = raw; delete process.env.DIRECT_URL;
+process.env.SERVICE_QUALITY_INTAKE = "1";
+process.env.RATE_LIMIT_IDENTIFIER_SECRET = "quality-disposable-only";
+process.env.PROVIDER_DOCUMENT_BLOB_READ_WRITE_TOKEN = "quality-disposable-only";
+export default defineConfig({ resolve: { alias: { "@": resolve(import.meta.dirname,"../../src"), "server-only":resolve(import.meta.dirname,"../stubs/server-only.ts"), "next/server":resolve(import.meta.dirname,"../../node_modules/next/server.js") } }, test: { environment:"node", include:["tests/postgres/service-quality.postgres.ts"], fileParallelism:false, testTimeout:30000, hookTimeout:30000 } });
