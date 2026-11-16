@@ -1,3 +1,4 @@
+import { buildStripeTestChargeIntent } from "@/lib/stripe-test-charge-intent";
 import { allocateVisitCents } from "@/lib/visit-billing";
 import "server-only";
 
@@ -2603,7 +2604,7 @@ export async function updateVisitStatus(
               status: true,
               requestId: true,
               community: { select: { name: true, type: true } },
-              request: { select: { title: true } },
+              request: { select: { title: true, kind: true } },
             },
           },
         },
@@ -2641,8 +2642,11 @@ export async function updateVisitStatus(
       : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
+  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, status: input.status,
+    communityType: visit.occurrence.agreement.community.type, requestKind: visit.occurrence.agreement.request.kind }, process.env.STRIPE_TEST_PAYMENTS);
   try {
     await db.$transaction([
+    ...(chargeIntent ? [db.outboxEvent.createMany({ data: [chargeIntent], skipDuplicates: true })] : []),
     db.$executeRaw(Prisma.sql`SELECT bundleen_assert_visit_photo_provider(${providerUserId}, ${visit.id})`),
     db.serviceVisit.update({
       where: { id: visit.id, status: visit.status, updatedAt: visit.updatedAt,

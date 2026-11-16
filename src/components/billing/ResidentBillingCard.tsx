@@ -8,8 +8,8 @@ type Offer = { termsToken: string; currency: string; totalCents: number; visits:
 const publicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publicKey?.startsWith("pk_test_") ? loadStripe(publicKey) : null;
 
-async function post<T>(agreementId: string, endpoint: string, body: unknown): Promise<T> {
-  const response = await fetch(`/api/hoa/agreements/${encodeURIComponent(agreementId)}/${endpoint}`, {
+async function post<T>(agreementId: string, endpoint: "billing-consent" | "billing-card", body: unknown): Promise<T> {
+  const response = await fetch(`/api/hoa/agreements/${encodeURIComponent(agreementId)}/${endpoint === "billing-consent" ? "billing-consent" : "billing-card"}`, {
     method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
   const result = await response.json();

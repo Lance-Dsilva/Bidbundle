@@ -9,7 +9,7 @@ function stripeClient() {
   if (process.env.STRIPE_TEST_CONNECT !== "1" || !key || !/^(sk|rk)_test_[A-Za-z0-9]+$/.test(key)) {
     throw new HoaWorkflowError("Sandbox payout setup is unavailable.", 503);
   }
-  return new Stripe(key);
+  return new Stripe(key, { timeout: 8000, maxNetworkRetries: 0 });
 }
 function returnUrl() {
   const raw = process.env.STRIPE_TEST_APP_URL;

@@ -1,4 +1,6 @@
 import "server-only";
+import { STRIPE_TEST_VISIT_CHARGE } from "@/lib/stripe-test-charge-intent";
+import { chargeStripeTestVisit } from "@/lib/server/stripe-test-payments";
 
 import { createHash, randomUUID } from "node:crypto";
 
@@ -330,7 +332,7 @@ function backoffMinutes(attempts: number): number {
 export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResult> {
   const now = new Date();
   const candidates = await db.outboxEvent.findMany({
-    where: { status: "pending", nextAttemptAt: { lte: now } },
+    where: { status: "pending", nextAttemptAt: { lte: now }, ...(process.env.STRIPE_TEST_PAYMENTS !== "1" ? { kind: { not: STRIPE_TEST_VISIT_CHARGE } } : {}) },
     orderBy: { nextAttemptAt: "asc" },
     take: Math.min(Math.max(limit, 1), 100),
     select: { id: true, kind: true, dedupeKey: true, payload: true, attempts: true },
@@ -353,7 +355,11 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
     try {
       let providerMessageId: string | null = null;
 
-      if (event.kind === "notification_email") {
+      if (event.kind === STRIPE_TEST_VISIT_CHARGE) {
+        const payload = event.payload as { visitId?: unknown };
+        if (typeof payload.visitId !== "string" || !payload.visitId) throw new Error("Invalid sandbox payment job");
+        await chargeStripeTestVisit(payload.visitId);
+      } else if (event.kind === "notification_email") {
         const payload = event.payload as { to?: string; subject?: string; text?: string };
         if (!payload.to || !payload.subject || !payload.text) {
           throw new Error("outbox payload is incomplete");

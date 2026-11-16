@@ -167,6 +167,8 @@ export async function saveVerifiedStripeTestCard(
       throw new HoaWorkflowError("The billing offer has changed. Review the current prices before adding a card.", 409);
     }
     const key = { agreementId, payerUserId, unitId: current.unitId };
+    const existing = await tx.stripeTestCard.findUnique({ where: { agreementId_payerUserId_unitId: key } });
+    if (existing?.setupIntentId === card.setupIntentId && existing.customerId === card.customerId && existing.paymentMethodId === card.paymentMethodId) return;
     await tx.stripeTestCard.upsert({
       where: { agreementId_payerUserId_unitId: key },
       create: { ...key, ...card },

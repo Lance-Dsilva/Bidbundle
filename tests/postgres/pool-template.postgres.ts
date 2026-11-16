@@ -1,3 +1,5 @@
+import sharp from "sharp";
+import { storeVisitPhoto } from "@/lib/server/visit-photos";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -21,8 +23,9 @@ vi.mock("@/lib/server/notifications", async (importActual) => ({
   ...await importActual<typeof import("@/lib/server/notifications")>(), scheduleOutboxDrain: external.drain,
 }));
 
-import { createHoaRequest, respondToOptionalRequest, transitionHoaRequest, submitBid, awardBid, listRequestBids, getResidentHoaHub } from "@/lib/server/hoa-market";
+import { updateVisitStatus, createHoaRequest, respondToOptionalRequest, transitionHoaRequest, submitBid, awardBid, listRequestBids, getResidentHoaHub } from "@/lib/server/hoa-market";
 import { acceptVisitBillingOffer, getVisitBillingOffer, saveVerifiedStripeTestCard } from "@/lib/server/visit-billing-consent";
+import { prepareStripeTestPayment } from "@/lib/server/stripe-test-payments";
 import { storeProviderCredential } from "@/lib/server/provider-credentials";
 import { updateProviderAdministration } from "@/lib/server/providers-admin";
 import { inviteProviderToBid, listProviderBidInvitations } from "@/lib/server/provider-bid-invitations";
@@ -467,6 +470,40 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     await first.visitBillingConsent.deleteMany({ where: { agreementId, payerUserId: payer } });
     expect(await first.stripeTestCard.count({ where: { agreementId } })).toBe(0);
     await expect(run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card))).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("prepares one immutable sandbox payment per completed visit under concurrent retries", async () => {
+    const f = await seed();
+    await open(f); const agreementId = await award(f, await submit(f));
+    const payer = f.residents[0].user.id; const customerId = `cus_${payer}`;
+    await first.user.update({ where: { id: payer }, data: { stripeTestCustomerId: customerId } });
+    await first.providerProfile.update({ where: { userId: f.provider.id }, data: { stripeTestAccountId: `acct_${f.provider.id}`, stripeTestPayoutStatus: "active" } });
+    const offer = await run(first, () => getVisitBillingOffer(payer, agreementId));
+    const accepted = await run(first, () => acceptVisitBillingOffer(payer, agreementId, offer.termsToken));
+    await run(first, () => saveVerifiedStripeTestCard(payer, agreementId, { termsToken: accepted.termsToken, acceptedAt: accepted.acceptedAt! }, { customerId, paymentMethodId: `pm_${payer}`, setupIntentId: `seti_${payer}`, brand: "visa", last4: "4242" }));
+    const visit = await first.serviceVisit.findFirstOrThrow({ where: { billingPayerUserId: payer, occurrence: { agreementId } } });
+    await expect(run(first, () => prepareStripeTestPayment(visit.id))).rejects.toMatchObject({ status: 409 });
+    await first.serviceVisit.update({ where: { id: visit.id }, data: { status: "scheduled" } });
+    const bytes = await sharp({ create: { width: 24, height: 18, channels: 3, background: { r: 20, g: 60, b: 90 } } }).png().toBuffer();
+    await run(first, () => storeVisitPhoto(f.provider.id, visit.id, "visit_after", new Blob([new Uint8Array(bytes)], { type: "image/png" })));
+    const beforeRetry = await first.stripeTestCard.findFirstOrThrow({ where: { agreementId, payerUserId: payer } });
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "1");
+    try {
+      await run(first, () => updateVisitStatus(f.provider.id, visit.id, { status: "completed", completionNote: null }));
+      await run(second, () => updateVisitStatus(f.provider.id, visit.id, { status: "completed", completionNote: null }));
+    } finally { vi.unstubAllEnvs(); }
+    expect(await first.outboxEvent.count({ where: { dedupeKey: `stripe-test-charge:${visit.id}` } })).toBe(1);
+    await run(second, () => saveVerifiedStripeTestCard(payer, agreementId, { termsToken: accepted.termsToken, acceptedAt: accepted.acceptedAt! }, { customerId, paymentMethodId: `pm_${payer}`, setupIntentId: `seti_${payer}`, brand: "visa", last4: "4242" }));
+    expect((await first.stripeTestCard.findFirstOrThrow({ where: { agreementId, payerUserId: payer } })).verifiedAt).toEqual(beforeRetry.verifiedAt);
+    const [a, b] = await Promise.all([run(first, () => prepareStripeTestPayment(visit.id)), run(second, () => prepareStripeTestPayment(visit.id))]);
+    expect(a.visitId).toBe(b.visitId); expect(a.amountCents).toBe(visit.allocatedVisitCents);
+    expect(a.providerAmountCents + a.platformFeeCents).toBe(a.amountCents);
+    expect(await first.stripeTestPayment.count({ where: { visitId: visit.id } })).toBe(1);
+    await expect(first.stripeTestPayment.delete({ where: { visitId: visit.id } })).rejects.toThrow(/cannot be deleted/i);
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment"`).rejects.toThrow(/cannot be deleted|truncated/i);
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
+    await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);
   });
 
   it.each(["expired-proof","higher-policy"])("fails a new pool award closed for %s without partial award rows", async (reason) => {

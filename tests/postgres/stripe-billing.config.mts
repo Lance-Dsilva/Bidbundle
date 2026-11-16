@@ -16,6 +16,7 @@ if (!["postgres:", "postgresql:"].includes(target.protocol) ||
 process.env.DATABASE_URL = raw;
 delete process.env.DIRECT_URL;
 process.env.RATE_LIMIT_IDENTIFIER_SECRET = "issue43-isolated-database-only";
+process.env.VISIT_PHOTO_BLOB_READ_WRITE_TOKEN = "issue43-isolated-private-transport-only";
 process.env.PROVIDER_DOCUMENT_BLOB_READ_WRITE_TOKEN = "issue43-isolated-private-transport-only";
 
 export default defineConfig({

@@ -1084,6 +1084,7 @@ model VisitBillingConsent {
 }
 
 model ServiceVisit {
+  testPayment StripeTestPayment?
   id           String            @id @default(cuid())
   occurrenceId String
   occurrence   ServiceOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
@@ -2545,4 +2546,34 @@ model StripeTestCard {
   verifiedAt DateTime @default(now())
 
   @@id([agreementId, payerUserId, unitId])
+}
+
+/// Durable sandbox-only economic identity: one charge intent per completed visit.
+model StripeTestPayment {
+  visitId String @id
+  visit ServiceVisit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  requestId String
+  agreementId String
+  communityId String
+  residentUserId String
+  providerUserId String
+  unitId String
+  customerId String
+  paymentMethodId String
+  providerAccountId String
+  termsToken String
+  amountCents Int
+  platformFeeCents Int
+  hoaShareCents Int @default(0)
+  providerAmountCents Int
+  currency String
+  stripePaymentIntentId String? @unique
+  stripeChargeId String? @unique
+  stripeTransferId String? @unique
+  status String @default("pending")
+  failureCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
 }

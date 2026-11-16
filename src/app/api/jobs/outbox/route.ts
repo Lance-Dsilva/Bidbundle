@@ -1,3 +1,4 @@
+import { reconcileStripeTestPayments } from "@/lib/server/stripe-test-reconciliation";
 import { timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
@@ -45,7 +46,10 @@ async function drain(request: Request): Promise<NextResponse> {
     const remindersQueued = await enqueueUpcomingServiceReminders();
     const credentials = await sweepProviderCredentialExpirations();
     const result = await deliverPendingOutbox(100);
-    return NextResponse.json({ ...result, remindersQueued, reconciled, credentials });
+    // Sandbox failures must not turn successful unrelated notification delivery into a failed job.
+    let stripeTest: Awaited<ReturnType<typeof reconcileStripeTestPayments>> | null = null;
+    try { stripeTest = await reconcileStripeTestPayments(); } catch { stripeTest = { processed: 0, refreshed: 0, failed: 1 }; }
+    return NextResponse.json({ ...result, remindersQueued, reconciled, credentials, stripeTest });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

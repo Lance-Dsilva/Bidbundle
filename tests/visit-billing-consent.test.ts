@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const store = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
   user: { findUnique: vi.fn() },
-  stripeTestCard: { upsert: vi.fn() },
+  stripeTestCard: { upsert: vi.fn(), findUnique: vi.fn() },
   serviceAgreement: { findFirst: vi.fn() },
   communityMembership: { findFirst: vi.fn() },
   serviceVisit: { findMany: vi.fn() },
@@ -128,6 +128,12 @@ describe("verified sandbox card binding", () => {
       create: { agreementId: agreement, payerUserId: payer, unitId: "unit", ...card },
       update: { ...card, verifiedAt: expect.any(Date) },
     });
+  });
+  it("preserves original verification time on identical setup retries", async () => {
+    const expected = await acceptedOffer();
+    store.stripeTestCard.findUnique.mockResolvedValue({ ...card, verifiedAt: acceptedAt });
+    await saveVerifiedStripeTestCard(payer, agreement, expected, card);
+    expect(store.stripeTestCard.upsert).not.toHaveBeenCalled();
   });
   it("rejects revoked consent after lock acquisition", async () => {
     const expected = await acceptedOffer();
