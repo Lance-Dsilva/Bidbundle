@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import Stripe from "stripe";
 import { db } from "@/lib/server/db";
 import { HoaWorkflowError } from "@/lib/server/hoa";
-import { getVisitBillingOffer } from "@/lib/server/visit-billing-consent";
+import { getVisitBillingOffer, saveVerifiedStripeTestCard } from "@/lib/server/visit-billing-consent";
 
 function idempotencyKey(scope: string, parts: string[]): string {
   return scope + ":" + createHash("sha256").update(JSON.stringify(parts)).digest("hex");
@@ -86,13 +86,16 @@ export async function verifyStripeTestCardSetup(
 
   const method = intent.payment_method;
   if (intent.status !== "succeeded" || !method || typeof method === "string" ||
-      method.livemode !== false || method.customer !== customerId || !method.card) {
+      method.livemode !== false || method.customer !== customerId || !method.card || !method.id) {
     throw new HoaWorkflowError("Stripe has not confirmed a card for this agreement.", 409);
   }
   const current = await getAcceptedOffer(payerUserId, agreementId);
   if (current.termsToken !== offer.termsToken || current.acceptedAt !== offer.acceptedAt) {
     throw new HoaWorkflowError("Review and accept the current visit prices before adding a card.", 409);
   }
+  await saveVerifiedStripeTestCard(payerUserId, agreementId, offer, {
+    customerId, paymentMethodId: method.id, setupIntentId, brand: method.card.brand, last4: method.card.last4,
+  });
   return { brand: method.card.brand, last4: method.card.last4 };
 }
 

@@ -1078,6 +1078,7 @@ model VisitBillingConsent {
   termsToken  String
   termsVersion String
   acceptedAt  DateTime @default(now())
+  testCard StripeTestCard?
 
   @@id([agreementId, payerUserId, unitId])
 }
@@ -1394,6 +1395,8 @@ model HomeownerProfile {
 
 /// Provider-only profile data. Exactly one row per provider `User`.
 model ProviderProfile {
+  stripeTestAccountId String? @unique
+  stripeTestPayoutStatus String @default("not_connected")
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2526,4 +2529,20 @@ model StripeTestEvent {
   processedAt DateTime?
 
   @@index([processedAt, receivedAt])
+}
+
+/// Sandbox-only verified card reference. Never stores card numbers or client secrets.
+model StripeTestCard {
+  agreementId String
+  payerUserId String
+  unitId String
+  consent VisitBillingConsent @relation(fields: [agreementId, payerUserId, unitId], references: [agreementId, payerUserId, unitId], onDelete: Cascade)
+  customerId String
+  paymentMethodId String
+  setupIntentId String @unique
+  brand String
+  last4 String
+  verifiedAt DateTime @default(now())
+
+  @@id([agreementId, payerUserId, unitId])
 }

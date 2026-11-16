@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
+  user: { findUnique: vi.fn() },
+  stripeTestCard: { upsert: vi.fn() },
   serviceAgreement: { findFirst: vi.fn() },
   communityMembership: { findFirst: vi.fn() },
   serviceVisit: { findMany: vi.fn() },
@@ -16,7 +18,7 @@ vi.mock("@/lib/server/db", () => ({
   db: { ...store, $transaction: (fn: (tx: typeof store) => unknown) => fn(store) },
 }));
 
-import { acceptVisitBillingOffer, getVisitBillingOffer } from "@/lib/server/visit-billing-consent";
+import { acceptVisitBillingOffer, getVisitBillingOffer, saveVerifiedStripeTestCard } from "@/lib/server/visit-billing-consent";
 
 const payer = "original-resident";
 const agreement = "agreement";
@@ -105,5 +107,41 @@ describe("final-price consent", () => {
     await expect(acceptVisitBillingOffer(payer, agreement, offer.termsToken))
       .resolves.toMatchObject({ acceptedAt: acceptedAt.toISOString() });
     expect(store.visitBillingConsent.createMany).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("verified sandbox card binding", () => {
+  const card = { customerId: "cus_fixture", paymentMethodId: "pm_fixture", setupIntentId: "seti_fixture", brand: "visa", last4: "4242" };
+  async function acceptedOffer() {
+    const offer = await getVisitBillingOffer(payer, agreement);
+    store.visitBillingConsent.findUnique.mockResolvedValue({ termsToken: offer.termsToken, termsVersion: "completed-visit-charge-v1", acceptedAt });
+    store.user.findUnique.mockResolvedValue({ stripeTestCustomerId: card.customerId });
+    return { termsToken: offer.termsToken, acceptedAt: acceptedAt.toISOString() };
+  }
+  it("persists only the verified reference against the locked exact consent", async () => {
+    const expected = await acceptedOffer();
+    await saveVerifiedStripeTestCard(payer, agreement, expected, card);
+    expect(store.$queryRaw).toHaveBeenCalledTimes(3);
+    expect(store.stripeTestCard.upsert).toHaveBeenCalledWith({
+      where: { agreementId_payerUserId_unitId: { agreementId: agreement, payerUserId: payer, unitId: "unit" } },
+      create: { agreementId: agreement, payerUserId: payer, unitId: "unit", ...card },
+      update: { ...card, verifiedAt: expect.any(Date) },
+    });
+  });
+  it("rejects revoked consent after lock acquisition", async () => {
+    const expected = await acceptedOffer();
+    store.visitBillingConsent.findUnique.mockResolvedValueOnce({ termsToken: expected.termsToken, termsVersion: "completed-visit-charge-v1", acceptedAt }).mockResolvedValueOnce(null);
+    await expect(saveVerifiedStripeTestCard(payer, agreement, expected, card)).rejects.toMatchObject({ status: 409 });
+    expect(store.stripeTestCard.upsert).not.toHaveBeenCalled();
+  });
+  it("rejects a changed Stripe customer or replaced membership", async () => {
+    const expected = await acceptedOffer();
+    store.user.findUnique.mockResolvedValue({ stripeTestCustomerId: "cus_other" });
+    await expect(saveVerifiedStripeTestCard(payer, agreement, expected, card)).rejects.toMatchObject({ status: 409 });
+    store.user.findUnique.mockResolvedValue({ stripeTestCustomerId: card.customerId });
+    store.communityMembership.findFirst.mockResolvedValueOnce({ id: "membership", unitId: "unit" }).mockResolvedValueOnce({ id: "replacement-membership", unitId: "unit" });
+    await expect(saveVerifiedStripeTestCard(payer, agreement, expected, card)).rejects.toMatchObject({ status: 409 });
+    expect(store.stripeTestCard.upsert).not.toHaveBeenCalled();
   });
 });

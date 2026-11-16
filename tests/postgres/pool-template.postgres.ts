@@ -22,7 +22,7 @@ vi.mock("@/lib/server/notifications", async (importActual) => ({
 }));
 
 import { createHoaRequest, respondToOptionalRequest, transitionHoaRequest, submitBid, awardBid, listRequestBids, getResidentHoaHub } from "@/lib/server/hoa-market";
-import { acceptVisitBillingOffer, getVisitBillingOffer } from "@/lib/server/visit-billing-consent";
+import { acceptVisitBillingOffer, getVisitBillingOffer, saveVerifiedStripeTestCard } from "@/lib/server/visit-billing-consent";
 import { storeProviderCredential } from "@/lib/server/provider-credentials";
 import { updateProviderAdministration } from "@/lib/server/providers-admin";
 import { inviteProviderToBid, listProviderBidInvitations } from "@/lib/server/provider-bid-invitations";
@@ -146,7 +146,9 @@ async function lockRow(table: "ProviderProfile" | "MediaAsset" | "AdminAccessGra
 }
 beforeAll(() => {
   const url = new URL(process.env.TEST_DATABASE_URL!);
-  if (url.hostname !== "127.0.0.1" || url.port !== "54371" || !/^\/bundleen_issue52_test_[a-z0-9]+$/.test(url.pathname)) throw new Error("Refusing non-owned issue52 target.");
+  const owned52 = url.port === "54371" && /^\/bundleen_issue52_test_[a-z0-9]+$/.test(url.pathname);
+  const owned43 = url.port === "53952" && /^\/bundleen_issue43_test_[a-z0-9]+$/.test(url.pathname) && /^bundleen_issue43_runner_[a-z0-9]+$/.test(url.username);
+  if (url.hostname !== "127.0.0.1" || (!owned52 && !owned43)) throw new Error("Refusing non-owned billing test target.");
   first = client("first"); second = client("second"); injection.current = () => context.getStore() ?? first;
 });
 beforeEach(() => { external.drain.mockClear(); external.after.mockClear(); });
@@ -447,6 +449,24 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     const retry = await run(second, () => acceptVisitBillingOffer(standardPayer, agreementId, offer.termsToken));
     expect(retry).toEqual(accepted);
     expect(await first.visitBillingConsent.count({ where: { agreementId } })).toBe(1);
+  });
+
+  it("stores sandbox card references under exact consent and cascades revocation", async () => {
+    const f = await seed(); await open(f); const agreementId = await award(f, await submit(f));
+    const payer = f.residents[0].user.id;
+    const customerId = `cus_${payer}`;
+    await first.user.update({ where: { id: payer }, data: { stripeTestCustomerId: customerId } });
+    const offer = await run(first, () => getVisitBillingOffer(payer, agreementId));
+    const accepted = await run(first, () => acceptVisitBillingOffer(payer, agreementId, offer.termsToken));
+    const expected = { termsToken: accepted.termsToken, acceptedAt: accepted.acceptedAt! };
+    const card = { customerId, paymentMethodId: `pm_${payer}`, setupIntentId: `seti_${payer}`, brand: "visa", last4: "4242" };
+    await run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card));
+    await run(second, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card));
+    expect(await first.stripeTestCard.count({ where: { agreementId, payerUserId: payer } })).toBe(1);
+    await expect(run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, { ...card, customerId: "cus_other" }))).rejects.toMatchObject({ status: 409 });
+    await first.visitBillingConsent.deleteMany({ where: { agreementId, payerUserId: payer } });
+    expect(await first.stripeTestCard.count({ where: { agreementId } })).toBe(0);
+    await expect(run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card))).rejects.toMatchObject({ status: 409 });
   });
 
   it.each(["expired-proof","higher-policy"])("fails a new pool award closed for %s without partial award rows", async (reason) => {

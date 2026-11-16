@@ -136,3 +136,41 @@ export async function acceptVisitBillingOffer(
     return { ...snapshot.offer, acceptedAt: consent.acceptedAt.toISOString() };
   });
 }
+
+/** Persist a verified sandbox reference only while its exact consent and payer remain current. */
+export async function saveVerifiedStripeTestCard(
+  payerUserId: string,
+  agreementId: string,
+  expected: { termsToken: string; acceptedAt: string },
+  card: { customerId: string; paymentMethodId: string; setupIntentId: string; brand: string; last4: string },
+) {
+  return db.$transaction(async (tx) => {
+    const prepared = await readBillingOffer(tx, payerUserId, agreementId);
+    await tx.$queryRaw`
+      SELECT membership."id" FROM "CommunityMembership" membership
+      JOIN "Community" community ON community."id" = membership."communityId"
+      JOIN "ServiceAgreement" agreement ON agreement."communityId" = community."id"
+      WHERE membership."id" = ${prepared.membershipId} AND agreement."id" = ${agreementId}
+      FOR SHARE OF agreement, community, membership
+    `;
+    await tx.$queryRaw`
+      SELECT "agreementId" FROM "VisitBillingConsent"
+      WHERE "agreementId" = ${agreementId} AND "payerUserId" = ${payerUserId} AND "unitId" = ${prepared.unitId}
+      FOR UPDATE
+    `;
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${payerUserId} FOR SHARE`;
+    const current = await readBillingOffer(tx, payerUserId, agreementId);
+    const payer = await tx.user.findUnique({ where: { id: payerUserId }, select: { stripeTestCustomerId: true } });
+    if (current.unitId !== prepared.unitId || current.membershipId !== prepared.membershipId ||
+        current.offer.termsToken !== expected.termsToken || current.offer.acceptedAt !== expected.acceptedAt ||
+        payer?.stripeTestCustomerId !== card.customerId) {
+      throw new HoaWorkflowError("The billing offer has changed. Review the current prices before adding a card.", 409);
+    }
+    const key = { agreementId, payerUserId, unitId: current.unitId };
+    await tx.stripeTestCard.upsert({
+      where: { agreementId_payerUserId_unitId: key },
+      create: { ...key, ...card },
+      update: { ...card, verifiedAt: new Date() },
+    });
+  });
+}

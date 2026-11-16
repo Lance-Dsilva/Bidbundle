@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startStripeTestCardSetup, verifyStripeTestCardSetup } from "@/lib/server/stripe-test-card";
 
 const mocks = vi.hoisted(() => ({
-  offer: vi.fn(), customer: vi.fn(), update: vi.fn(), createCustomer: vi.fn(), createIntent: vi.fn(), retrieveIntent: vi.fn(),
+  save: vi.fn(), offer: vi.fn(), customer: vi.fn(), update: vi.fn(), createCustomer: vi.fn(), createIntent: vi.fn(), retrieveIntent: vi.fn(),
 }));
 vi.mock("stripe", () => ({
   default: class {
@@ -10,7 +10,7 @@ vi.mock("stripe", () => ({
     setupIntents = { create: mocks.createIntent, retrieve: mocks.retrieveIntent };
   },
 }));
-vi.mock("@/lib/server/visit-billing-consent", () => ({ getVisitBillingOffer: mocks.offer }));
+vi.mock("@/lib/server/visit-billing-consent", () => ({ getVisitBillingOffer: mocks.offer, saveVerifiedStripeTestCard: mocks.save }));
 vi.mock("@/lib/server/db", () => ({
   db: { user: { findUniqueOrThrow: mocks.customer, updateMany: mocks.update } },
 }));
@@ -64,12 +64,15 @@ describe("Stripe sandbox card setup", () => {
     const intent = {
       livemode: false, customer: "cus_fixture", status: "succeeded",
       metadata: { bundleenAgreementId: "agreement", bundleenTermsToken: accepted.termsToken, bundleenConsentAt: accepted.acceptedAt },
-      payment_method: { livemode: false, customer: "cus_fixture", card: { brand: "visa", last4: "4242" } },
+      payment_method: { id: "pm_fixture", livemode: false, customer: "cus_fixture", card: { brand: "visa", last4: "4242" } },
     };
     mocks.retrieveIntent.mockResolvedValueOnce(intent)
       .mockResolvedValueOnce({ ...intent, customer: "cus_other" })
       .mockResolvedValueOnce({ ...intent, metadata: { ...intent.metadata, bundleenConsentAt: "old" } });
     await expect(verifyStripeTestCardSetup("payer", "agreement", "seti_fixture")).resolves.toEqual({ brand: "visa", last4: "4242" });
+    expect(mocks.save).toHaveBeenCalledWith("payer", "agreement", accepted, {
+      customerId: "cus_fixture", paymentMethodId: "pm_fixture", setupIntentId: "seti_fixture", brand: "visa", last4: "4242",
+    });
     await expect(verifyStripeTestCardSetup("payer", "agreement", "seti_other")).rejects.toMatchObject({ status: 404 });
     await expect(verifyStripeTestCardSetup("payer", "agreement", "seti_stale")).rejects.toMatchObject({ status: 404 });
   });

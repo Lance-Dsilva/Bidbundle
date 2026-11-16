@@ -54,6 +54,7 @@ export default async function HomeownerCommunityPage() {
         </div>
       ) : null}
 
+      {process.env.STRIPE_TEST_CARD_SETUP === "1" && <Link className="bb-btn bb-btn-secondary min-h-11" href="/app/homeowner/billing">Review service payment setup</Link>}
       <ResidentHoaWorkspace hub={residentHoa} />
 
       {neighborhoodManagement.map(({ community, roleLabels, members }) => {
