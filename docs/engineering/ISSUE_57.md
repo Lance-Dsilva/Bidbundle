@@ -8,7 +8,7 @@ This branch is a **partial, disabled-by-default implementation** of [issue #57](
 - No third-party browser SDK, analytics cookies, autocapture, session recording, browser URLs, IP, user-agent or form values. Only internal user IDs and allowlisted `communityId`, `requestId`, category and role are exported. Server context comes from authorized stored business records.
 - Durable events with deterministic UUIDs; concurrent drains lock rows, recheck consent, suppress revoked queues, and retry transport errors with backoff. Event time and UUID survive retries. Delivered event IDs remain to deduplicate business retries. Withdrawal stops future export; it cannot retract previously sent events.
 - Existing signed daily outbox and five-minute reminder workers drain a maximum of ten analytics events per invocation. No new scheduler or external account is provisioned.
-- Current hooks: successful provider bid submission (one per bid, not each revision), successful award, completed resident visit, submitted visit review, and committed roster import (one milestone per manager/community). These nonfinancial hooks are best-effort after business commit; outages can lose these optional events. Payment hooks **must** use transactional enqueue instead.
+- Current hooks: successful provider bid submission (one per bid, not each revision), successful award, completed neighborhood resident visit, submitted visit review, and committed roster import (one milestone per manager/community). HOA visits on current main have no frozen resident identity: their completion event is deliberately omitted until #43 supplies the frozen payer; never substitute the unit’s current occupant. These nonfinancial hooks are best-effort after business commit; outages can lose these optional events. Payment hooks **must** use transactional enqueue instead.
 
 ## Enable only after deployment verification
 
@@ -51,6 +51,8 @@ Full issue acceptance remains blocked on these integrations, dashboard creation,
 - `npm test -- tests/product-analytics.test.ts tests/product-analytics-consent.test.tsx`
 - `npm run typecheck`
 - Dedicated synthetic DB: `DATABASE_URL=postgresql://...@127.0.0.1:53957/bundleen_analytics_test npx vitest run --config vitest.analytics.config.mts`. The suite refuses all other hosts, ports and database names. Transport is mocked; it cannot send real events.
+- Independent review corrected optional worker failure isolation and documented the HOA payer integration gate.
+- Direct Next build and TypeScript passed. Five real PostgreSQL transactional/concurrency cases passed.
 - Full suite at initial implementation: 2486/2490 passed; four known baseline neighborhood enrollment reconciliation failures remain.
 
 References: [PostHog capture API](https://posthog.com/docs/api/capture), [data collection controls](https://posthog.com/docs/privacy/data-collection), [dashboard API](https://posthog.com/docs/api/dashboards).

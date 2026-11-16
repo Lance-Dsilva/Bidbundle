@@ -5,7 +5,7 @@ const { consent, events, query, transaction } = vi.hoisted(() => ({
   query: vi.fn(), transaction: vi.fn(),
 }));
 vi.mock("@/lib/server/db", () => ({ db: { productAnalyticsConsent: consent, productAnalyticsEvent: events, $queryRaw: query, $transaction: transaction } }));
-import { analyticsConfig, captureProductEvent, deliverProductAnalytics, enqueueProductEvent, posthogPayload, productEventUuid, setProductAnalyticsConsent } from "@/lib/server/product-analytics";
+import { analyticsConfig, captureProductEvent, deliverProductAnalytics, deliverOptionalProductAnalytics, enqueueProductEvent, posthogPayload, productEventUuid, setProductAnalyticsConsent } from "@/lib/server/product-analytics";
 import { ANALYTICS_CONSENT_VERSION, productPropertiesSchema } from "@/lib/analytics/events";
 const store = { productAnalyticsConsent: consent, productAnalyticsEvent: events, $queryRaw: query } as never;
 const input = { userId: "internal_user", event: "payment_succeeded" as const, eventId: "evt_fixture", properties: { communityId: "community_1", requestId: "request_1", role: "homeowner" as const } };
@@ -49,4 +49,11 @@ describe("durable delivery", () => {
   it("does not treat quota-limited HTTP 200 as delivered", async () => { vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: 1, quota_limited: ["events"] }))); expect((await deliverProductAnalytics()).failed).toBe(1); });
   it("does not send already delivered rows claimed by another worker", async () => { events.findUnique.mockResolvedValue({ ...row, deliveredAt: new Date() }); const fetch = vi.fn(); vi.stubGlobal("fetch", fetch); await deliverProductAnalytics(); expect(fetch).not.toHaveBeenCalled(); });
   it("caps every drain", async () => { events.findMany.mockResolvedValue([]); await deliverProductAnalytics(10000); expect(events.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 })); });
+});
+
+it("isolates an analytics database outage from the operational worker", async () => {
+  events.findMany.mockRejectedValueOnce(new Error("database unavailable"));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  await expect(deliverOptionalProductAnalytics()).resolves.toMatchObject({ unavailable: true });
+  warn.mockRestore();
 });

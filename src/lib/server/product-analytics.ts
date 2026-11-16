@@ -129,3 +129,12 @@ export async function captureVisitProductEvent(visitId: string, event: "visit_co
     await captureRequestProductEvent(userId, event, visit.occurrence.agreement.requestId, visitId, "homeowner");
   } catch { console.warn("[analytics] optional visit context lookup failed"); }
 }
+
+/** Optional measurement must not invalidate a successful operational drain. */
+export async function deliverOptionalProductAnalytics() {
+  try { return { ...await deliverProductAnalytics(), unavailable: false }; }
+  catch {
+    console.warn("[analytics] optional delivery unavailable");
+    return { delivered: 0, suppressed: 0, failed: 0, unavailable: true };
+  }
+}

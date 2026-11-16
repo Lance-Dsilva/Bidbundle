@@ -1,4 +1,4 @@
-import { deliverProductAnalytics } from "@/lib/server/product-analytics";
+import { deliverOptionalProductAnalytics } from "@/lib/server/product-analytics";
 import { timingSafeEqual } from "node:crypto";
 
 import { Receiver } from "@upstash/qstash";
@@ -79,7 +79,7 @@ async function drain(): Promise<NextResponse> {
   try {
     const reconciled = await reconcileNeighborhoodEnrollments();
     const result = await deliverPendingOutbox(100);
-    const analytics = await deliverProductAnalytics();
+    const analytics = await deliverOptionalProductAnalytics();
     return NextResponse.json({ ...result, reconciled, analytics });
   } catch (error) {
     console.error("[reminders] drain failed", {

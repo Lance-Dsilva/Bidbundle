@@ -1,4 +1,4 @@
-import { deliverProductAnalytics } from "@/lib/server/product-analytics";
+import { deliverOptionalProductAnalytics } from "@/lib/server/product-analytics";
 import { timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
@@ -46,7 +46,7 @@ async function drain(request: Request): Promise<NextResponse> {
     const remindersQueued = await enqueueUpcomingServiceReminders();
     const credentials = await sweepProviderCredentialExpirations();
     const result = await deliverPendingOutbox(100);
-    const analytics = await deliverProductAnalytics();
+    const analytics = await deliverOptionalProductAnalytics();
     return NextResponse.json({ ...result, remindersQueued, reconciled, credentials, analytics });
   } catch (error) {
     console.error("[outbox] drain failed", {
