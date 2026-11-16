@@ -1,4 +1,7 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
+import { validatePriceLadder, type PriceLadderTier } from "@/lib/price-ladder";
+import { providerVerificationSelect, providerVerificationState } from "@/lib/provider-verification";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/server/db";
 import { HoaWorkflowError } from "@/lib/server/hoa";
@@ -36,12 +39,25 @@ export async function setRequestSharing(userId: string, requestId: string, actio
 // request titles/descriptions can contain home addresses and are never selected.
 const publicSelect = {
   category: true, status: true, enrollmentClosesAt: true, minHomes: true,
+  priceCommitment: { select: { acceptedAt: true, guaranteedPerHomeCents: true, tiers: { select: { minHomes: true, perHomeCents: true }, orderBy: { minHomes: "asc" as const } } } },
+  agreement: { select: { provider: { select: { providerProfile: { select: { companyName: true } } } } } },
+  bids: { where: { status: "submitted" as const }, select: { validUntil: true, provider: { select: { role: true, providerProfile: { select: { ...providerVerificationSelect, accountStatus: true } } } } } },
   _count: { select: { participations: { where: { response: "joined" as const, unitId: { not: null } } } } },
 } as const;
-export type PublicRequestSummary = { service: string; status: string; joinedHomes: number; minimumHomes: number | null; enrollmentClosesAt: string | null; path: string };
-function serialize(row: { category: string; status: string; minHomes: number | null; enrollmentClosesAt: Date | null; _count: { participations: number } }, path: string): PublicRequestSummary {
+export type PublicRequestSummary = { service: string; status: string; joinedHomes: number; minimumHomes: number | null; enrollmentClosesAt: string | null; path: string; priceLadder: { tiers: PriceLadderTier[]; guaranteedPerHomeCents: number } | null; providerName: string | null; verifiedBidders: number };
+function serialize(row: Prisma.HoaServiceRequestGetPayload<{ select: typeof publicSelect }>, path: string): PublicRequestSummary {
   const category = normalizeServiceCategory(row.category);
-  return { service: category ? CATEGORY_LABELS[category] : "Community service", status: row.status, joinedHomes: row._count.participations, minimumHomes: row.minHomes, enrollmentClosesAt: row.enrollmentClosesAt?.toISOString() ?? null, path };
+  let priceLadder: PublicRequestSummary["priceLadder"] = null;
+  if (row.priceCommitment?.acceptedAt) {
+    try {
+      const tiers = validatePriceLadder(row.priceCommitment.tiers);
+      const cap = row.priceCommitment.guaranteedPerHomeCents;
+      if (Number.isSafeInteger(cap) && cap >= 0 && cap <= tiers[0].perHomeCents) priceLadder = { tiers, guaranteedPerHomeCents: cap };
+    } catch { /* Malformed commitments fail closed; never invent prices. */ }
+  }
+  const now = new Date();
+  const verifiedBidders = (row.bids ?? []).filter(bid => (!bid.validUntil || bid.validUntil > now) && bid.provider.role === "provider" && bid.provider.providerProfile?.accountStatus === "active" && providerVerificationState(bid.provider.providerProfile, now).verified).length;
+  return { priceLadder, verifiedBidders, providerName: row.agreement ? (row.agreement.provider.providerProfile?.companyName?.trim() || "Community service provider") : null, service: category ? CATEGORY_LABELS[category] : "Community service", status: row.status, joinedHomes: row._count.participations, minimumHomes: row.minHomes, enrollmentClosesAt: row.enrollmentClosesAt?.toISOString() ?? null, path };
 }
 
 export async function getPublicCommunity(communityToken: string): Promise<{ name: string; requests: PublicRequestSummary[] } | null> {
@@ -74,4 +90,12 @@ export function canonicalShareUrl(path: string): string {
   if (origin.protocol !== "https:" || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/") throw new Error("Invalid public sharing origin.");
   if (!/^\/c\/[A-Za-z0-9_-]{32}\/r\/[A-Za-z0-9_-]{32}$/.test(path)) throw new Error("Invalid public sharing path.");
   return new URL(path, origin).toString();
+}
+
+/** Resolve only for an authenticated resident already matched to an active
+ * roster unit. Possession of a share link never grants membership or joins. */
+export async function resolveSharedEnrollment(userId: string, communityToken: string, requestToken: string): Promise<string | null> {
+  if (!publicSharingEnabled() || !validShareToken(communityToken) || !validShareToken(requestToken)) return null;
+  const share = await db.requestPublicShare.findFirst({ where: { token: requestToken, enabled: true, request: { kind: "optional_group", status: { in: [...PUBLIC_REQUEST_STATUSES] }, community: { type: "hoa", status: "active", publicShare: { token: communityToken }, memberships: { some: { userId, status: "active", unitId: { not: null }, unit: { occupancyStatus: "occupied" } } } } } }, select: { requestId: true } });
+  return share ? `/app/homeowner/community#request-${encodeURIComponent(share.requestId)}` : null;
 }
