@@ -10,9 +10,14 @@ The transaction creates an existing SupportTicket with category service_quality,
 
 Administrators use /app/admin/quality to open the support ticket and record a redo_pending or refund_pending intent. The active admin allowlist is rechecked under a transaction lock. These actions never close the ticket, create a redo visit, call Stripe, move funds or claim that a refund executed. Appending a response or resolution updates support activity/concurrency timestamps and records a timeline event atomically.
 
+## Private evidence
+
+After reporting, the resident may attach up to eight JPEG/PNG/WebP photos of at most 4 MiB each within the same 72-hour completion window, while the claim remains reported. The existing image normalizer strips metadata and rejects malformed/oversized files. Evidence uses the explicitly configured private visit-photo store (VISIT_PHOTO_BLOB_READ_WRITE_TOKEN or VISIT_PHOTO_BLOB_STORE_ID), never a fallback public store. A separate ServiceQualityPhoto table prevents public MediaAsset/marketing routes from exposing claim photos.
+
+Only the original reporting resident with current access, assigned active provider, or verified nonstaff active administrator can read. Managers and other residents are denied. Uploads recheck access and the eight-photo cap under a claim lock after network transport; failed attachments delete only their own generated object. Download access is rechecked after private Blob transport and all responses, including denials, use private/no-store and nosniff headers.
+
 ## Unfinished acceptance gates
 
-- Resident claim photo upload through the private media pipeline.
 - Binding to #43's actual payment and frozen payer; completed/paid eligibility and provider transfer hold/reversal.
 - Durable no-charge redo scheduling and Stripe full/partial refund execution/reconciliation.
 - Claim-rate metrics and provider threshold flags.
@@ -23,6 +28,6 @@ No shared database migration, external delivery or production deployment is perf
 
 ## Validation
 
-Run npm run typecheck, npx vitest run tests/service-quality.test.ts tests/service-quality-ui.test.tsx and direct npx next build (npm run build runs migrations).
+Run npm run typecheck, npx vitest run tests/service-quality.test.ts tests/service-quality-ui.test.tsx tests/service-quality-photos.test.ts and direct npx next build (npm run build runs migrations).
 
-For PostgreSQL, create a disposable owned loopback database named quality_test with role quality_test and pass TEST_DATABASE_URL explicitly. Apply all repository migrations to that empty database, then run npx vitest run --config tests/postgres/service-quality.config.mts. It validates real workflow-created completed visits, concurrent claim retries, ticket/notification atomicity, provider replies, pending-only resolution and removed/re-added membership. Tests never use application environment files or deliver email/Blob requests.
+For PostgreSQL, create a disposable owned loopback database named quality_test with role quality_test and pass TEST_DATABASE_URL explicitly. Apply all repository migrations to that empty database, then run npx vitest run --config tests/postgres/service-quality.config.mts. It validates real workflow-created completed visits, concurrent claim retries, ticket/notification atomicity, provider replies, pending-only resolution and removed/re-added membership and concurrent private photo limits. Tests never use application environment files or deliver email/Blob requests.

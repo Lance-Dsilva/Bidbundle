@@ -17,7 +17,7 @@ it("preserves the report text when the server rejects an expired window", async 
 });
 
 it("submits only the resident's report fields and shows the support follow-up", async () => {
-  const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "claim" }) }); vi.stubGlobal("fetch", fetch);
+  const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "claim", photos: [] }) }); vi.stubGlobal("fetch", fetch);
   render(<ServiceQualityReport visitId="visit-1" />);
   fireEvent.click(screen.getByRole("button", { name: "Report a problem" }));
   fireEvent.change(screen.getByLabelText("What went wrong?"), { target: { value: "The cleaning was incomplete." } });

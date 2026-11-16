@@ -2508,6 +2508,7 @@ model ServiceQualityClaim {
   requesterUserId String
   providerUserId String
   reason String
+  photos ServiceQualityPhoto[]
   resolution String @default("reported")
   resolutionNote String?
   resolutionRequestedBy String?
@@ -2516,4 +2517,18 @@ model ServiceQualityClaim {
   providerRespondedAt DateTime?
   createdAt DateTime @default(now())
   @@index([providerUserId, createdAt])
+}
+
+/// Private claim evidence, deliberately outside public marketing MediaAsset routes.
+model ServiceQualityPhoto {
+  id String @id @default(cuid())
+  claimId String
+  claim ServiceQualityClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  uploaderUserId String
+  storagePath String @unique
+  contentType String
+  byteSize Int
+  checksum String
+  createdAt DateTime @default(now())
+  @@index([claimId, createdAt])
 }

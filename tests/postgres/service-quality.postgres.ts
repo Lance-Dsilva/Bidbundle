@@ -1,3 +1,5 @@
+import sharp from "sharp";
+import { storeQualityPhoto, listQualityPhotos } from "@/lib/server/service-quality-photos";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
@@ -99,4 +101,19 @@ describe("service quality transactions on migrated PostgreSQL", () => {
     await expect(reportServiceQuality(f.residents[0].user.id,f.ownVisit.id,input)).rejects.toMatchObject({status:404});
     expect(await first.serviceQualityClaim.count({where:{visitId:f.ownVisit.id}})).toBe(0);
   });
+});
+
+it("stores private normalized evidence with a serialized eight-photo cap", async () => {
+ const f = await seed("landscaping");
+ await updateVisitStatus(f.provider.id, f.ownVisit.id, {status:"completed",completionNote:null});
+ const claim = await reportServiceQuality(f.residents[0].user.id,f.ownVisit.id,{reason:"incomplete",description:"The service was not completed."});
+ const bytes = await sharp({create:{width:12,height:12,channels:3,background:{r:0,g:100,b:100}}}).png().toBuffer();
+ const results = await Promise.allSettled(Array.from({length:9},()=>storeQualityPhoto(f.residents[0].user.id,claim.id,new Blob([new Uint8Array(bytes)],{type:"image/png"}))));
+ expect(results.filter(r=>r.status==="fulfilled")).toHaveLength(8);
+ expect(await first.serviceQualityPhoto.count({where:{claimId:claim.id}})).toBe(8);
+ const stored = await first.serviceQualityPhoto.findFirstOrThrow({where:{claimId:claim.id}});
+ expect(stored.storagePath).toMatch(/^quality-photos\//);
+ expect((await listQualityPhotos(f.provider.id,claim.id))[0]).not.toHaveProperty("storagePath");
+ await expect(listQualityPhotos(f.residents[1].user.id,claim.id)).rejects.toMatchObject({status:404});
+ await expect(listQualityPhotos(f.manager.id,claim.id)).rejects.toMatchObject({status:404});
 });

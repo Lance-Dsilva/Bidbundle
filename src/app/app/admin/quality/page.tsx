@@ -1,3 +1,4 @@
+import { QualityEvidence } from "@/components/hoa/QualityEvidence";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/server/auth";
 import { QualityResolutionForm } from "@/components/hoa/QualityResolutionForm";
@@ -13,6 +14,7 @@ export default async function QualityPage() {
     <a className="underline" href={`/app/admin/support/${claim.ticketId}`}>Open support ticket</a>
     {claim.providerResponse && <p>Provider response: {claim.providerResponse}</p>}
     {claim.resolution === "reported" && <QualityResolutionForm claimId={claim.id} />}
+    <QualityEvidence claimId={claim.id} />
     </section>)}
   </div>;
 }

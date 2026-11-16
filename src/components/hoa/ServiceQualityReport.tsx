@@ -1,11 +1,12 @@
 "use client";
+import { QualityEvidence } from "./QualityEvidence";
 import { useRef, useState } from "react";
 
 export function ServiceQualityReport({ visitId }: { visitId: string }) {
-  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false);
+  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false);
-  if (saved) return <p role="status" className="mt-3 text-sm">Your report is saved. Follow up in <a href="/app/support" className="underline">Support</a>.</p>;
+  if (saved) return <div className="space-y-3"><p role="status" className="mt-3 text-sm">Your report is saved. Follow up in <a href="/app/support" className="underline">Support</a>.</p><QualityEvidence claimId={saved} canUpload /></div>;
   if (!open) return <button type="button" className="bb-btn bb-btn-secondary mt-3 min-h-11" onClick={() => setOpen(true)}>Report a problem</button>;
   return <form className="mt-4 space-y-3" onSubmit={async event => {
     event.preventDefault(); if (lock.current) return;
@@ -14,7 +15,7 @@ export function ServiceQualityReport({ visitId }: { visitId: string }) {
     try {
       const response = await fetch(`/api/hoa/visits/${encodeURIComponent(visitId)}/quality`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: data.get("reason"), description: data.get("description") }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Unable to save your report.");
-      setSaved(true);
+      setSaved(result.id);
     } catch (error) { setError(error instanceof Error ? error.message : "Unable to save your report."); }
     finally { lock.current = false; setBusy(false); }
   }}>
