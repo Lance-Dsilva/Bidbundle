@@ -140,7 +140,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                   request.status === "collecting_interest" &&
                   !request.participantsLockedAt;
                 return (
-                  <article className="rounded-xl border p-4" style={{ borderColor: "var(--line)" }} key={request.id}>
+                  <article id={`request-${request.id}`} className="scroll-mt-6 rounded-xl border p-4" style={{ borderColor: "var(--line)" }} key={request.id}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--teal-800)]">

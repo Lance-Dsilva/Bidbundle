@@ -4,6 +4,7 @@ import { PriceLadder } from "@/components/ui/PriceLadder";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 
+import { RequestShareControls } from "@/components/hoa/RequestShareControls";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { BidPrice, LegacyBidNotice } from "@/components/ui/BidPrice";
 import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
@@ -69,7 +70,7 @@ function dateLabel(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString() : "—";
 }
 
-export function HoaManagerWorkspace({ dashboard }: { dashboard: HoaManagerDashboard }) {
+export function HoaManagerWorkspace({ dashboard, sharingEnabled = false }: { dashboard: HoaManagerDashboard; sharingEnabled?: boolean }) {
   const community = dashboard.communities[0];
 
   if (!community) {
@@ -83,10 +84,10 @@ export function HoaManagerWorkspace({ dashboard }: { dashboard: HoaManagerDashbo
     );
   }
 
-  return <CommunityWorkspace community={community} />;
+  return <CommunityWorkspace community={community} sharingEnabled={sharingEnabled} />;
 }
 
-function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
+function CommunityWorkspace({ community, sharingEnabled }: { community: HoaManagerCommunity; sharingEnabled: boolean }) {
   const router = useRouter();
   const [invite, setInvite] = useState(IDLE);
   const [unitState, setUnitState] = useState(IDLE);
@@ -533,6 +534,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
             community.requests.map((item) => (
               <RequestCard
                 key={item.id}
+                sharingEnabled={sharingEnabled}
                 request={item}
                 bids={community.bidsByRequest[item.id] ?? []}
                 busy={requestState.busy || awardState.busy}
@@ -702,12 +704,14 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
 }
 
 function RequestCard({
+  sharingEnabled,
   request,
   bids,
   busy,
   onTransition,
   onAward,
 }: {
+  sharingEnabled: boolean;
   request: HoaRequestSummary;
   bids: BidSummary[];
   busy: boolean;
@@ -773,6 +777,7 @@ function RequestCard({
         ) : null}
       </div>
 
+      {sharingEnabled && request.kind === "optional_group" && request.status !== "draft" && <RequestShareControls requestId={request.id} />}
       {request.poolTemplate ? <PoolBidComparison template={request.poolTemplate} bids={bids} tierCounts={request.tierCounts} managerView busy={busy} canAward={["open_for_bids", "bidding_closed"].includes(request.status) && !accepted} onAward={(bid) => void onAward(request.id, bid.id)} /> : null}
       {!request.poolTemplate && bids.length > 0 ? (
         <div className="mt-4 rounded-xl bg-[#f6faf9] p-3">
