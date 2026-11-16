@@ -18,3 +18,5 @@ it("highlights the newly unlocked price and states the cap", () => {
   expect(screen.getAllByRole("listitem")[1].getAttribute("aria-current")).toBe("step");
   expect(screen.getByText(/never exceed/)).toBeTruthy();
 });
+
+it("does not advertise an already protected discount as still locked after withdrawals",()=>{render(<PriceLadder tiers={tiers} joinedHomes={2} guaranteedPerHomeCents={10000}/>);expect(screen.getByRole("status").textContent).toBe("Lowest group price unlocked");expect(screen.getAllByRole("listitem")[1].getAttribute("aria-current")).toBe("step");});

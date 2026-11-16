@@ -2,7 +2,7 @@
 
 import { PriceLadder } from "@/components/ui/PriceLadder";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BidPrice } from "@/components/ui/BidPrice";
 import { VerifiedProviderBadge } from "@/components/ui/VerifiedProviderBadge";
@@ -48,6 +48,13 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
   const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef(false);
   const [visibleVisits, setVisibleVisits] = useState<Record<string, number>>({});
+
+  const hasLiveLadder = hub.communities.some(community => community.requests.some(request => request.status === "collecting_interest" && (request.priceLadder || request.priceLadderPending)));
+  useEffect(() => {
+    if (!hasLiveLadder) return;
+    const timer = window.setInterval(() => { if (!document.hidden && !inFlight.current) router.refresh(); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [hasLiveLadder, router]);
 
   if (hub.communities.length === 0) return null;
 

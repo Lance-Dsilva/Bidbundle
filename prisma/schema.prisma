@@ -815,6 +815,7 @@ model HoaServiceRequest {
   participantsLockedAt DateTime?
   awardedAt            DateTime?
 
+  requiresPriceCommitment Boolean @default(false)
   priceCommitment PriceLadderCommitment?
   participations HoaRequestParticipation[]
   bids           ServiceBid[]

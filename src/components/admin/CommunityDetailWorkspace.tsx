@@ -171,7 +171,7 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
       )}
 
       {community.type === "hoa" && <ProviderPolicyEditor key={community.id} communityId={community.id} />}
-      {community.type === "hoa" ? <PriceLadderPilotPanel communityId={community.id} /> : null}
+      <PriceLadderPilotPanel communityId={community.id} />
       {community.type === "hoa" && <ProviderBidInvitationPanel key={`bids-${community.id}`} communityId={community.id} />}
 
       <CategoryVisitProofPolicyPanel />

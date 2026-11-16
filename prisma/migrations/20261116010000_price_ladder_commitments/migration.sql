@@ -1,3 +1,4 @@
+ALTER TABLE "HoaServiceRequest" ADD COLUMN "requiresPriceCommitment" BOOLEAN NOT NULL DEFAULT false;
 CREATE TABLE "PriceLadderCommitment" (
  "id" TEXT PRIMARY KEY, "requestId" TEXT NOT NULL UNIQUE REFERENCES "HoaServiceRequest"("id") ON DELETE RESTRICT,
  "providerUserId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE RESTRICT,
@@ -22,7 +23,7 @@ BEGIN
  IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'Provider commitments cannot be deleted'; END IF;
  SELECT * INTO r FROM "HoaServiceRequest" WHERE "id"=NEW."requestId" FOR UPDATE;
  IF TG_OP='UPDATE' THEN
-  IF (to_jsonb(NEW)-ARRAY['guaranteedPerHomeCents','acceptedAt']) IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['guaranteedPerHomeCents','acceptedAt']) OR (OLD."acceptedAt" IS NOT NULL AND NEW."acceptedAt" IS DISTINCT FROM OLD."acceptedAt") OR NEW."guaranteedPerHomeCents">OLD."guaranteedPerHomeCents" THEN
+  IF (to_jsonb(NEW)-ARRAY['guaranteedPerHomeCents','acceptedAt']) IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['guaranteedPerHomeCents','acceptedAt']) OR (OLD."acceptedAt" IS NOT NULL AND NEW."acceptedAt" IS DISTINCT FROM OLD."acceptedAt") OR (OLD."acceptedAt" IS NOT NULL AND NEW."guaranteedPerHomeCents">OLD."guaranteedPerHomeCents") THEN
    RAISE EXCEPTION 'Provider commitment terms are immutable';
   END IF;
   RETURN NEW;
@@ -49,10 +50,16 @@ END $$;
 CREATE CONSTRAINT TRIGGER "ServiceBidPriceTier_validate" AFTER INSERT OR UPDATE OR DELETE ON "ServiceBidPriceTier" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION bundleen_ladder_tiers_guard();
 
 CREATE FUNCTION bundleen_ladder_tier_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE c "PriceLadderCommitment"%ROWTYPE;
 BEGIN
- IF TG_OP='DELETE' OR (TG_OP='UPDATE' AND (to_jsonb(NEW)-'bidId') IS DISTINCT FROM (to_jsonb(OLD)-'bidId')) THEN RAISE EXCEPTION 'Committed tiers are immutable'; END IF;
- IF TG_OP='INSERT' AND NOT EXISTS(SELECT 1 FROM "PriceLadderCommitment" WHERE "id"=NEW."commitmentId" AND xmin::text=txid_current()::text) THEN RAISE EXCEPTION 'Committed tiers cannot be added later'; END IF;
- IF TG_OP='INSERT' AND EXISTS(SELECT 1 FROM "HoaRequestParticipation" p JOIN "PriceLadderCommitment" c ON c."requestId"=p."requestId" WHERE c."id"=NEW."commitmentId") THEN RAISE EXCEPTION 'Enrollment has started'; END IF;
+ SELECT * INTO c FROM "PriceLadderCommitment" WHERE "id"=COALESCE(NEW."commitmentId",OLD."commitmentId") FOR UPDATE;
+ IF c."acceptedAt" IS NOT NULL THEN
+  IF TG_OP<>'UPDATE' OR (to_jsonb(NEW)-'bidId') IS DISTINCT FROM (to_jsonb(OLD)-'bidId') OR OLD."bidId" IS NOT NULL THEN RAISE EXCEPTION 'Accepted price tiers are immutable'; END IF;
+  IF NEW."bidId" IS DISTINCT FROM 'ladder:'||c."id" THEN RAISE EXCEPTION 'Only the committed bid may own price tiers'; END IF;
+ ELSE
+  IF EXISTS(SELECT 1 FROM "HoaRequestParticipation" WHERE "requestId"=c."requestId" AND "response"='joined') THEN RAISE EXCEPTION 'Enrollment has started'; END IF;
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER "ServiceBidPriceTier_immutable" BEFORE INSERT OR UPDATE OR DELETE ON "ServiceBidPriceTier" FOR EACH ROW EXECUTE FUNCTION bundleen_ladder_tier_immutable();
@@ -62,7 +69,10 @@ CREATE FUNCTION bundleen_ladder_join_cap() RETURNS trigger LANGUAGE plpgsql AS $
 DECLARE c "PriceLadderCommitment"%ROWTYPE; homes INTEGER; price INTEGER;
 BEGIN
  SELECT * INTO c FROM "PriceLadderCommitment" WHERE "requestId"=NEW."requestId" FOR UPDATE;
- IF NOT FOUND THEN RETURN NEW; END IF;
+ IF NOT FOUND THEN
+  IF NEW."response"='joined' AND EXISTS(SELECT 1 FROM "HoaServiceRequest" WHERE "id"=NEW."requestId" AND "requiresPriceCommitment") THEN RAISE EXCEPTION 'Provider acceptance required before enrollment'; END IF;
+  RETURN NEW;
+ END IF;
  IF TG_OP='UPDATE' AND OLD."maximumPriceCents" IS NOT NULL THEN NEW."maximumPriceCents":=OLD."maximumPriceCents"; END IF;
  IF NEW."response"='joined' THEN
   IF c."acceptedAt" IS NULL THEN RAISE EXCEPTION 'Provider must accept the price commitment before enrollment'; END IF;
@@ -210,8 +220,8 @@ $$;
 CREATE FUNCTION bundleen_ladder_request_terms() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF EXISTS(SELECT 1 FROM "PriceLadderCommitment" WHERE "requestId"=OLD."id") AND
- ROW(NEW."title",NEW."description",NEW."category",NEW."kind",NEW."recurrenceLabel",NEW."recurrenceIntervalDays",NEW."totalOccurrences",NEW."startDate",NEW."enrollmentClosesAt",NEW."minHomes",NEW."maxHomes",NEW."poolTemplate",NEW."requiresAfterPhoto") IS DISTINCT FROM
- ROW(OLD."title",OLD."description",OLD."category",OLD."kind",OLD."recurrenceLabel",OLD."recurrenceIntervalDays",OLD."totalOccurrences",OLD."startDate",OLD."enrollmentClosesAt",OLD."minHomes",OLD."maxHomes",OLD."poolTemplate",OLD."requiresAfterPhoto") THEN
+ ROW(NEW."requiresPriceCommitment",NEW."title",NEW."description",NEW."category",NEW."kind",NEW."recurrenceLabel",NEW."recurrenceIntervalDays",NEW."totalOccurrences",NEW."startDate",NEW."enrollmentClosesAt",NEW."minHomes",NEW."maxHomes",NEW."poolTemplate",NEW."requiresAfterPhoto") IS DISTINCT FROM
+ ROW(OLD."requiresPriceCommitment",OLD."title",OLD."description",OLD."category",OLD."kind",OLD."recurrenceLabel",OLD."recurrenceIntervalDays",OLD."totalOccurrences",OLD."startDate",OLD."enrollmentClosesAt",OLD."minHomes",OLD."maxHomes",OLD."poolTemplate",OLD."requiresAfterPhoto") THEN
  RAISE EXCEPTION 'Service terms under a provider price commitment are immutable';
  END IF;
  RETURN NEW;
