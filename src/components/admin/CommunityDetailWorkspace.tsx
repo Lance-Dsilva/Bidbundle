@@ -36,6 +36,7 @@ import { HoaOnboardingPanel } from "@/components/admin/HoaOnboardingPanel";
 import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
 import { PriceLadderPilotPanel } from "@/components/admin/PriceLadderPilotPanel";
 import { ProviderBidInvitationPanel } from "@/components/admin/ProviderBidInvitationPanel";
+import { HoaRevenueSharePanel } from "@/components/hoa/HoaRevenueSharePanel";
 import { CategoryVisitProofPolicyPanel } from "@/components/admin/CategoryVisitProofPolicyPanel";
 
 /** Thrown when an admin declines a confirmation dialog. Not an error. */
@@ -54,7 +55,7 @@ class Cancelled extends Error {}
  * anyone else is refused by `assertCanAssignStaffRole` regardless of what this
  * component allowed.
  */
-export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: CommunityDetail }) {
+export function CommunityDetailWorkspace({ initialDetail, revenueShareEnabled = false }: { initialDetail: CommunityDetail; revenueShareEnabled?: boolean }) {
   const [detail, setDetail] = useState(initialDetail);
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -172,6 +173,7 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
 
       {community.type === "hoa" && <ProviderPolicyEditor key={community.id} communityId={community.id} />}
       <PriceLadderPilotPanel communityId={community.id} />
+      {revenueShareEnabled && community.type === "hoa" && <HoaRevenueSharePanel communityId={community.id} admin />}
       {community.type === "hoa" && <ProviderBidInvitationPanel key={`bids-${community.id}`} communityId={community.id} />}
 
       <CategoryVisitProofPolicyPanel />

@@ -1,4 +1,5 @@
 "use client";
+import { HoaRevenueSharePanel } from "@/components/hoa/HoaRevenueSharePanel";
 
 import { PriceLadder } from "@/components/ui/PriceLadder";
 import { useRouter } from "next/navigation";
@@ -69,7 +70,7 @@ function dateLabel(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString() : "—";
 }
 
-export function HoaManagerWorkspace({ dashboard }: { dashboard: HoaManagerDashboard }) {
+export function HoaManagerWorkspace({ dashboard, revenueShareEnabled = false }: { dashboard: HoaManagerDashboard; revenueShareEnabled?: boolean }) {
   const community = dashboard.communities[0];
 
   if (!community) {
@@ -83,10 +84,10 @@ export function HoaManagerWorkspace({ dashboard }: { dashboard: HoaManagerDashbo
     );
   }
 
-  return <CommunityWorkspace community={community} />;
+  return <CommunityWorkspace community={community} revenueShareEnabled={revenueShareEnabled} />;
 }
 
-function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
+function CommunityWorkspace({ community, revenueShareEnabled }: { community: HoaManagerCommunity; revenueShareEnabled: boolean }) {
   const router = useRouter();
   const [invite, setInvite] = useState(IDLE);
   const [unitState, setUnitState] = useState(IDLE);
@@ -316,6 +317,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
         <Stat label="Awaiting award" value={bidsAwaiting} />
       </div>
 
+      {revenueShareEnabled && <HoaRevenueSharePanel communityId={community.id} />}
       <ProviderPolicyEditor key={community.id} communityId={community.id} onSaved={() => router.refresh()} />
 
       {/* ── Units & residents ─────────────────────────────────────────── */}
