@@ -8,3 +8,4 @@ it("does not queue disabled, incomplete, neighborhood or HOA-paid services", () 
   expect(buildStripeTestChargeIntent(visit, undefined)).toBeNull();
   for (const change of [{ status: "in_progress" }, { communityType: "neighborhood" }, { requestKind: "compulsory_recurring" }]) expect(buildStripeTestChargeIntent({ ...visit, ...change }, "1")).toBeNull();
 });
+it("never queues the finite per-visit payment path for a recurring subscription",()=>{expect(buildStripeTestChargeIntent({...visit,recurringSubscriptionId:"recurring-subscription"},"1")).toBeNull();});

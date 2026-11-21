@@ -1,0 +1,13 @@
+import {beforeEach,expect,it,vi} from 'vitest';
+const m=vi.hoisted(()=>({auth:vi.fn(),receipt:vi.fn()}));
+vi.mock('@/lib/server/auth',()=>({authorizeRequest:m.auth}));
+vi.mock('@/lib/server/recurring-payments',()=>({getRecurringReceipt:m.receipt}));
+vi.mock('@/lib/server/hoa',()=>({HoaWorkflowError:class extends Error{constructor(message:string,public status:number){super(message);}}}));
+vi.mock('@/lib/server/hoa-api',()=>({hoaErrorResponse:(_:string,e:{message:string;status:number})=>Response.json({error:e.message},{status:e.status})}));
+import {recurringReceipt} from '@/lib/server/recurring-receipt-api';
+const req=new Request('https://example.invalid');const ctx={params:Promise.resolve({chargeId:'charge'})};
+beforeEach(()=>{vi.resetAllMocks();m.auth.mockResolvedValue({ok:true,user:{id:'payer'}});});
+it('requires authentication before fetching a receipt',async()=>{m.auth.mockResolvedValue({ok:false,response:new Response('Denied',{status:401})});expect((await recurringReceipt(req,ctx)).status).toBe(401);expect(m.receipt).not.toHaveBeenCalled();});
+it('redirects only the authorized receipt without cache or referrer leakage',async()=>{m.receipt.mockResolvedValue('https://pay.stripe.com/receipts/example');const r=await recurringReceipt(req,ctx);expect(m.receipt).toHaveBeenCalledWith('payer','charge');expect(r.status).toBe(302);expect(r.headers.get('Location')).toBe('https://pay.stripe.com/receipts/example');expect(r.headers.get('Cache-Control')).toBe('private, no-store');expect(r.headers.get('Referrer-Policy')).toBe('no-referrer');});
+it.each(['https://evil.example/receipts/x','https://pay.stripe.com.evil.example/receipts/x','http://pay.stripe.com/receipts/x','https://user@pay.stripe.com/receipts/x','https://pay.stripe.com:8443/receipts/x','https://pay.stripe.com/other'])('rejects unsafe receipt redirect %s',async url=>{m.receipt.mockResolvedValue(url);const r=await recurringReceipt(req,ctx);expect(r.status).toBe(409);expect(r.headers.get('Location')).toBeNull();});
+it('does not expose unexpected processor errors',async()=>{m.receipt.mockRejectedValue(new Error('private processor data'));const r=await recurringReceipt(req,ctx);expect(r.status).toBe(503);expect(await r.text()).not.toContain('private processor');});

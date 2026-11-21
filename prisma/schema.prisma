@@ -1033,6 +1033,10 @@ model ServiceAgreement {
 
 /// One recurring cycle (or the single date of a one-off service).
 model ServiceOccurrence {
+  recurringRedoOfVisitId String? @unique
+  recurringPlanId String?
+  recurringLocalDate String?
+  @@unique([recurringPlanId, recurringLocalDate])
   id          String           @id @default(cuid())
   agreementId String
   agreement   ServiceAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
@@ -1093,6 +1097,8 @@ model VisitBillingConsent {
 }
 
 model ServiceVisit {
+  recurringSubscriptionId String?
+  recurringMonth String?
   redoOfVisitId String? @unique
   testPayment StripeTestPayment?
   id           String            @id @default(cuid())
@@ -1145,7 +1151,9 @@ model ServiceVisit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([occurrenceId, unitId])
+  // Legacy and active-recurring uniqueness are separate partial SQL indexes.
+  @@index([occurrenceId, unitId])
+  @@unique([occurrenceId, unitId, recurringSubscriptionId])
   @@unique([occurrenceId, homeownerUserId])
   @@index([unitId, status])
   @@index([homeownerUserId, status])
@@ -2737,6 +2745,7 @@ model StripeTestFinancialObservation {
 model ServiceQualityClaim {
   financialPayerUserId String?
   refundOperationId String? @unique
+  recurringRefundOperationId String? @unique
   redoVisitId String? @unique
   resolvedAt DateTime?
   id String @id @default(cuid())
@@ -2775,7 +2784,8 @@ model ServiceQualityPhoto {
 model HoaShareEntry {
   id String @id @default(cuid())
   communityId String
-  paymentVisitId String
+  paymentVisitId String?
+  recurringChargeId String?
   sequence Int
   kind String
   amountCents Int
@@ -2783,6 +2793,7 @@ model HoaShareEntry {
   refundedCents Int
   createdAt DateTime @default(now())
   @@unique([paymentVisitId, sequence])
+  @@unique([recurringChargeId, sequence])
   @@index([communityId, createdAt])
 }
 model HoaShareStatement {
@@ -2820,4 +2831,210 @@ model HoaShareJobCursor {
   id String @id
   lastCommunityId String?
   updatedAt DateTime @updatedAt
+}
+
+/// Explicit new open-ended contract, never inferred from finite billing consent.
+model RecurringPlan {
+  id String @id
+  agreementId String @unique
+  requestId String
+  communityId String
+  providerUserId String
+  createdByUserId String
+  scope String
+  monthlyPriceCents Int
+  currency String @default("usd")
+  billingMode String
+  timezone String
+  anchorDate String
+  cadenceDays Int
+  requiresAfterPhoto Boolean
+  termsVersion String
+  termsToken String
+  status String @default("proposed")
+  acceptedAt DateTime?
+  endRequestedAt DateTime?
+  endEffectiveDate String?
+  endedAt DateTime?
+  lastGeneratedMonth String?
+  lastReminderYear Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, updatedAt])
+}
+model RecurringSubscription {
+  id String @id
+  planId String
+  payerUserId String
+  unitId String
+  membershipId String
+  startDate String
+  monthlyCapCents Int
+  currency String
+  termsVersion String
+  termsToken String
+  acceptedAt DateTime @default(now())
+  receiptEmail String
+  customerId String?
+  paymentMethodId String?
+  setupIntentId String? @unique
+  cardVerifiedAt DateTime?
+  status String @default("pending")
+  stopKind String?
+  stopRequestedAt DateTime?
+  stopEffectiveDate String?
+  stoppedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([planId, status])
+  @@index([payerUserId, status])
+}
+model RecurringMonthlyBill {
+  id String @id
+  planId String
+  subscriptionId String
+  unitId String
+  payerUserId String
+  month String
+  timezone String
+  currency String
+  amountCents Int
+  sealedAt DateTime @default(now())
+  @@unique([planId, subscriptionId, unitId, month])
+}
+model RecurringBillLine {
+  id String @id
+  billId String
+  visitId String @unique
+  allocatedCents Int
+  amountCents Int
+  statusAtSeal String
+  completedAt DateTime?
+  @@index([billId])
+}
+
+// Separate recurring money identity; never aliases a finite visit payment.
+model RecurringCharge {
+  id String @id @default(cuid())
+  monthlyBillId String? @unique
+  sourceVisitId String? @unique
+  planId String
+  subscriptionId String
+  agreementId String
+  communityId String
+  payerUserId String
+  providerUserId String
+  unitId String
+  localMonth String
+  customerId String
+  paymentMethodId String
+  receiptEmail String
+  providerAccountId String
+  termsToken String
+  currency String @default("usd")
+  amountCents Int
+  platformFeeCents Int
+  providerAmountCents Int
+  hoaShareCents Int
+  feeBps Int
+  hoaBps Int
+  status String @default("pending")
+  failureCode String?
+  reconciliationHoldReason String?
+  stripePaymentIntentId String? @unique
+  stripeChargeId String? @unique
+  createAttemptedAt DateTime?
+  confirmAttemptedAt DateTime?
+  lastRecoveryAttemptId String?
+  stripeTransferId String? @unique
+  transferAttemptedAt DateTime?
+  transferAmountCents Int?
+  transferBaseProviderDebitCents Int?
+  refundedCents Int @default(0)
+  providerReversedCents Int @default(0)
+  observedRefundedCents Int @default(0)
+  observedReversedCents Int @default(0)
+  paidAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([planId, createdAt])
+  @@index([status, updatedAt])
+}
+model RecurringChargeLine {
+  id String @id @default(cuid())
+  chargeId String
+  visitId String @unique
+  localDate String
+  grossCents Int
+  feeCents Int
+  providerCents Int
+  hoaCents Int
+  refundedCents Int @default(0)
+  createdAt DateTime @default(now())
+  @@index([chargeId])
+}
+model RecurringChargeRecovery {
+  id String @id @default(cuid())
+  chargeId String
+  sequence Int
+  payerUserId String
+  paymentMethodId String
+  setupIntentId String @unique
+  termsToken String
+  termsVersion String @default("recurring-recovery-exact-v1")
+  acceptedAt DateTime @default(now())
+  @@unique([chargeId, sequence])
+}
+model RecurringChargeRefund {
+  id String @id @default(cuid())
+  chargeId String
+  lineId String
+  actorUserId String
+  reason String
+  amountCents Int
+  previousLineRefundCents Int
+  providerDebitCents Int
+  hoaDebitCents Int
+  providerReversalCents Int
+  status String @default("pending")
+  stripeRefundId String? @unique
+  stripeReversalId String? @unique
+  refundAttemptedAt DateTime?
+  reversalAttemptedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([chargeId, status])
+}
+model RecurringRecoverySetup {
+  id String @id @default(cuid())
+  chargeId String
+  sequence Int
+  payerUserId String
+  customerId String
+  termsToken String
+  attemptedAt DateTime @default(now())
+  setupIntentId String? @unique
+  @@unique([chargeId, sequence])
+}
+model RecurringFinancialCursor {
+  id String @id
+  lastKey String?
+  updatedAt DateTime @updatedAt
+}
+model RecurringFinancialObservation {
+  id String @id @default(cuid())
+  eventId String @unique
+  chargeId String
+  eventType String
+  objectId String
+  processorChargeId String?
+  processorTransferId String?
+  refundedCents Int
+  reversedCents Int
+  disputed Boolean
+  disputeId String?
+  disputeStatus String?
+  holdReason String?
+  observedAt DateTime @default(now())
+  @@index([chargeId, observedAt])
 }

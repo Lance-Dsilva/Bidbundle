@@ -6,6 +6,7 @@ import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { VisitPhotoPanel } from "@/components/hoa/VisitPhotoPanel";
+import { reconcileServiceDayOrder } from "@/lib/service-day-order";
 import { apiFetch } from "@/lib/api";
 import type { AgreementSummary, OccurrenceSummary, VisitSummary } from "@/lib/hoa-types";
 import { useProviderMarketplace } from "@/hooks/useProviderMarketplace";
@@ -227,12 +228,12 @@ function OccurrenceBlock({
 
   const ordered = useMemo(() => {
     const byId = new Map(occurrence.visits.map((visit) => [visit.id, visit]));
-    return order.map((id) => byId.get(id)).filter((visit): visit is VisitSummary => Boolean(visit));
+    return reconcileServiceDayOrder(order, occurrence.visits).map((id) => byId.get(id)).filter((visit): visit is VisitSummary => Boolean(visit));
   }, [occurrence.visits, order]);
 
   const move = (index: number, delta: number) => {
     setOrder((current) => {
-      const next = [...current];
+      const next = reconcileServiceDayOrder(current, occurrence.visits);
       const target = index + delta;
       if (target < 0 || target >= next.length) return current;
       [next[index], next[target]] = [next[target], next[index]];

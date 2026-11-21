@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { HomeownerShell } from "@/components/layout/HomeownerShell";
@@ -21,6 +22,7 @@ export default async function HomeownerLayout({
 
   return (
     <HomeownerShell userName={user.name ?? ""} unreadMessages={unreadMessages}>
+      {process.env.RECURRING_PLANS === "1" && <div className="px-4 py-2"><Link className="underline" href="/app/recurring-plans">Recurring services</Link></div>}
       {children}
     </HomeownerShell>
   );

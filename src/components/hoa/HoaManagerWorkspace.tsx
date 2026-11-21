@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { RecurringPlanProposal } from "@/components/recurring-plans/RecurringPlanProposal";
 import { HoaRevenueSharePanel } from "@/components/hoa/HoaRevenueSharePanel";
 
 import { PriceLadder } from "@/components/ui/PriceLadder";
@@ -70,7 +72,7 @@ function dateLabel(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString() : "—";
 }
 
-export function HoaManagerWorkspace({ dashboard, revenueShareEnabled = false }: { dashboard: HoaManagerDashboard; revenueShareEnabled?: boolean }) {
+export function HoaManagerWorkspace({ dashboard, revenueShareEnabled = false, recurringPlansEnabled = false }: { dashboard: HoaManagerDashboard; revenueShareEnabled?: boolean; recurringPlansEnabled?: boolean }) {
   const community = dashboard.communities[0];
 
   if (!community) {
@@ -84,10 +86,10 @@ export function HoaManagerWorkspace({ dashboard, revenueShareEnabled = false }: 
     );
   }
 
-  return <CommunityWorkspace community={community} revenueShareEnabled={revenueShareEnabled} />;
+  return <CommunityWorkspace community={community} revenueShareEnabled={revenueShareEnabled} recurringPlansEnabled={recurringPlansEnabled} />;
 }
 
-function CommunityWorkspace({ community, revenueShareEnabled }: { community: HoaManagerCommunity; revenueShareEnabled: boolean }) {
+function CommunityWorkspace({ community, revenueShareEnabled, recurringPlansEnabled }: { community: HoaManagerCommunity; revenueShareEnabled: boolean; recurringPlansEnabled: boolean }) {
   const router = useRouter();
   const [invite, setInvite] = useState(IDLE);
   const [unitState, setUnitState] = useState(IDLE);
@@ -317,6 +319,7 @@ function CommunityWorkspace({ community, revenueShareEnabled }: { community: Hoa
         <Stat label="Awaiting award" value={bidsAwaiting} />
       </div>
 
+      {recurringPlansEnabled && <Link className="bb-btn bb-btn-secondary" href="/app/recurring-plans">Manage recurring services</Link>}
       {revenueShareEnabled && <HoaRevenueSharePanel communityId={community.id} />}
       <ProviderPolicyEditor key={community.id} communityId={community.id} onSaved={() => router.refresh()} />
 
@@ -573,6 +576,7 @@ function CommunityWorkspace({ community, revenueShareEnabled }: { community: Hoa
                   </div>
                   <Badge tone={agreement.status === "active" ? "green" : "gray"}>{agreement.status}</Badge>
                 </div>
+                {recurringPlansEnabled && agreement.status !== "cancelled" && community.requests.find(r => r.id === agreement.requestId)?.kind === "optional_group" && <RecurringPlanProposal agreementId={agreement.id} />}
                 <OccurrenceList
                   occurrences={community.occurrencesByAgreement[agreement.id] ?? []}
                   canClose

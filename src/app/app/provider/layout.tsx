@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ProviderShell } from "@/components/layout/ProviderShell";
@@ -16,6 +17,7 @@ export default async function ProviderLayout({
 
   return (
     <ProviderShell userName={user.name ?? ""} identity={identity}>
+      {process.env.RECURRING_PLANS === "1" && <div className="px-4 py-2"><Link className="underline" href="/app/recurring-plans">Recurring services</Link></div>}
       {children}
     </ProviderShell>
   );

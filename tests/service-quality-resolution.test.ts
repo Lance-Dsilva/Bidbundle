@@ -1,14 +1,14 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
- claim: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() }, payment: vi.fn(), refund: vi.fn(), visit: vi.fn(), createVisit: vi.fn(),
+ recurringLine:vi.fn(), claim: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() }, payment: vi.fn(), refund: vi.fn(), visit: vi.fn(), createVisit: vi.fn(),
  raw: vi.fn(), owner: vi.fn(), reserve: vi.fn(), process: vi.fn(), ticket: vi.fn(), message: vi.fn(), event: vi.fn(), notify: vi.fn(), occurrence: vi.fn(), max: vi.fn(),
 }));
-vi.mock("@/lib/server/db", () => { const tx = { $queryRaw: m.raw, serviceQualityClaim: m.claim, stripeTestPayment: { findUnique: m.payment }, stripeTestRefund: { findUnique: m.refund }, serviceVisit: { findUnique: m.visit, findUniqueOrThrow: m.visit, create: m.createVisit }, supportTicket: { update: m.ticket }, supportTicketMessage: { create: m.message }, supportTicketEvent: { create: m.event }, notification: { createMany: m.notify }, serviceOccurrence: { aggregate: m.max, create: m.occurrence } }; return { db: { ...tx, $transaction: (fn: (tx: unknown) => unknown) => fn(tx) } }; });
+vi.mock("@/lib/server/db", () => { const tx = { recurringChargeLine:{findUnique:m.recurringLine}, $queryRaw: m.raw, serviceQualityClaim: m.claim, stripeTestPayment: { findUnique: m.payment }, stripeTestRefund: { findUnique: m.refund }, serviceVisit: { findUnique: m.visit, findUniqueOrThrow: m.visit, create: m.createVisit }, supportTicket: { update: m.ticket }, supportTicketMessage: { create: m.message }, supportTicketEvent: { create: m.event }, notification: { createMany: m.notify }, serviceOccurrence: { aggregate: m.max, create: m.occurrence } }; return { db: { ...tx, $transaction: (fn: (tx: unknown) => unknown) => fn(tx) } }; });
 vi.mock("@/lib/server/stripe-test-refunds", () => ({ requireStripeRefundOwner: m.owner, reserveStripeTestRefund: m.reserve, processStripeTestRefund: m.process }));
 import { executeQualityRefund, reconcileQualityResolution, scheduleQualityRedo } from "@/lib/server/service-quality-resolution";
 const claim = { id: "claim", visitId: "visit", ticketId: "ticket", requesterUserId: "reporter", providerUserId: "provider", financialPayerUserId: "original", resolution: "refund_pending", refundOperationId: null, redoVisitId: null, resolvedAt: null };
 const input = { operationId: "op", amountCents: 400, note: "Agreed partial compensation" };
-beforeEach(() => { vi.resetAllMocks(); m.claim.findUnique.mockResolvedValue({ visitId: "visit" }); m.claim.findUniqueOrThrow.mockResolvedValue({ ...claim }); m.payment.mockResolvedValue({ residentUserId: "original", currency: "usd" }); m.reserve.mockResolvedValue({ id: "op" }); });
+beforeEach(() => { vi.resetAllMocks(); m.recurringLine.mockResolvedValue(null); m.claim.findUnique.mockResolvedValue({ visitId: "visit" }); m.claim.findUniqueOrThrow.mockResolvedValue({ ...claim }); m.payment.mockResolvedValue({ residentUserId: "original", currency: "usd" }); m.reserve.mockResolvedValue({ id: "op" }); });
 it("reserves the explicit amount and immutable original payer linkage atomically", async () => {
  await executeQualityRefund("owner", "claim", input);
  expect(m.owner).toHaveBeenCalled(); expect(m.reserve).toHaveBeenCalledWith(expect.anything(), "owner", "visit", { id: "op", amountCents: 400, reason: "service_quality" });
