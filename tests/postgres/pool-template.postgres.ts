@@ -1,3 +1,5 @@
+import sharp from "sharp";
+import { storeVisitPhoto } from "@/lib/server/visit-photos";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -21,11 +23,18 @@ vi.mock("@/lib/server/notifications", async (importActual) => ({
   ...await importActual<typeof import("@/lib/server/notifications")>(), scheduleOutboxDrain: external.drain,
 }));
 
-import { createHoaRequest, respondToOptionalRequest, transitionHoaRequest, submitBid, awardBid, listRequestBids, getResidentHoaHub } from "@/lib/server/hoa-market";
+import { updateVisitStatus, createHoaRequest, respondToOptionalRequest, transitionHoaRequest, submitBid, awardBid, listRequestBids, getResidentHoaHub } from "@/lib/server/hoa-market";
+import { acceptVisitBillingOffer, getVisitBillingOffer, saveVerifiedStripeTestCard } from "@/lib/server/visit-billing-consent";
+import { prepareStripeTestPayment } from "@/lib/server/stripe-test-payments";
 import { storeProviderCredential } from "@/lib/server/provider-credentials";
 import { updateProviderAdministration } from "@/lib/server/providers-admin";
 import { inviteProviderToBid, listProviderBidInvitations } from "@/lib/server/provider-bid-invitations";
 
+const financial = vi.hoisted(() => ({ charge: vi.fn(), refunds: vi.fn(), transfer: vi.fn(), reversals: vi.fn() }));
+vi.mock("stripe", () => ({ default: class {
+  charges = { retrieve: financial.charge }; refunds = { list: financial.refunds };
+  transfers = { retrieve: financial.transfer, listReversals: financial.reversals };
+} }));
 const context = new AsyncLocalStorage<PrismaClient>();
 let first: PrismaClient, second: PrismaClient;
 function deferred() { let resolve!: () => void; const promise = new Promise<void>((done) => { resolve = done; }); return { promise, resolve }; }
@@ -145,7 +154,9 @@ async function lockRow(table: "ProviderProfile" | "MediaAsset" | "AdminAccessGra
 }
 beforeAll(() => {
   const url = new URL(process.env.TEST_DATABASE_URL!);
-  if (url.hostname !== "127.0.0.1" || url.port !== "54371" || !/^\/bundleen_issue52_test_[a-z0-9]+$/.test(url.pathname)) throw new Error("Refusing non-owned issue52 target.");
+  const owned52 = url.port === "54371" && /^\/bundleen_issue52_test_[a-z0-9]+$/.test(url.pathname);
+  const owned43 = url.port === "53952" && /^\/bundleen_issue43_test_[a-z0-9]+$/.test(url.pathname) && /^bundleen_issue43_runner_[a-z0-9]+$/.test(url.username);
+  if (url.hostname !== "127.0.0.1" || (!owned52 && !owned43)) throw new Error("Refusing non-owned billing test target.");
   first = client("first"); second = client("second"); injection.current = () => context.getStore() ?? first;
 });
 beforeEach(() => { external.drain.mockClear(); external.after.mockClear(); });
@@ -395,7 +406,115 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     const dates=await first.serviceOccurrence.findMany({where:{agreementId:id},orderBy:{sequence:"asc"}});
     expect(dates.map(row=>row.serviceDate.toISOString().slice(0,10))).toEqual(["2028-01-31","2028-02-07","2028-02-14","2028-02-21","2028-02-29","2028-03-07","2028-03-15","2028-03-23","2028-03-31","2028-04-07","2028-04-15","2028-04-22"]);
     expect((await first.serviceAgreement.findUniqueOrThrow({where:{id}})).amountCents).toBe(120015);
-    expect(await first.serviceVisit.count({where:{occurrence:{agreementId:id}}})).toBe(36);
+    const visits = await first.serviceVisit.findMany({ where: { occurrence: { agreementId: id } } });
+    expect(visits).toHaveLength(36);
+    const totals = new Map<string, number>();
+    for (const visit of visits) {
+      expect(visit.allocatedVisitCents).not.toBeNull();
+      const unitId = visit.unitId!;
+      totals.set(unitId, (totals.get(unitId) ?? 0) + visit.allocatedVisitCents!);
+    }
+    expect([...totals.values()].sort((a, b) => a - b)).toEqual([30003, 30003, 60009]);
+    await expect(first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { allocatedVisitCents: 1 },
+    })).rejects.toThrow(/immutable/i);
+    const otherUnit = visits.find((visit) => visit.unitId !== visits[0].unitId)!;
+    await expect(first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { unitId: otherUnit.unitId },
+    })).rejects.toThrow(/immutable/i);
+    const otherRound = visits.find((visit) => visit.occurrenceId !== visits[0].occurrenceId)!;
+    await expect(first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { occurrenceId: otherRound.occurrenceId },
+    })).rejects.toThrow(/immutable/i);
+    const scheduled = await first.serviceVisit.update({
+      where: { id: visits[0].id },
+      data: { estimatedMinutes: 45 },
+    });
+    expect(scheduled.estimatedMinutes).toBe(45);
+    expect(scheduled.allocatedVisitCents).toBe(visits[0].allocatedVisitCents);
+  });
+
+  it("records only the awarded payer’s acceptance of their own exact prices", async () => {
+    const fixture = await seed();
+    await open(fixture);
+    const agreementId = await award(fixture, await submit(fixture));
+    const standardPayer = fixture.residents[0].user.id;
+    const largePayer = fixture.residents[1].user.id;
+    const offer = await run(first, () => getVisitBillingOffer(standardPayer, agreementId));
+
+    expect(offer.totalCents).toBe(30003);
+    expect(offer.acceptedAt).toBeNull();
+    await expect(run(first, () => getVisitBillingOffer(fixture.manager.id, agreementId)))
+      .rejects.toMatchObject({ status: 404 });
+    await expect(run(first, () => acceptVisitBillingOffer(largePayer, agreementId, offer.termsToken)))
+      .rejects.toMatchObject({ status: 409 });
+
+    const accepted = await run(first, () => acceptVisitBillingOffer(standardPayer, agreementId, offer.termsToken));
+    expect(accepted.acceptedAt).toEqual(expect.any(String));
+    const retry = await run(second, () => acceptVisitBillingOffer(standardPayer, agreementId, offer.termsToken));
+    expect(retry).toEqual(accepted);
+    expect(await first.visitBillingConsent.count({ where: { agreementId } })).toBe(1);
+  });
+
+  it("stores sandbox card references under exact consent and cascades revocation", async () => {
+    const f = await seed(); await open(f); const agreementId = await award(f, await submit(f));
+    const payer = f.residents[0].user.id;
+    const customerId = `cus_${payer}`;
+    await first.user.update({ where: { id: payer }, data: { stripeTestCustomerId: customerId } });
+    const offer = await run(first, () => getVisitBillingOffer(payer, agreementId));
+    const accepted = await run(first, () => acceptVisitBillingOffer(payer, agreementId, offer.termsToken));
+    const expected = { termsToken: accepted.termsToken, acceptedAt: accepted.acceptedAt! };
+    const card = { customerId, paymentMethodId: `pm_${payer}`, setupIntentId: `seti_${payer}`, brand: "visa", last4: "4242" };
+    await run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card));
+    await run(second, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card));
+    expect(await first.stripeTestCard.count({ where: { agreementId, payerUserId: payer } })).toBe(1);
+    await expect(run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, { ...card, customerId: "cus_other" }))).rejects.toMatchObject({ status: 409 });
+    await first.visitBillingConsent.deleteMany({ where: { agreementId, payerUserId: payer } });
+    expect(await first.stripeTestCard.count({ where: { agreementId } })).toBe(0);
+    await expect(run(first, () => saveVerifiedStripeTestCard(payer, agreementId, expected, card))).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("prepares one immutable sandbox payment per completed visit under concurrent retries", async () => {
+    const f = await seed();
+    await open(f); const agreementId = await award(f, await submit(f));
+    const payer = f.residents[0].user.id; const customerId = `cus_${payer}`;
+    await first.user.update({ where: { id: payer }, data: { stripeTestCustomerId: customerId } });
+    await first.providerProfile.update({ where: { userId: f.provider.id }, data: { stripeTestAccountId: `acct_${f.provider.id}`, stripeTestPayoutStatus: "active" } });
+    const offer = await run(first, () => getVisitBillingOffer(payer, agreementId));
+    const accepted = await run(first, () => acceptVisitBillingOffer(payer, agreementId, offer.termsToken));
+    await run(first, () => saveVerifiedStripeTestCard(payer, agreementId, { termsToken: accepted.termsToken, acceptedAt: accepted.acceptedAt! }, { customerId, paymentMethodId: `pm_${payer}`, setupIntentId: `seti_${payer}`, brand: "visa", last4: "4242" }));
+    const visit = await first.serviceVisit.findFirstOrThrow({ where: { billingPayerUserId: payer, occurrence: { agreementId } } });
+    await expect(run(first, () => prepareStripeTestPayment(visit.id))).rejects.toMatchObject({ status: 409 });
+    await first.serviceVisit.update({ where: { id: visit.id }, data: { status: "scheduled" } });
+    const bytes = await sharp({ create: { width: 24, height: 18, channels: 3, background: { r: 20, g: 60, b: 90 } } }).png().toBuffer();
+    await run(first, () => storeVisitPhoto(f.provider.id, visit.id, "visit_after", new Blob([new Uint8Array(bytes)], { type: "image/png" })));
+    const beforeRetry = await first.stripeTestCard.findFirstOrThrow({ where: { agreementId, payerUserId: payer } });
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "1");
+    try {
+      await run(first, () => updateVisitStatus(f.provider.id, visit.id, { status: "completed", completionNote: null }));
+      await run(second, () => updateVisitStatus(f.provider.id, visit.id, { status: "completed", completionNote: null }));
+    } finally { vi.unstubAllEnvs(); }
+    expect(await first.outboxEvent.count({ where: { dedupeKey: `stripe-test-charge:${visit.id}` } })).toBe(1);
+    await run(second, () => saveVerifiedStripeTestCard(payer, agreementId, { termsToken: accepted.termsToken, acceptedAt: accepted.acceptedAt! }, { customerId, paymentMethodId: `pm_${payer}`, setupIntentId: `seti_${payer}`, brand: "visa", last4: "4242" }));
+    expect((await first.stripeTestCard.findFirstOrThrow({ where: { agreementId, payerUserId: payer } })).verifiedAt).toEqual(beforeRetry.verifiedAt);
+    const [a, b] = await Promise.all([run(first, () => prepareStripeTestPayment(visit.id)), run(second, () => prepareStripeTestPayment(visit.id))]);
+    expect(a.visitId).toBe(b.visitId); expect(a.amountCents).toBe(visit.allocatedVisitCents);
+    expect(a.providerAmountCents + a.platformFeeCents).toBe(a.amountCents);
+    expect(await first.stripeTestPayment.count({ where: { visitId: visit.id } })).toBe(1);
+    await expect(first.stripeTestPayment.delete({ where: { visitId: visit.id } })).rejects.toThrow(/cannot be deleted/i);
+    // Include its dependent recovery ledger so PostgreSQL reaches our explicit
+    // no-truncate guards rather than stopping at the foreign-key precheck.
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt", "StripeTestRefund", "StripeTestFinancialObservation", "ServiceQualityClaim", "ServiceQualityPhoto"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
+    await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);
+    const attemptAt = new Date();
+    await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAmountCents: a.providerAmountCents, transferRefundedBeforeCents: 0, transferAttemptedAt: attemptAt, stripeTransferId: `tr_${visit.id}` } });
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAttemptedAt: new Date(+attemptAt + 1) } })).rejects.toThrow(/immutable/i);
+    await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripeTransferId: "tr_other" } })).rejects.toThrow(/immutable/i);
   });
 
   it.each(["expired-proof","higher-policy"])("fails a new pool award closed for %s without partial award rows", async (reason) => {
@@ -414,4 +533,226 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     expect(await first.serviceAgreement.findUniqueOrThrow({where:{id}})).toMatchObject({amountCents:12345,poolSnapshot:null,pricingBasis:"total"});
     expect(await first.serviceBidRevision.count({where:{bidId:bid.id}})).toBe(0);
   });
+});
+
+describe("sandbox award payout transaction guard", () => {
+  it("accepts the exact active account and rejects replacement, restriction and inactive identity", async () => {
+    const p = await provider(`payout-${randomUUID()}`);
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestAccountId: `acct_${p.id}`, stripeTestPayoutStatus: "active" } });
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${`acct_${p.id}`})`).resolves.toBeDefined();
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${"acct_replaced"})`).rejects.toThrow();
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestPayoutStatus: "restricted" } });
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${`acct_${p.id}`})`).rejects.toThrow();
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestPayoutStatus: "active", accountStatus: "suspended" } });
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${`acct_${p.id}`})`).rejects.toThrow();
+  });
+
+  it.each(["suspension", "replacement"])("rechecks a concurrent %s after acquiring its lock and rolls back earlier writes", async (change) => {
+    const p = await provider(`payout-race-${randomUUID()}`);
+    const account = `acct_${p.id}`;
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestAccountId: account, stripeTestPayoutStatus: "active" } });
+    const locked = deferred(), release = deferred(); releases.push(release);
+    let mutatorPid = 0, awardPid = 0;
+    const mutation = run(second, () => second.$transaction(async (tx) => {
+      mutatorPid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0].pid;
+      await tx.providerProfile.update({ where: { userId: p.id }, data: change === "suspension" ? { accountStatus: "suspended" } : { stripeTestAccountId: `acct_replacement_${p.id}` } });
+      locked.resolve(); await release.promise;
+    }));
+    await reached(locked);
+    // The first update is intentionally before the guard: rejection must roll
+    // back the entire batch, as with the award's request-status update.
+    const assertionStarted = deferred();
+    const attempt = run(first, () => first.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: p.id }, data: { fullName: "must roll back" } });
+      awardPid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0].pid;
+      assertionStarted.resolve();
+      await tx.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${account})`;
+    }));
+    await reached(assertionStarted);
+    const observer = new PgClient({ connectionString: process.env.TEST_DATABASE_URL! });
+    await observer.connect();
+    try {
+      const deadline = Date.now() + 3000;
+      let blocked = false;
+      while (Date.now() < deadline) {
+        const observation = await observer.query<{ blockers: number[] }>("SELECT pg_blocking_pids($1) AS blockers", [awardPid]);
+        if (observation.rows[0].blockers.includes(mutatorPid)) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, "award assertion must actually wait for the provider mutation lock").toBe(true);
+    } finally { await observer.end(); release.resolve(); }
+    await mutation;
+    await expect(attempt).rejects.toThrow();
+    expect((await first.user.findUniqueOrThrow({ where: { id: p.id } })).fullName).toBe("PRIVATE_PROVIDER_NAME");
+  });
+});
+
+describe("sandbox recovery consent ledger", () => {
+  async function payments() {
+    const f = await seed(); await open(f);
+    const agreementId = await award(f, await submit(f));
+    const visits = await first.serviceVisit.findMany({ where: { occurrence: { agreementId } }, take: 2 });
+    const rows = [];
+    for (const visit of visits) rows.push(await first.stripeTestPayment.create({ data: {
+      visitId: visit.id, requestId: f.requestId, agreementId, communityId: f.community.id,
+      residentUserId: visit.billingPayerUserId!, providerUserId: f.provider.id, unitId: visit.unitId!,
+      customerId: `cus_${visit.billingPayerUserId}`, paymentMethodId: `pm_${visit.id}`, providerAccountId: `acct_${f.provider.id}`,
+      termsToken: `terms_${visit.id}`, amountCents: 1000, platformFeeCents: 100, hoaShareCents: 0, providerAmountCents: 900,
+      currency: "usd", stripePaymentIntentId: `pi_${visit.id}`, status: "failed",
+    } }));
+    return rows;
+  }
+  async function append(db: PrismaClient, payment: { visitId: string; customerId: string }, sequence: number, change: { customerId?: string; termsVersion?: string } = {}) {
+    const id = randomUUID();
+    await db.$executeRaw`INSERT INTO "StripeTestPaymentAttempt" ("id", "visitId", "customerId", "paymentMethodId", "setupIntentId", "sequence", "termsVersion", "acceptedAt")
+      VALUES (${id}, ${payment.visitId}, ${change.customerId ?? payment.customerId}, ${`pm_${id}`}, ${`seti_${id}`}, ${sequence}, ${change.termsVersion ?? "completed-visit-retry-v1"}, TIMESTAMP '2000-01-01')`;
+    return id;
+  }
+
+  it("records ordered explicit retry consent and prevents mutation, deletion and truncation", async () => {
+    const [payment] = await payments();
+    const attempt = await append(first, payment, 1);
+    const rows = await first.$queryRaw<Array<{ sequence: number; termsVersion: string }>>`SELECT "sequence", "termsVersion" FROM "StripeTestPaymentAttempt" WHERE "id" = ${attempt}`;
+    expect(rows).toEqual([{ sequence: 1, termsVersion: "completed-visit-retry-v1" }]);
+    const clock = await first.$queryRaw<Array<{ recent: boolean }>>`SELECT "acceptedAt" BETWEEN clock_timestamp() - INTERVAL '10 seconds' AND clock_timestamp() AS recent FROM "StripeTestPaymentAttempt" WHERE "id" = ${attempt}`;
+    expect(clock[0].recent, "database stamps current consent time instead of trusting a supplied historical timestamp").toBe(true);
+    await expect(first.$executeRaw`UPDATE "StripeTestPaymentAttempt" SET "paymentMethodId" = 'pm_changed' WHERE "id" = ${attempt}`).rejects.toThrow(/immutable/i);
+    await expect(first.$executeRaw`DELETE FROM "StripeTestPaymentAttempt" WHERE "id" = ${attempt}`).rejects.toThrow(/immutable/i);
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPaymentAttempt"`).rejects.toThrow(/immutable/i);
+  });
+
+  it("rejects incorrect customer, terms, sequence and a recovery pointer from another visit", async () => {
+    const [payment, other] = await payments();
+    await expect(append(first, payment, 1, { customerId: "cus_unowned" })).rejects.toThrow();
+    await expect(append(first, payment, 1, { termsVersion: "unknown-terms" })).rejects.toThrow();
+    await expect(append(first, payment, 2)).rejects.toThrow();
+    const attempt = await append(first, payment, 1);
+    await first.stripeTestPayment.update({ where: { visitId: payment.visitId }, data: { lastRecoveryAttemptId: attempt } });
+    await expect(first.stripeTestPayment.update({ where: { visitId: other.visitId }, data: { lastRecoveryAttemptId: attempt } })).rejects.toThrow();
+    await expect(first.stripeTestPayment.update({ where: { visitId: payment.visitId }, data: { lastRecoveryAttemptId: "missing-attempt" } })).rejects.toThrow();
+    expect((await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: other.visitId } })).lastRecoveryAttemptId).toBeNull();
+  });
+
+  it("permits only one concurrent next sequence and then accepts the next explicit retry", async () => {
+    const [payment] = await payments();
+    const results = await Promise.allSettled([append(first, payment, 1), append(second, payment, 1)]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    await append(first, payment, 2);
+    const rows = await first.$queryRaw<Array<{ sequence: number }>>`SELECT "sequence" FROM "StripeTestPaymentAttempt" WHERE "visitId" = ${payment.visitId} ORDER BY "sequence"`;
+    expect(rows).toEqual([{ sequence: 1 }, { sequence: 2 }]);
+  });
+});
+
+describe("sandbox refund reservations", () => {
+  async function paid() {
+    vi.stubEnv("STRIPE_TEST_REFUNDS", "1"); vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_syntheticOnly");
+    const f = await seed(); await open(f); const agreementId = await award(f, await submit(f));
+    await first.adminAccessGrant.update({ where: { userId: f.admin.id }, data: { level: "owner" } });
+    const visit = await first.serviceVisit.findFirstOrThrow({ where: { occurrence: { agreementId } } });
+    const payment = await first.stripeTestPayment.create({ data: {
+      visitId: visit.id, requestId: f.requestId, agreementId, communityId: f.community.id,
+      residentUserId: visit.billingPayerUserId!, providerUserId: f.provider.id, unitId: visit.unitId!,
+      customerId: `cus_${visit.id}`, paymentMethodId: `pm_${visit.id}`, providerAccountId: `acct_${f.provider.id}`,
+      termsToken: `terms_${visit.id}`, amountCents: 1000, platformFeeCents: 100, hoaShareCents: 0, providerAmountCents: 900,
+      currency: "usd", stripePaymentIntentId: `pi_${visit.id}`, stripeChargeId: `ch_${visit.id}`, status: "succeeded",
+    } });
+    const transferred = await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: {
+      transferAttemptedAt: new Date(), transferAmountCents: 900, transferRefundedBeforeCents: 0, stripeTransferId: `tr_${visit.id}`,
+    } });
+    return { ...f, payment: transferred };
+  }
+  const reserve = async (db: PrismaClient, f: Awaited<ReturnType<typeof paid>>, id: string = randomUUID(), amountCents = 400) => {
+    const { requestStripeTestRefund } = await import("@/lib/server/stripe-test-refunds");
+    return run(db, () => requestStripeTestRefund(f.admin.id, f.payment.visitId, { id, amountCents, reason: "service_quality" }));
+  };
+  it("atomically reserves only one concurrent refund and its audit", async () => {
+    const f = await paid();
+    const results = await Promise.allSettled([reserve(first, f), reserve(second, f)]);
+    expect(results.filter(row => row.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(row => row.status === "rejected")).toHaveLength(1);
+    const rows = await first.stripeTestRefund.findMany({ where: { visitId: f.payment.visitId } });
+    expect(rows).toHaveLength(1); expect(rows[0]).toMatchObject({ amountCents: 400, reversalCents: 360, state: "pending", stripeRefundId: null });
+    expect(await first.adminAuditLog.count({ where: { targetId: f.payment.visitId, action: "marketplace_recovery_action" } })).toBe(1);
+    expect((await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: f.payment.visitId } })).amountRefundedCents).toBe(0);
+  });
+  it("requires current owner authority even for replay and rejects over-refund", async () => {
+    const f = await paid(); await expect(reserve(first, f, randomUUID(), 1001)).rejects.toThrow(/exceeds/i);
+    const op = await reserve(first, f); expect((await reserve(first, f, op.id)).id).toBe(op.id);
+    await first.user.update({ where: { id: f.admin.id }, data: { isVerified: false } });
+    await expect(reserve(first, f, op.id)).rejects.toThrow(/administrator/i);
+    expect(await first.stripeTestRefund.count({ where: { visitId: f.payment.visitId } })).toBe(1);
+  });
+  it("prevents mutation, deletion, fake completion and resetting durable clocks", async () => {
+    const f = await paid(); const op = await reserve(first, f);
+    await expect(first.stripeTestRefund.update({ where: { id: op.id }, data: { amountCents: 300 } })).rejects.toThrow();
+    await expect(first.stripeTestRefund.update({ where: { id: op.id }, data: { state: "succeeded" } })).rejects.toThrow();
+    await expect(first.stripeTestRefund.delete({ where: { id: op.id } })).rejects.toThrow();
+    await expect(first.$executeRaw`TRUNCATE "StripeTestRefund"`).rejects.toThrow();
+    await first.stripeTestRefund.update({ where: { id: op.id }, data: { refundAttemptedAt: new Date() } });
+    await expect(first.stripeTestRefund.update({ where: { id: op.id }, data: { refundAttemptedAt: null } })).rejects.toThrow();
+  });
+  it("rejects direct SQL reservation with incorrect balance, allocation or prefilled processor evidence", async () => {
+    const f = await paid();
+    const base = { id: randomUUID(), visitId: f.payment.visitId, actorUserId: f.admin.id, reason: "service_quality", amountCents: 400,
+      refundedBeforeCents: 0, cumulativeRefundCents: 400, reversedBeforeCents: 0, reversalCents: 360, chargeId: f.payment.stripeChargeId!, transferId: f.payment.stripeTransferId };
+    for (const change of [{ chargeId: "ch_wrong" }, { reversalCents: 359 }, { refundedBeforeCents: 1, cumulativeRefundCents: 401 }, { state: "failed" }, { stripeRefundId: "re_invented" }, { refundAttemptedAt: new Date() }]) {
+      await expect(first.stripeTestRefund.create({ data: { ...base, ...change } })).rejects.toThrow();
+    }
+    expect(await first.stripeTestRefund.count({ where: { visitId: f.payment.visitId } })).toBe(0);
+  });
+  async function financialFixture() {
+    const f = await paid(); const op = await reserve(first, f);
+    const event = await first.stripeTestEvent.create({ data: { id: `evt_${randomUUID()}`, objectId: f.payment.stripeChargeId!, eventType: "charge.refunded", occurredAt: new Date() } });
+    financial.charge.mockResolvedValue({ id: f.payment.stripeChargeId, livemode: false, paid: true, disputed: false, amount: 1000, amount_captured: 1000, amount_refunded: 400,
+      currency: "usd", customer: f.payment.customerId, payment_intent: f.payment.stripePaymentIntentId });
+    financial.refunds.mockResolvedValue({ has_more: false, data: [{ id: `re_${op.id}`, amount: 400, currency: "usd", charge: f.payment.stripeChargeId, payment_intent: f.payment.stripePaymentIntentId,
+      status: "succeeded", created: 1, metadata: { bundleenRefundId: op.id } }] });
+    financial.transfer.mockResolvedValue({ id: f.payment.stripeTransferId, amount: 900, amount_reversed: 360, livemode: false, currency: "usd", destination: f.payment.providerAccountId, source_transaction: f.payment.stripeChargeId });
+    financial.reversals.mockResolvedValue({ has_more: false, data: [{ id: `trr_${op.id}`, amount: 360, currency: "usd", transfer: f.payment.stripeTransferId, created: 1, metadata: { bundleenRefundId: op.id } }] });
+    return { ...f, op, event };
+  }
+  it("reconciles owned remote refund and reversal exactly once with atomic immutable observation", async () => {
+    const f = await financialFixture();
+    const { reconcileStripeFinancialEvent } = await import("@/lib/server/stripe-financial-events");
+    const charge = await financial.charge(); const hit = deferred(), release = deferred(); releases.push(release);
+    financial.charge.mockImplementationOnce(async () => { hit.resolve(); await release.promise; return charge; });
+    const one = run(first, () => reconcileStripeFinancialEvent(f.event.id)); await reached(hit);
+    const two = run(second, () => reconcileStripeFinancialEvent(f.event.id));
+    const observer = new PgClient({ connectionString: process.env.TEST_DATABASE_URL! }); await observer.connect();
+    let blocked = false;
+    try {
+      for (let retry = 0; retry < 100; retry++) {
+        const rows = await observer.query(`SELECT 1 FROM pg_stat_activity WHERE application_name='issue52-second' AND cardinality(pg_blocking_pids(pid))>0`);
+        if (rows.rowCount) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, "duplicate event must actually wait for the first reconciliation transaction").toBe(true);
+    } finally { await observer.end(); release.resolve(); }
+    await Promise.all([one, two]);
+    expect(await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: f.payment.visitId } })).toMatchObject({ amountRefundedCents: 400, providerReversedCents: 360, reconciliationHoldReason: null });
+    expect(await first.stripeTestRefund.findUniqueOrThrow({ where: { id: f.op.id } })).toMatchObject({ state: "succeeded", stripeRefundId: `re_${f.op.id}`, stripeReversalId: `trr_${f.op.id}` });
+    expect(await first.stripeTestFinancialObservation.count({ where: { eventId: f.event.id } })).toBe(1);
+    await expect(first.stripeTestFinancialObservation.delete({ where: { eventId: f.event.id } })).rejects.toThrow(/immutable/i);
+    await expect(first.stripeTestFinancialObservation.update({ where: { eventId: f.event.id }, data: { refundedCents: 1 } })).rejects.toThrow(/immutable/i);
+  });
+  it("rolls back owned ledger progress when a later processor identity check fails", async () => {
+    const f = await financialFixture(); financial.transfer.mockResolvedValue({ id: "wrong", livemode: false });
+    const { reconcileStripeFinancialEvent } = await import("@/lib/server/stripe-financial-events");
+    await expect(run(first, () => reconcileStripeFinancialEvent(f.event.id))).rejects.toThrow();
+    expect(await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: f.payment.visitId } })).toMatchObject({ amountRefundedCents: 0, providerReversedCents: 0 });
+    expect(await first.stripeTestRefund.findUniqueOrThrow({ where: { id: f.op.id } })).toMatchObject({ state: "pending", stripeRefundId: null });
+    expect((await first.stripeTestEvent.findUniqueOrThrow({ where: { id: f.event.id } })).processedAt).toBeNull();
+    expect(await first.stripeTestFinancialObservation.count({ where: { eventId: f.event.id } })).toBe(0);
+  });
+  it("keeps external adjustments separate from owned accounting and blocks new refunds", async () => {
+    const f = await financialFixture(); financial.refunds.mockResolvedValue({ has_more: false, data: [{ id: "re_external", status: "succeeded", created: 1, metadata: {} }] });
+    financial.reversals.mockResolvedValue({ has_more: false, data: [] });
+    const { reconcileStripeFinancialEvent } = await import("@/lib/server/stripe-financial-events");
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "0"); vi.stubEnv("STRIPE_TEST_REFUNDS", "0");
+    await run(first, () => reconcileStripeFinancialEvent(f.event.id));
+    expect(await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: f.payment.visitId } })).toMatchObject({ amountRefundedCents: 0, observedChargeRefundedCents: 400, reconciliationHoldReason: "external_refund" });
+    vi.stubEnv("STRIPE_TEST_REFUNDS", "1"); await expect(reserve(first, f)).rejects.toThrow(/reconciliation/i);
+  });
+
 });

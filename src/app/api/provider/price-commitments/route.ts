@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { requireProviderUser, hoaErrorResponse } from "@/lib/server/hoa-api";
+import { db } from "@/lib/server/db";
+export async function GET(){const gate=await requireProviderUser();if(!gate.ok)return gate.response;try{const rows=await db.priceLadderCommitment.findMany({where:{providerUserId:gate.user.id,request:{status:{in:["draft","collecting_interest"]}}},select:{id:true,scope:true,acceptedAt:true,tiers:{select:{minHomes:true,perHomeCents:true},orderBy:{minHomes:"asc"}},request:{select:{title:true,description:true,startDate:true,totalOccurrences:true,recurrenceIntervalDays:true,enrollmentClosesAt:true}}},orderBy:{createdAt:"desc"},take:100});return NextResponse.json({commitments:rows},{headers:{"Cache-Control":"private, no-store"}});}catch(e){return hoaErrorResponse("price commitments",e);}}

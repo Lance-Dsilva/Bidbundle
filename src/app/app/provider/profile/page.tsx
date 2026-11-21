@@ -4,6 +4,7 @@ import { SignOutButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
+import { StripeTestPayoutSetup } from "@/components/provider/StripeTestPayoutSetup";
 import { ProviderBusinessDetailsDialog } from "@/components/provider/ProviderBusinessDetailsDialog";
 import { ProviderServiceAreasPanel } from "@/components/provider/ProviderServiceAreasPanel";
 import { ProviderCredentialsPanel } from "@/components/provider/ProviderCredentialsPanel";
@@ -652,6 +653,7 @@ export default function ProviderProfilePage() {
         </div>
       </div>
 
+      <StripeTestPayoutSetup />
       {editing && profile && provider ? (
         <ProviderBusinessDetailsDialog
           profile={profile}

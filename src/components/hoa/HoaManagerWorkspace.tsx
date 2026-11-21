@@ -1,5 +1,6 @@
 "use client";
 
+import { PriceLadder } from "@/components/ui/PriceLadder";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 
@@ -100,7 +101,7 @@ function CommunityWorkspace({ community }: { community: HoaManagerCommunity }) {
   const validConfirmation = Boolean(confirmation && currentRequest && currentRequest.status === confirmation.status && currentRequest.title === confirmation.title &&
     (confirmation.action === "award"
       ? ["open_for_bids", "bidding_closed"].includes(currentRequest.status) &&
-        currentRequest.joinedCount === confirmation.joinedCount && currentRequest.totalOccurrences === confirmation.totalOccurrences && currentBid?.status === "submitted" && currentBid.pricingBasis === "total" &&
+        currentRequest.joinedCount === confirmation.joinedCount && currentRequest.totalOccurrences === confirmation.totalOccurrences && currentBid?.status === "submitted" && (currentBid.pricingBasis === "total" || Boolean(currentBid.priceLadder?.length)) &&
         currentBid.version === confirmation.bid?.version && currentBid.amountCents === confirmation.bid.amountCents && currentBid.currency === confirmation.bid.currency &&
         currentBid.providerUserId === confirmation.bid.providerUserId &&
         JSON.stringify(currentBid.poolQuote ?? null) === JSON.stringify(confirmation.bid.poolQuote ?? null) &&
@@ -728,6 +729,7 @@ function RequestCard({
         </Badge>
       </div>
       <p className="mt-2 line-clamp-2 text-sm text-[#64748b]">{request.description}</p>
+      {request.priceLadder ? <PriceLadder tiers={request.priceLadder.tiers} joinedHomes={request.joinedCount} guaranteedPerHomeCents={request.priceLadder.guaranteedPerHomeCents} /> : null}
       {request.poolTemplate && <p className="mt-2 text-xs text-[#64748b]">Pool template · {request.poolTemplate.serviceMonths} calendar months · {request.poolTemplate.visitsPerMonth} visits/month · {request.poolTemplate.tiers.map((tier) => `${POOL_TIER_LABELS[tier]}: ${request.tierCounts?.[tier] ?? 0} homes`).join(" · ")}</p>}
       <p className="mt-2 text-xs text-[#64748b]">
         {request.kind === "compulsory_recurring"
@@ -792,7 +794,7 @@ function RequestCard({
                     {bid.proposedStartDate ? `starts ${dateLabel(bid.proposedStartDate)} · ` : ""}
                     v{bid.version}
                   </p>
-                  {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice requestStatus={request.status} /> : null}
+                  {bid.pricingBasis !== "total" && !bid.priceLadder?.length && bid.status === "submitted" ? <LegacyBidNotice requestStatus={request.status} /> : null}
                   <p className="mt-1 line-clamp-2 text-xs text-[#64748b]">{bid.scope}</p>
                 </div>
                 <div>
@@ -803,7 +805,7 @@ function RequestCard({
                   ) : ["open_for_bids", "bidding_closed"].includes(request.status) && !accepted && bid.status === "submitted" ? (
                     <button
                       className="min-h-11 rounded-lg bg-[#0f8f83] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                      disabled={busy || bid.pricingBasis !== "total"}
+                      disabled={busy || (bid.pricingBasis !== "total" && !bid.priceLadder?.length)}
                       onClick={() => void onAward(request.id, bid.id)}
                       type="button"
                     >

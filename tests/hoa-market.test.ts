@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 /**
@@ -9,6 +9,10 @@ import { approvedProviderVerification } from "./fixtures/provider-verification";
  */
 
 type Op = { model: string; action: string; args: Record<string, unknown> };
+
+const payouts = vi.hoisted(() => ({ verify: vi.fn() }));
+vi.mock("@/lib/server/stripe-test-connect", () => ({ requireStripeTestAwardPayouts: payouts.verify }));
+afterEach(() => vi.unstubAllEnvs());
 
 const state = vi.hoisted(() => ({
   request: null as Record<string, unknown> | null,
@@ -160,6 +164,8 @@ describe("areaCoversLocation", () => {
 describe("awardBid", () => {
   beforeEach(() => {
     state.batches = [];
+    payouts.verify.mockReset().mockResolvedValue("acct_verified");
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "0");
     // `requireCommunityManager` reads the community first, so the type it
     // returns is what decides whether HOA or neighbourhood rules apply.
     state.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa", status: "active" };
@@ -220,6 +226,49 @@ describe("awardBid", () => {
       { user: { id: "resident-1", email: "resident1@example.com" } },
     ];
     state.emailOptOutUserIds = [];
+  });
+
+  it("requires verified payouts only for enabled optional HOA awards and locks the exact account in the award batch", async () => {
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "1");
+    state.request!.kind = "optional_group";
+    await awardBid("manager-1", "request-1", { bidId: "bid-1" });
+    expect(payouts.verify).toHaveBeenCalledWith("provider-1");
+    const batch = state.batches[0];
+    const guard = batch.findIndex((op) => JSON.stringify(op.args).includes("bundleen_assert_stripe_test_award_payouts"));
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(batch.findIndex((op) => op.model === "serviceBid" && op.action === "update"));
+    expect(JSON.stringify(batch[guard].args)).toContain("acct_verified");
+  });
+  it("does not write an award when authoritative payouts are unavailable", async () => {
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "1"); state.request!.kind = "optional_group";
+    payouts.verify.mockRejectedValue(new HoaWorkflowError("Finish payout setup", 409));
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+  it.each([false, true])("preserves flag-off optional and enabled compulsory awards (enabled=%s)", async (enabled) => {
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", enabled ? "1" : "0");
+    state.request!.kind = enabled ? "compulsory_recurring" : "optional_group";
+    await awardBid("manager-1", "request-1", { bidId: "bid-1" });
+    expect(payouts.verify).not.toHaveBeenCalled();
+  });
+
+  it("allocates the committed full-term per-home price across visits without multiplying the term", async () => {
+    state.request!.kind = "optional_group";
+    state.request!.priceCommitment = { id: "commitment-1", providerUserId: "provider-1", acceptedAt: new Date(), guaranteedPerHomeCents: 10001 };
+    state.bid = { ...state.bid!, id: "ladder:commitment-1", pricingBasis: "per_home", perHomeCents: 10001, amountCents: 20002 };
+    await awardBid("manager-1", "request-1", { bidId: "ladder:commitment-1" });
+    const visits = state.batches[0].find(row => row.model === "serviceVisit" && row.action === "createMany")!.args.data as Array<{unitId:string; allocatedVisitCents:number}>;
+    for (const unitId of ["unit-1", "unit-2"]) {
+      expect(visits.filter(v => v.unitId === unitId).map(v => v.allocatedVisitCents)).toEqual([3334, 3334, 3333]);
+    }
+  });
+
+  it("rejects a committed bid whose total does not match the frozen household count", async () => {
+    state.request!.kind = "optional_group";
+    state.request!.priceCommitment = { id: "commitment-1", providerUserId: "provider-1", acceptedAt: new Date(), guaranteedPerHomeCents: 10001 };
+    state.bid = { ...state.bid!, id: "ladder:commitment-1", pricingBasis: "per_home", perHomeCents: 10001, amountCents: 60006 };
+    await expect(awardBid("manager-1", "request-1", { bidId: "ladder:commitment-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
   });
 
   it.each(["per_home", "per_visit"])("refuses a new legacy %s award before all writes", async (pricingBasis) => {
@@ -456,5 +505,19 @@ describe("notifications", () => {
       "notification",
       "outboxEvent",
     ]);
+  });
+});
+
+describe("sandbox payment notification links", () => {
+  it("uses only the explicit sandbox origin, not the production fallback", () => {
+    vi.stubEnv("STRIPE_TEST_APP_URL", "https://sandbox.example.invalid/ignored-path");
+    vi.stubEnv("APP_URL", "https://production.example.invalid");
+    const ops = buildNotificationOps([{ userId: "payer", email: "payer@example.invalid", kind: "account", emailLinkOrigin: "stripe_test", title: "Payment", body: "Sign in", linkPath: "/app/homeowner/billing/payments/visit", dedupeKey: "payment-notice" }]) as unknown as Op[];
+    expect(JSON.stringify(ops)).toContain("https://sandbox.example.invalid/app/homeowner/billing/payments/visit");
+    expect(JSON.stringify(ops)).not.toContain("https://production.example.invalid");
+  });
+  it.each(["", "http://public.example.invalid", "https://user:pass@example.invalid", "https://example.invalid?token=secret"])("rejects missing or unsafe configured origin %s", origin => {
+    vi.stubEnv("STRIPE_TEST_APP_URL", origin);
+    expect(() => buildNotificationOps([{ userId: "payer", email: "payer@example.invalid", kind: "account", emailLinkOrigin: "stripe_test", title: "Payment", body: "Sign in", linkPath: "/app/homeowner/billing", dedupeKey: "payment-notice" }])).toThrow();
   });
 });

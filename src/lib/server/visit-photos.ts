@@ -76,7 +76,7 @@ async function requirePhotoProvider(userId: string, visitId: string) {
   const access = await visitPhotoAccess(userId, visitId);
   if (!access?.provider) throw new HoaWorkflowError("Visit not found.", 404);
   if (access.actor.providerProfile?.accountStatus !== "active") throw new HoaWorkflowError("An active provider account is required.", 403);
-  if (access.visit.occurrence.agreement.status !== "active" || !["scheduled", "en_route", "in_progress"].includes(access.visit.status)) {
+  if ((access.visit.occurrence.agreement.status !== "active" && !(access.visit.redoOfVisitId && access.visit.occurrence.agreement.status === "completed")) || !["scheduled", "en_route", "in_progress"].includes(access.visit.status)) {
     throw new HoaWorkflowError("Photos can be changed only while this service visit is active.", 409);
   }
   return access;

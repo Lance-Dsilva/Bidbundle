@@ -1,4 +1,8 @@
+import { requireStripeTestAwardPayouts } from "@/lib/server/stripe-test-connect";
+import { buildStripeTestChargeIntent } from "@/lib/stripe-test-charge-intent";
+import { allocateVisitCents } from "@/lib/visit-billing";
 import "server-only";
+import { notifyPriceLadderUnlock } from "@/lib/server/price-ladder";
 
 import { providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
 
@@ -101,6 +105,8 @@ function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
   if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
   if (codes.includes("P1710")) return new HoaWorkflowError("This visit or its required after photo changed. Refresh and add the required proof before completing it.", 409);
   if (codes.includes("P1711")) return new HoaWorkflowError("This visit's photo or provider access changed. Refresh before trying again.", 409);
+  if (codes.includes("P1744")) return new HoaWorkflowError("Enrollment authorization changed. Each home must complete card setup and accept its maximum price before award.", 409);
+  if (codes.includes("P1743")) return new HoaWorkflowError("The provider’s sandbox payout account changed or is not active. Refresh payout setup before awarding.", 409);
   if (codes.includes("P1712")) return new HoaWorkflowError("Photo consent or household access changed. Refresh before trying again.", 409);
   return null;
 }
@@ -123,6 +129,7 @@ type RequestRow = {
   totalOccurrences: number;
   poolTemplate?: unknown;
   requiresAfterPhoto?: boolean;
+  stripeTestEnrollmentRequired?: boolean;
   status: HoaRequestSummary["status"];
   opensAt: Date | null;
   enrollmentClosesAt: Date | null;
@@ -134,10 +141,12 @@ type RequestRow = {
   awardedAt: Date | null;
   createdAt: Date;
   participations: Array<{ userId: string | null; response: "joined" | "declined"; poolTier?: string | null }>;
+  priceCommitment?: { acceptedAt: Date | null; guaranteedPerHomeCents: number; tiers: { minHomes: number; perHomeCents: number }[] } | null;
   _count: { bids: number };
 };
 
 const requestInclude = {
+  priceCommitment: { include: { tiers: { orderBy: { minHomes: "asc" } } } },
   participations: { select: { userId: true, response: true, poolTier: true } },
   _count: { select: { bids: { where: { status: { in: ["submitted", "accepted", "rejected"] } } } } },
 } satisfies Prisma.HoaServiceRequestInclude;
@@ -173,6 +182,9 @@ function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: Revi
     maxHomes: row.maxHomes,
     participantsLockedAt: row.participantsLockedAt?.toISOString() ?? null,
     awardedAt: row.awardedAt?.toISOString() ?? null,
+    stripeTestEnrollmentRequired: Boolean(row.stripeTestEnrollmentRequired || (process.env.STRIPE_TEST_PAYMENTS === "1" && row.priceCommitment?.acceptedAt)),
+    priceLadderPending: Boolean(row.priceCommitment && !row.priceCommitment.acceptedAt),
+    priceLadder: row.priceCommitment?.acceptedAt ? { tiers: row.priceCommitment.tiers.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })), guaranteedPerHomeCents: row.priceCommitment.guaranteedPerHomeCents } : null,
     joinedCount: joined.length,
     declinedCount: declined.length,
     bidCount: row._count.bids,
@@ -182,6 +194,7 @@ function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: Revi
 }
 
 type BidRow = {
+  priceTiers?: { minHomes: number; perHomeCents: number }[];
   id: string;
   requestId: string;
   providerUserId: string;
@@ -218,6 +231,7 @@ type BidRow = {
 };
 
 const bidInclude = {
+  priceTiers: { orderBy: { minHomes: "asc" } },
   request: {
     select: {
       totalOccurrences: true,
@@ -282,6 +296,7 @@ function serializeBid(row: BidRow, reviews?: ReviewStats): BidSummary {
     amountCents: row.amountCents,
     currency: row.currency,
     pricingBasis: row.pricingBasis,
+    priceLadder: row.priceTiers?.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })) ?? [],
     perHomeCents: row.perHomeCents,
     homeCount: row.request?._count?.participations,
     totalOccurrences: row.request?.totalOccurrences,
@@ -301,6 +316,7 @@ function serializeBid(row: BidRow, reviews?: ReviewStats): BidSummary {
 }
 
 type AgreementRow = {
+  bid?: { priceTiers: { minHomes: number; perHomeCents: number }[] };
   id: string;
   requestId: string;
   communityId: string;
@@ -323,6 +339,7 @@ type AgreementRow = {
 };
 
 const agreementInclude = {
+  bid: { select: { priceTiers: { select: { minHomes: true, perHomeCents: true }, orderBy: { minHomes: "asc" } } } },
   request: { select: { title: true } },
   community: { select: { name: true } },
   provider: {
@@ -344,6 +361,7 @@ function serializeAgreement(row: AgreementRow): AgreementSummary {
     amountCents: row.amountCents,
     currency: row.currency,
     pricingBasis: row.pricingBasis,
+    priceLadder: row.bid?.priceTiers ?? [],
     perHomeCents: row.perHomeCents,
     scope: row.scope,
     cadenceLabel: row.cadenceLabel,
@@ -718,6 +736,7 @@ export async function transitionHoaRequest(
     where: { id: requestId },
     include: {
       community: { select: { type: true } },
+      priceCommitment: { select: { acceptedAt: true } },
       participations: { select: { unitId: true, userId: true, response: true, poolTier: true } },
       agreement: { select: { id: true, status: true, providerUserId: true } },
     },
@@ -805,6 +824,7 @@ export async function transitionHoaRequest(
             },
             data: {
               status: isCompulsory ? "open_for_bids" : "collecting_interest",
+              ...(!isCompulsory && !isNeighborhood && process.env.STRIPE_TEST_PAYMENTS === "1" && request.priceCommitment?.acceptedAt ? { stripeTestEnrollmentRequired: true } : {}),
               opensAt: request.opensAt ?? now,
               participantsLockedAt: isCompulsory ? now : null,
               ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
@@ -999,6 +1019,8 @@ export async function respondToOptionalRequest(
     where: { id: requestId },
     select: {
       id: true,
+      stripeTestEnrollmentRequired: true,
+      priceCommitment: { select: { id: true } },
       communityId: true,
       kind: true,
       status: true,
@@ -1010,6 +1032,7 @@ export async function respondToOptionalRequest(
     },
   });
   if (!request) throw new HoaWorkflowError("That HOA request does not exist.", 404);
+  if (input.response === "joined" && (request.stripeTestEnrollmentRequired || (process.env.STRIPE_TEST_PAYMENTS === "1" && request.priceCommitment))) throw new HoaWorkflowError("Save a test card and accept the maximum price before joining.", 409);
   const membership = await requireActiveResident(userId, request.communityId);
   if (!membership.unitId) {
     throw new HoaWorkflowError("Your membership is not linked to a home. Contact your HOA manager.");
@@ -1043,6 +1066,8 @@ export async function respondToOptionalRequest(
           (live.enrollmentClosesAt && live.enrollmentClosesAt <= new Date())) {
         throw new HoaWorkflowError("Sign-ups for this request have closed or locked.", 409);
       }
+      const ladderBefore = request.priceCommitment ? await tx.priceLadderCommitment.findUnique({ where: { requestId }, select: { guaranteedPerHomeCents: true, acceptedAt: true } }) : null;
+      if (ladderBefore && !ladderBefore.acceptedAt && input.response === "joined") throw new HoaWorkflowError("The provider must accept the price commitment before enrollment opens.", 409);
       const existing = await tx.hoaRequestParticipation.findFirst({
         where: { requestId, unitId: membership.unitId }, select: { id: true, response: true },
       });
@@ -1056,6 +1081,7 @@ export async function respondToOptionalRequest(
       } else {
         await tx.hoaRequestParticipation.create({ data: { id: randomUUID(), requestId, unitId: membership.unitId, ...data } });
       }
+      if (request.priceCommitment) await notifyPriceLadderUnlock(tx, requestId, ladderBefore?.guaranteedPerHomeCents ?? null);
       // Database authority and tier guards recheck membership, locking and
       // wall-clock deadlines after any resident/authority lock waits.
     });
@@ -2020,6 +2046,7 @@ export async function awardBid(
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     include: {
+      priceCommitment: true,
       community: { select: { id: true, name: true, type: true, hoaProfile: { select: { minimumInsuranceCoverageCents: true, requiresAdditionalInsured: true } } } },
       participations: {
         where: { response: "joined" },
@@ -2061,7 +2088,10 @@ export async function awardBid(
   if (bid.status !== "submitted") {
     throw new HoaWorkflowError("Only a submitted bid can be accepted.");
   }
-  if (bid.pricingBasis !== "total") {
+  const ladderCommitment = request.priceCommitment;
+  const isLadderBid = ladderCommitment && bid.id === `ladder:${ladderCommitment.id}`;
+  if (ladderCommitment && !isLadderBid) throw new HoaWorkflowError("Award the provider commitment residents enrolled against.", 409);
+  if (bid.pricingBasis !== "total" && !isLadderBid) {
     throw new HoaWorkflowError(
       request.status === "open_for_bids"
         ? "This legacy quote uses unit pricing and cannot be awarded. Ask the provider for a whole-job total while bidding is open."
@@ -2089,6 +2119,10 @@ export async function awardBid(
     (policy.requiresAdditionalInsured && !provider.providerProfile.insuranceAdditionalInsured))) {
     throw new HoaWorkflowError("That provider does not meet this HOA’s insurance coverage and additional-insured requirements.", 409);
   }
+
+  const verifiedPayoutAccountId = (process.env.STRIPE_TEST_PAYMENTS === "1" || request.stripeTestEnrollmentRequired) &&
+    request.community.type === "hoa" && request.kind === "optional_group"
+    ? await requireStripeTestAwardPayouts(bid.providerUserId) : null;
 
   // Resolve the service targets *before* anything is written. A neighbourhood
   // participant with no verified address aborts the whole award here, with a
@@ -2147,14 +2181,42 @@ export async function awardBid(
   // One valid visit per locked home per occurrence. `visitDataForTarget`
   // produces either `{ unitId }` or the homeowner id plus the frozen address —
   // exactly one target, which is what the database CHECK requires.
-  const visitRows = occurrenceRows.flatMap((occurrence) =>
-    targets.map((target) => ({
-      id: randomUUID(),
-      occurrenceId: occurrence.id,
-      requiresAfterPhoto: request.requiresAfterPhoto,
-      updatedAt: now,
-      ...visitDataForTarget(target),
-    })),
+  const snapshotBilling = request.community.type === "hoa" &&
+    request.kind === "optional_group" && (bid.pricingBasis === "total" || Boolean(isLadderBid));
+  if (snapshotBilling && isLadderBid && (!ladderCommitment.acceptedAt ||
+      bid.pricingBasis !== "per_home" || bid.providerUserId !== ladderCommitment.providerUserId ||
+      bid.currency !== "usd" || bid.perHomeCents !== ladderCommitment.guaranteedPerHomeCents ||
+      bid.amountCents !== ladderCommitment.guaranteedPerHomeCents * targets.length)) {
+    throw new HoaWorkflowError("The committed price no longer matches the locked homes. Refresh before awarding.", 409);
+  }
+  const billingIndexByUnit = new Map(
+    targets.flatMap((target) => target.kind === "unit" ? [target.unitId] : [])
+      .sort()
+      .map((unitId, index) => [unitId, index] as const),
+  );
+  const poolTermByUnit = new Map(poolSnapshot?.homes.map((home) => [home.unitId, home.termCents]));
+  const visitRows = occurrenceRows.flatMap((occurrence, roundIndex) =>
+    targets.map((target) => {
+      let allocatedVisitCents: number | null = null;
+      if (snapshotBilling && target.kind === "unit") {
+        const poolTerm = poolTermByUnit.get(target.unitId);
+        if (poolSnapshot && poolTerm === undefined) {
+          throw new HoaWorkflowError("The pool quote does not cover every locked home.", 409);
+        }
+        allocatedVisitCents = poolTerm === undefined
+          ? allocateVisitCents(bid.amountCents, targets.length, occurrenceRows.length, billingIndexByUnit.get(target.unitId)!, roundIndex)
+          : allocateVisitCents(poolTerm, 1, occurrenceRows.length, 0, roundIndex);
+      }
+      return {
+        id: randomUUID(),
+        occurrenceId: occurrence.id,
+        requiresAfterPhoto: request.requiresAfterPhoto,
+        updatedAt: now,
+        ...visitDataForTarget(target),
+        allocatedVisitCents,
+        billingPayerUserId: snapshotBilling && target.kind === "unit" ? target.userId : null,
+      };
+    }),
   );
 
   const losingBids = await db.serviceBid.findMany({
@@ -2202,6 +2264,9 @@ export async function awardBid(
         },
       }),
       assertPreparedManager(userId, request.id, authority.via),
+      // Held through all award writes; fail closed if suspension, webhook status
+      // changes or account replacement occurred after the authoritative read.
+      ...(verifiedPayoutAccountId ? [db.$executeRaw(Prisma.sql`SELECT "bundleen_assert_stripe_test_award_payouts"(${bid.providerUserId}, ${verifiedPayoutAccountId})`)] : []),
       db.serviceBid.update({
         where: { id: bid.id, version: bid.version, status: "submitted" },
         data: { status: "accepted", decidedAt: now },
@@ -2552,6 +2617,7 @@ export async function updateVisitStatus(
       status: true,
       updatedAt: true,
       requiresAfterPhoto: true,
+      redoOfVisitId: true,
       photos: { where: { purpose: "visit_after", status: "active" }, select: { id: true }, take: 1 },
       occurrenceId: true,
       unitId: true,
@@ -2580,7 +2646,7 @@ export async function updateVisitStatus(
               status: true,
               requestId: true,
               community: { select: { name: true, type: true } },
-              request: { select: { title: true } },
+              request: { select: { title: true, kind: true } },
             },
           },
         },
@@ -2590,7 +2656,7 @@ export async function updateVisitStatus(
   if (!visit || visit.occurrence.agreement.providerUserId !== providerUserId) {
     throw new HoaWorkflowError("That visit does not exist.", 404);
   }
-  if (visit.occurrence.agreement.status !== "active") {
+  if (visit.occurrence.agreement.status !== "active" && !(visit.redoOfVisitId && visit.occurrence.agreement.status === "completed")) {
     throw new HoaWorkflowError("This agreement is no longer active.");
   }
   if (visit.status === input.status) return;
@@ -2618,12 +2684,15 @@ export async function updateVisitStatus(
       : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
+  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, redoOfVisitId: visit.redoOfVisitId, status: input.status,
+    communityType: visit.occurrence.agreement.community.type, requestKind: visit.occurrence.agreement.request.kind }, process.env.STRIPE_TEST_PAYMENTS);
   try {
     await db.$transaction([
+    ...(chargeIntent ? [db.outboxEvent.createMany({ data: [chargeIntent], skipDuplicates: true })] : []),
     db.$executeRaw(Prisma.sql`SELECT bundleen_assert_visit_photo_provider(${providerUserId}, ${visit.id})`),
     db.serviceVisit.update({
       where: { id: visit.id, status: visit.status, updatedAt: visit.updatedAt,
-        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: "active" } } },
+        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: visit.redoOfVisitId ? { in: ["active", "completed"] } : "active" } } },
       data: {
         status: input.status,
         statusChangedAt: now,

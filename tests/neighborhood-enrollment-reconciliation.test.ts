@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 // Scripted Prisma promises model the observable transaction boundary: writes
@@ -154,6 +154,7 @@ function request(overrides: Row = {}): Row {
 }
 function provider(overrides: Row = {}): Row {
   return {
+    ...approvedProviderVerification(),
     accountStatus: "active", licenseVerifiedAt: new Date(), insuranceVerifiedAt: new Date(), trades: ["cleaning"], notifyNewJobs: true,
     user: { id: "provider-1", email: "provider@example.test", providerServiceAreas: [{
       centerLatitude: 30.4, centerLongitude: -97.72, radiusMiles: 15, postalCodes: [],
@@ -164,12 +165,17 @@ function notifications() { return state.committed.filter((write) => write.model 
 function audits() { return state.committed.filter((write) => write.model === "adminAuditLog"); }
 
 beforeEach(() => {
+  // Match nested eligibility checks to the explicit reconciliation clock.
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
   state.rows = [request()]; state.providers = [provider()]; state.committed = [];
   state.finds = []; state.updates = []; state.transactions = 0;
   state.failNextTransaction = null; state.beforeTransaction = null; state.managerAllowed = false;
   state.failModel = null;
   state.failChildOnce = false; state.afterRollback = null; state.childError = null;
 });
+
+afterEach(() => vi.useRealTimers());
 
 describe("automatic neighborhood enrollment reconciliation", () => {
   it("opens a no-manager request after enrollment, locks it and notifies eligible providers", async () => {

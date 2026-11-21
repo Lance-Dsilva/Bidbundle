@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import Link from "next/link";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useProviderEarnings } from "@/hooks/useProviderEarnings";
@@ -10,8 +11,7 @@ import { useProviderEarnings } from "@/hooks/useProviderEarnings";
  *
  * Every figure is the value of work this account actually won: the amount
  * snapshotted onto the agreement at award time, which no later bid edit can
- * change. Bundleen holds no payment rails yet, so this reports the value of
- * completed and active work rather than pretending to be a payout balance.
+ * change. Agreement values remain separate from sandbox payment activity.
  */
 
 const card: CSSProperties = {
@@ -62,6 +62,20 @@ export default function ProviderEarningsPage() {
           {earnings.completedVisits} visits finished.
         </p>
       </header>
+
+      {earnings.payments && <section className="mb-6 space-y-3" aria-label="Sandbox payment activity">
+        <h2 className="font-semibold">Test payment activity</h2>
+        <p className="text-sm">Sandbox only. Transfers reach your test Stripe account; they are not bank payouts. Pending transfers may be held for review.</p>
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
+          ["Transferred to Stripe", earnings.payments.transferredCents - earnings.payments.reversedCents],
+          ["Pending transfer", earnings.payments.awaitingTransferCents],
+          ["Uncollected provider share", earnings.payments.uncollectedCents],
+          ["Original platform fees", earnings.payments.grossFeeCents],
+        ].map(([label, amount]) => <div key={label} className="p-4" style={card}><dt className="text-sm">{label}</dt><dd className="font-semibold">{fmt(Number(amount))}</dd></div>)}</dl>
+        <p className="text-sm">Resident charges: {fmt(earnings.payments.chargedCents)} · Resident refunds: {fmt(earnings.payments.refundedCents)} · Provider transfer reversals: {fmt(earnings.payments.reversedCents)}. Original fees are shown before refund adjustments.</p>
+        {earnings.payments.reviewPaymentCount > 0 && <p className="text-sm text-amber-800">{earnings.payments.reviewPaymentCount} payments need billing review and are excluded from pending transfers.</p>}
+        <Link className="inline-flex min-h-11 items-center underline" href="/app/provider/earnings/payments">View test payment history</Link>
+      </section>}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map((tile) => (
