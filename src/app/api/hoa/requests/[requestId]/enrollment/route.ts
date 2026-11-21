@@ -5,7 +5,7 @@ import { fieldErrors } from "@/lib/validation/profile";
 import { startEnrollmentBilling, confirmEnrollmentBilling } from "@/lib/server/enrollment-billing";
 export const runtime = "nodejs";
 const schema = z.discriminatedUnion("action", [
-  z.strictObject({ action: z.literal("start"), consentId: z.uuid(), accepted: z.literal(true), termsToken: z.string().regex(/^[a-f0-9]{64}$/) }),
+  z.strictObject({ action: z.literal("start"), consentId: z.uuid(), accepted: z.literal(true), termsToken: z.string().regex(/^[a-f0-9]{64}$/), savedCardReference: z.string().regex(/^[a-f0-9]{64}$/).optional() }),
   z.strictObject({ action: z.literal("join"), consentId: z.uuid(), setupIntentId: z.string().max(128).regex(/^seti_[A-Za-z0-9]+$/) }),
 ]);
 export async function POST(request: Request, context: { params: Promise<{ requestId: string }> }) {
@@ -15,7 +15,7 @@ export async function POST(request: Request, context: { params: Promise<{ reques
   const { requestId } = await context.params;
   try {
     const data = parsed.data;
-    const result = data.action === "start" ? await startEnrollmentBilling(gate.user.id, requestId, data.consentId, data.termsToken)
+    const result = data.action === "start" ? await startEnrollmentBilling(gate.user.id, requestId, data.consentId, data.termsToken, data.savedCardReference)
       : await confirmEnrollmentBilling(gate.user.id, requestId, data.consentId, data.setupIntentId);
     return Response.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

@@ -16,7 +16,14 @@ it.each([
 ])("rejects missing consent or injected identity/pricing %j", async body => { expect((await POST(request(body), context)).status).toBe(400); expect(m.start).not.toHaveBeenCalled(); expect(m.join).not.toHaveBeenCalled(); });
 it("binds setup to authenticated payer and explicit terms with no-store response", async () => {
  const response = await POST(request({ action: "start", consentId, termsToken, accepted: true }), context);
- expect(m.start).toHaveBeenCalledWith("payer", "request", consentId, termsToken); expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+ expect(m.start).toHaveBeenCalledWith("payer", "request", consentId, termsToken, undefined); expect(response.headers.get("Cache-Control")).toBe("private, no-store");
 });
 it("forwards only verified setup identifiers to atomic enrollment", async () => { await POST(request({ action: "join", consentId, setupIntentId: "seti_valid" }), context); expect(m.join).toHaveBeenCalledWith("payer", "request", consentId, "seti_valid"); });
 it("sanitizes processor failures", async () => { m.start.mockRejectedValue(new Error("processor secret")); const response = await POST(request({ action: "start", consentId, termsToken, accepted: true }), context); expect(response.status).toBe(503); expect(await response.text()).not.toContain("processor secret"); });
+
+it("accepts only an opaque saved-card reference alongside fresh explicit consent", async () => {
+ const savedCardReference = "b".repeat(64);
+ expect((await POST(request({ action: "start", consentId, termsToken, accepted: true, savedCardReference }), context)).status).toBe(200);
+ expect(m.start).toHaveBeenCalledWith("payer", "request", consentId, termsToken, savedCardReference);
+ expect((await POST(request({ action: "start", consentId, termsToken, accepted: true, paymentMethodId: "pm_foreign" }), context)).status).toBe(400);
+});
