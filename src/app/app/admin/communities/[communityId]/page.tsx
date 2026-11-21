@@ -97,7 +97,7 @@ export default async function AdminCommunityDetailPage({ params }: PageProps) {
             </div>
           </section>
         )}
-        <CommunityDetailWorkspace initialDetail={detail} />
+        <CommunityDetailWorkspace initialDetail={detail} revenueShareEnabled={process.env.HOA_REVENUE_SHARE === "1"} />
       </div>
     </div>
   );
