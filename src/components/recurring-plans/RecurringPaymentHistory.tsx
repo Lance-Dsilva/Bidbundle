@@ -1,3 +1,4 @@
+import {RecurringPaymentRecovery} from './RecurringPaymentRecovery';
 export type RecurringPaymentSummary = {
   id: string;
   sourceKind: 'monthly' | 'per_visit';
@@ -8,6 +9,7 @@ export type RecurringPaymentSummary = {
   refundedCents: number;
   providerNetCents: number | null;
   holdReason: string | null;
+  canRecover?: boolean;
   lines: {visitId: string; localDate: string; grossCents: number; refundedCents: number}[];
 };
 
@@ -42,6 +44,7 @@ export function RecurringPaymentHistory({payments}: {payments: RecurringPaymentS
       </dl>
       {payment.providerNetCents !== null && <p className="text-sm">Provider share is not confirmation that a payout has been sent.</p>}
       {payment.holdReason && <p>This payment needs review before processing can continue.</p>}
+      {payment.canRecover === true && <RecurringPaymentRecovery chargeId={payment.id}/>}
       <details><summary className="cursor-pointer min-h-11">Included service visits ({payment.lines.length})</summary>
         <ul className="space-y-2">{payment.lines.map(line => <li key={line.visitId}>
           <time dateTime={line.localDate}>{line.localDate}</time>: {money(line.grossCents, payment.currency)}

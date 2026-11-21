@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import {afterEach, expect, it} from 'vitest';
+import {afterEach, expect, it, vi} from 'vitest';
 import {cleanup, render, screen} from '@testing-library/react';
+vi.mock('@/components/recurring-plans/RecurringPaymentRecovery',()=>({RecurringPaymentRecovery:()=> <button>Authorized recovery</button>}));
 import {RecurringPaymentHistory, type RecurringPaymentSummary} from '@/components/recurring-plans/RecurringPaymentHistory';
 afterEach(cleanup);
 const payment: RecurringPaymentSummary = {id:'private-charge-id',sourceKind:'monthly',localMonth:'2026-11',status:'succeeded',amountCents:1001,currency:'usd',refundedCents:1000,providerNetCents:null,holdReason:null,lines:[{visitId:'private-visit-id',localDate:'2026-11-05',grossCents:1001,refundedCents:1000}]};
@@ -39,4 +40,13 @@ it('does not guess that an unknown status means payment processing',()=>{
  render(<RecurringPaymentHistory payments={[{...payment,status:'future_state'}]}/>);
  expect(screen.getByText('Payment status unavailable')).toBeTruthy();
  expect(screen.queryByText('Payment processing')).toBeNull();
+});
+
+it('shows recovery only when the server explicitly grants the capability',()=>{
+ const {rerender}=render(<RecurringPaymentHistory payments={[payment]}/>);
+ expect(screen.queryByText('Authorized recovery')).toBeNull();
+ rerender(<RecurringPaymentHistory payments={[{...payment,canRecover:false}]}/>);
+ expect(screen.queryByText('Authorized recovery')).toBeNull();
+ rerender(<RecurringPaymentHistory payments={[{...payment,canRecover:true}]}/>);
+ expect(screen.getByText('Authorized recovery')).toBeTruthy();
 });
