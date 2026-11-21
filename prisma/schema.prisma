@@ -1033,6 +1033,9 @@ model ServiceAgreement {
 
 /// One recurring cycle (or the single date of a one-off service).
 model ServiceOccurrence {
+  recurringPlanId String?
+  recurringLocalDate String?
+  @@unique([recurringPlanId, recurringLocalDate])
   id          String           @id @default(cuid())
   agreementId String
   agreement   ServiceAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
@@ -1093,6 +1096,8 @@ model VisitBillingConsent {
 }
 
 model ServiceVisit {
+  recurringSubscriptionId String?
+  recurringMonth String?
   redoOfVisitId String? @unique
   testPayment StripeTestPayment?
   id           String            @id @default(cuid())
@@ -1145,7 +1150,9 @@ model ServiceVisit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([occurrenceId, unitId])
+  // Legacy and active-recurring uniqueness are separate partial SQL indexes.
+  @@index([occurrenceId, unitId])
+  @@unique([occurrenceId, unitId, recurringSubscriptionId])
   @@unique([occurrenceId, homeownerUserId])
   @@index([unitId, status])
   @@index([homeownerUserId, status])
@@ -2820,4 +2827,84 @@ model HoaShareJobCursor {
   id String @id
   lastCommunityId String?
   updatedAt DateTime @updatedAt
+}
+
+/// Explicit new open-ended contract, never inferred from finite billing consent.
+model RecurringPlan {
+  id String @id
+  agreementId String @unique
+  requestId String
+  communityId String
+  providerUserId String
+  createdByUserId String
+  scope String
+  monthlyPriceCents Int
+  currency String @default("usd")
+  billingMode String
+  timezone String
+  anchorDate String
+  cadenceDays Int
+  requiresAfterPhoto Boolean
+  termsVersion String
+  termsToken String
+  status String @default("proposed")
+  acceptedAt DateTime?
+  endRequestedAt DateTime?
+  endEffectiveDate String?
+  endedAt DateTime?
+  lastGeneratedMonth String?
+  lastReminderYear Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, updatedAt])
+}
+model RecurringSubscription {
+  id String @id
+  planId String
+  payerUserId String
+  unitId String
+  membershipId String
+  startDate String
+  monthlyCapCents Int
+  currency String
+  termsVersion String
+  termsToken String
+  acceptedAt DateTime @default(now())
+  receiptEmail String
+  customerId String?
+  paymentMethodId String?
+  setupIntentId String? @unique
+  cardVerifiedAt DateTime?
+  status String @default("pending")
+  stopKind String?
+  stopRequestedAt DateTime?
+  stopEffectiveDate String?
+  stoppedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([planId, status])
+  @@index([payerUserId, status])
+}
+model RecurringMonthlyBill {
+  id String @id
+  planId String
+  subscriptionId String
+  unitId String
+  payerUserId String
+  month String
+  timezone String
+  currency String
+  amountCents Int
+  sealedAt DateTime @default(now())
+  @@unique([planId, subscriptionId, unitId, month])
+}
+model RecurringBillLine {
+  id String @id
+  billId String
+  visitId String @unique
+  allocatedCents Int
+  amountCents Int
+  statusAtSeal String
+  completedAt DateTime?
+  @@index([billId])
 }

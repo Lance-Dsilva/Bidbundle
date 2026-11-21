@@ -1,3 +1,4 @@
+import { runRecurringPlanLifecycle } from "@/lib/server/recurring-plans";
 import { generateHoaMonthlyStatements } from "@/lib/server/hoa-revenue-share";
 import { reconcileQualityResolutions } from "@/lib/server/service-quality-resolution";
 import { reconcileStripeTestRefunds } from "@/lib/server/stripe-test-refunds";
@@ -59,7 +60,9 @@ async function drain(request: Request): Promise<NextResponse> {
     let hoaStatements: Awaited<ReturnType<typeof generateHoaMonthlyStatements>> | null = null;
     let hoaStatementsFailed = false;
     try { hoaStatements = await generateHoaMonthlyStatements(); hoaStatementsFailed = hoaStatements.failed > 0; } catch { hoaStatementsFailed = true; }
-    return NextResponse.json({ hoaStatements, hoaStatementsFailed, qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
+    let recurringPlans: Awaited<ReturnType<typeof runRecurringPlanLifecycle>> | null = null;
+    try { recurringPlans = await runRecurringPlanLifecycle(); } catch { recurringPlans = { processed: 0, generated: 0, failed: 1 }; }
+    return NextResponse.json({ recurringPlans, hoaStatements, hoaStatementsFailed, qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",
