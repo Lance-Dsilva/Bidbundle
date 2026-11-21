@@ -1,0 +1,10 @@
+import { resolve } from "node:path";
+import { defineConfig } from "vitest/config";
+const raw = process.env.TEST_DATABASE_URL;
+if (!raw) throw new Error("Explicit owned recurring test URL required");
+const url = new URL(raw);
+if (url.protocol !== "postgresql:" || url.hostname !== "127.0.0.1" || url.port !== "53952" || url.pathname !== "/bundleen_issue56_test_recurring" || url.username !== "bundleen_issue43_runner_cards" || url.search || url.hash) throw new Error("Only owned recurring disposable database allowed");
+process.env.DATABASE_URL=raw; delete process.env.DIRECT_URL;
+process.env.RECURRING_PLANS="1";process.env.HOA_REVENUE_SHARE="1"; process.env.PLATFORM_FEE_BPS="1000"; process.env.STRIPE_TEST_PAYMENTS="0"; process.env.SERVICE_QUALITY_INTAKE="1";
+process.env.PROVIDER_DOCUMENT_BLOB_READ_WRITE_TOKEN="owned-fixture-only"; process.env.RATE_LIMIT_IDENTIFIER_SECRET="owned-fixture-only";
+export default defineConfig({ resolve: { alias: { "@":resolve(import.meta.dirname,"../../src"), "server-only":resolve(import.meta.dirname,"../stubs/server-only.ts"), "next/server":resolve(import.meta.dirname,"../../node_modules/next/server.js") } }, test: { environment:"node", include:["tests/postgres/recurring-financial-independent.postgres.ts"], fileParallelism:false, testTimeout:30000, hookTimeout:30000 } });

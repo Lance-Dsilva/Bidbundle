@@ -1,3 +1,4 @@
+import { reconcileRecurringFinancialEvent } from "@/lib/server/recurring-financial-events";
 import { notifyStripeTestPaymentProblem } from "@/lib/server/stripe-test-payment-notifications";
 import "server-only";
 import { FINANCIAL_EVENT_TYPES, reconcileStripeFinancialEvent } from "@/lib/server/stripe-financial-events";
@@ -21,6 +22,7 @@ export async function reconcileStripeTestPayments(limit = 3) {
   const events = await db.stripeTestEvent.findMany({ where: { processedAt: null, OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }], eventType: { in: types } }, orderBy: { receivedAt: "asc" }, take });
   for (const event of events) {
     try {
+      if (await reconcileRecurringFinancialEvent(event.id)) { result.processed += 1; continue; }
       if (FINANCIAL_EVENT_TYPES.includes(event.eventType)) {
         await reconcileStripeFinancialEvent(event.id); result.processed += 1; continue;
       }
