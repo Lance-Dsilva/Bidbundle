@@ -88,3 +88,8 @@ it("does no history work when the sandbox feature is disabled", async () => {
   await expect(listResidentTestPayments("payer")).rejects.toMatchObject({ status: 404 });
   expect(m.list).not.toHaveBeenCalled();
 });
+it("reports the actual residual provider transfer after a pre-transfer partial refund", async () => {
+  m.list.mockResolvedValue([{ ...row, amountRefundedCents: 400, transferAmountCents: 540, providerReversedCents: 0 }]);
+  const history = await listProviderTestPayments("provider");
+  expect(history.payments[0]).toMatchObject({ providerCents: 900, transferredCents: 540, refundedCents: 400, reversedCents: 0 });
+});

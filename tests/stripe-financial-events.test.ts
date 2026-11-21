@@ -81,3 +81,11 @@ it("recovers a charge webhook racing the local latest-charge write from the pers
   await reconcileStripeFinancialEvent("evt"); expect(m.payment.stripeChargeId).toBe("ch_owned"); expect(m.payment.reconciliationHoldReason).toBe("unreconciled_refund_balance");
   expect(m.createMoney).not.toHaveBeenCalled();
 });
+it.each([100, 541])("checks reversals against the actual residual transfer, not the original provider share: %s", async reversed => {
+  m.payment.stripeTransferId = "tr_owned"; m.payment.transferAmountCents = 540; m.payment.transferRefundedBeforeCents = 400; m.payment.amountRefundedCents = 400;
+  m.charge.amount_refunded = 400; m.event.eventType = "transfer.reversed"; m.event.objectId = "tr_owned";
+  m.transfer = { id: "tr_owned", livemode: false, amount: 540, amount_reversed: reversed, currency: "usd", destination: "acct_owned", source_transaction: "ch_owned" };
+  m.reversalRows = [{ id: "trr_external", created: 1, metadata: {} }];
+  if (reversed > 540) { await expect(reconcileStripeFinancialEvent("evt")).rejects.toThrow(); expect(m.event.processedAt).toBeNull(); }
+  else { await reconcileStripeFinancialEvent("evt"); expect(m.payment.observedProviderReversedCents).toBe(100); expect(m.event.processedAt).toBeTruthy(); }
+});

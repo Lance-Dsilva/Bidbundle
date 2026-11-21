@@ -21,8 +21,8 @@ import { updateProviderAdministration } from "@/lib/server/providers-admin";
 import { reportServiceQuality, requestQualityResolution, respondToQualityClaim } from "@/lib/server/service-quality";
 let first: PrismaClient;
 async function run<T>(_db: PrismaClient, work: () => Promise<T>) { return work(); }
-beforeAll(() => { first = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.TEST_DATABASE_URL! }) }); injection.db = first; });
-afterAll(async () => first?.$disconnect());
+beforeAll(() => { vi.stubEnv("SERVICE_QUALITY_INTAKE", "1"); first = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.TEST_DATABASE_URL! }) }); injection.db = first; });
+afterAll(async () => { await first?.$disconnect(); vi.unstubAllEnvs(); });
 async function seed(category = "pool_care", options: { notifyEmail?: boolean; totalOccurrences?: number; paid?: boolean } = {}) {
   const tag = `quality50-${randomUUID()}`;
   const admin = await first.user.create({ data: { clerkUserId: `${tag}-admin`, email: `${tag}-admin@example.invalid`,
@@ -142,7 +142,7 @@ async function paidFixture() {
  stripeMock.charge.mockResolvedValue({ livemode: false, paid: true, disputed: false, amount_refunded: 0, amount: 1000, amount_captured: 1000, currency: "usd", payment_intent: pay.stripePaymentIntentId, customer: pay.customerId });
  stripeMock.account.mockResolvedValue({ metadata: { bundleenProviderUserId: f.provider.id }, payouts_enabled: true, capabilities: { transfers: "active" } });
  stripeMock.transfer.mockResolvedValue({ id: `tr_${f.ownVisit.id}`, livemode: false, amount: 900, currency: "usd", destination: pay.providerAccountId, source_transaction: pay.stripeChargeId });
- process.env.STRIPE_TEST_TRANSFERS="1"; process.env.STRIPE_SECRET_KEY="sk_test_fixture";
+ vi.stubEnv("STRIPE_TEST_TRANSFERS", "1"); vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fixture");
  return { ...f, pay };
 }
 async function waitForBlock(pid: number) {
@@ -198,7 +198,7 @@ it("creates immutable no-charge redo and closes claim only after actual completi
 });
 
 it("links the explicit partial refund then pays only the remaining provider share",async()=>{
- const f=await paidFixture();process.env.STRIPE_TEST_REFUNDS="1";
+ const f=await paidFixture();vi.stubEnv("STRIPE_TEST_REFUNDS", "1");
  const claim=await reportServiceQuality(f.residents[0].user.id,f.ownVisit.id,{reason:"incomplete",description:"The agreed work was incomplete."});
  await requestQualityResolution(f.admin.id,claim.id,{action:"request_refund",note:"Agreed partial service refund."});
  const op=await first.$transaction(async tx=>{const reserved=await reserveStripeTestRefund(tx,f.admin.id,f.ownVisit.id,{id:randomUUID(),amountCents:400,reason:"service_quality"});await tx.serviceQualityClaim.update({where:{id:claim.id},data:{refundOperationId:reserved.id}});return reserved;});

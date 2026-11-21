@@ -507,12 +507,12 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     await expect(first.stripeTestPayment.delete({ where: { visitId: visit.id } })).rejects.toThrow(/cannot be deleted/i);
     // Include its dependent recovery ledger so PostgreSQL reaches our explicit
     // no-truncate guards rather than stopping at the foreign-key precheck.
-    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt", "StripeTestRefund", "StripeTestFinancialObservation"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt", "StripeTestRefund", "StripeTestFinancialObservation", "ServiceQualityClaim", "ServiceQualityPhoto"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
     await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);
     const attemptAt = new Date();
-    await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAttemptedAt: attemptAt, stripeTransferId: `tr_${visit.id}` } });
+    await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAmountCents: a.providerAmountCents, transferRefundedBeforeCents: 0, transferAttemptedAt: attemptAt, stripeTransferId: `tr_${visit.id}` } });
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { transferAttemptedAt: new Date(+attemptAt + 1) } })).rejects.toThrow(/immutable/i);
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripeTransferId: "tr_other" } })).rejects.toThrow(/immutable/i);
   });
@@ -655,9 +655,12 @@ describe("sandbox refund reservations", () => {
       residentUserId: visit.billingPayerUserId!, providerUserId: f.provider.id, unitId: visit.unitId!,
       customerId: `cus_${visit.id}`, paymentMethodId: `pm_${visit.id}`, providerAccountId: `acct_${f.provider.id}`,
       termsToken: `terms_${visit.id}`, amountCents: 1000, platformFeeCents: 100, hoaShareCents: 0, providerAmountCents: 900,
-      currency: "usd", stripePaymentIntentId: `pi_${visit.id}`, stripeChargeId: `ch_${visit.id}`, stripeTransferId: `tr_${visit.id}`, status: "succeeded",
+      currency: "usd", stripePaymentIntentId: `pi_${visit.id}`, stripeChargeId: `ch_${visit.id}`, status: "succeeded",
     } });
-    return { ...f, payment };
+    const transferred = await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: {
+      transferAttemptedAt: new Date(), transferAmountCents: 900, transferRefundedBeforeCents: 0, stripeTransferId: `tr_${visit.id}`,
+    } });
+    return { ...f, payment: transferred };
   }
   const reserve = async (db: PrismaClient, f: Awaited<ReturnType<typeof paid>>, id: string = randomUUID(), amountCents = 400) => {
     const { requestStripeTestRefund } = await import("@/lib/server/stripe-test-refunds");
