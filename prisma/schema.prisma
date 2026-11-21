@@ -505,6 +505,7 @@ model AdminAccessGrant {
 /// `neighborhood` by a CHECK constraint in the migration — Prisma cannot
 /// express a conditional requirement.
 model Community {
+  publicShare CommunityPublicShare?
   id     String          @id @default(cuid())
   name   String
   type   CommunityType
@@ -770,6 +771,7 @@ model CommunityInvitation {
 /// requests are visible to every active resident; optional group requests use
 /// participation rows to record who chose to join.
 model HoaServiceRequest {
+  publicShare RequestPublicShare?
   id          String    @id @default(cuid())
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -2651,6 +2653,22 @@ model ServiceBidPriceTier {
   @@index([bidId])
 }
 
+/// Manager-controlled capability URLs. Never index or enumerate these links.
+model CommunityPublicShare {
+  communityId String @id
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  token String @unique
+  createdAt DateTime @default(now())
+}
+model RequestPublicShare {
+  requestId String @id
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  token String @unique
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model EnrollmentBillingConsent {
   id String @id
   requestId String
@@ -2765,4 +2783,19 @@ model ServiceQualityPhoto {
   checksum String
   createdAt DateTime @default(now())
   @@index([claimId, createdAt])
+}
+
+/// Short-lived signup continuation. It never grants residency or billing consent.
+model SharedEnrollmentFlow {
+  token String @id
+  requestId String
+  communityTokenHash String
+  requestTokenHash String
+  userId String?
+  consentId String @unique
+  confirmedMembershipId String?
+  confirmedUnitId String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([expiresAt])
 }

@@ -80,5 +80,22 @@ it("can restart after saved-card verification fails with fresh explicit consent"
  fireEvent.change(screen.getByRole("combobox"), { target: { value: "b".repeat(64) } }); fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(screen.getByRole("button", { name: "Save card and join" }));
  await screen.findByText(/Your saved card will be verified/); fireEvent.click(screen.getByRole("button", { name: "Confirm card and join" })); await screen.findByRole("alert");
  fireEvent.click(screen.getByRole("button", { name: "Choose a different card" }));
- expect(screen.getByRole("combobox")).toHaveValue(""); expect(screen.getByRole("checkbox")).not.toBeChecked(); expect(screen.getByRole("button", { name: "Save card and join" })).toBeDisabled();
+ expect(await screen.findByRole("combobox")).toHaveValue(""); expect(screen.getByRole("checkbox")).not.toBeChecked(); expect(screen.getByRole("button", { name: "Save card and join" })).toBeDisabled();
+});
+
+it("keeps public enrollment behind its flow endpoint and only confirms after atomic join", async () => {
+ const joined = vi.fn();
+ m.fetch.mockResolvedValueOnce(ok({clientSecret:"setup"})).mockResolvedValueOnce(ok({joined:true}));
+ m.setup.mockResolvedValue({setupIntent:{id:"seti_shared",status:"succeeded"}});
+ render(<EnrollmentBilling requestId="ignored" sharedFlowToken="flow" offer={offer} onJoined={joined} />);
+ fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(screen.getByRole("button",{name:"Save card and join"}));
+ await screen.findByText("Secure card fields"); expect(joined).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole("button",{name:"Confirm card and join"})); await screen.findByRole("status");
+ expect(joined).toHaveBeenCalledTimes(1);
+ for(const call of m.fetch.mock.calls){expect(call[0]).toBe("/api/public-enrollment/flow");expect(JSON.parse(call[1].body)).not.toHaveProperty("consentId");}
+});
+
+it("does not claim success for a non-committed shared response", async () => {
+ const joined=vi.fn();m.fetch.mockResolvedValueOnce(ok({clientSecret:"setup"})).mockResolvedValueOnce(ok({stage:"review"}));m.setup.mockResolvedValue({setupIntent:{id:"seti_shared",status:"succeeded"}});
+ render(<EnrollmentBilling requestId="" sharedFlowToken="flow" offer={offer} onJoined={joined}/>);fireEvent.click(screen.getByRole("checkbox"));fireEvent.click(screen.getByRole("button",{name:"Save card and join"}));await screen.findByText("Secure card fields");fireEvent.click(screen.getByRole("button",{name:"Confirm card and join"}));expect(await screen.findByRole("alert")).toHaveTextContent("not confirmed");expect(joined).not.toHaveBeenCalled();
 });

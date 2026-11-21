@@ -110,7 +110,7 @@ export function scheduleOutboxDrain(): void {
  * Returns the `createMany` operations for a set of notification intents, ready
  * to be spread into the caller's `$transaction` batch.
  */
-export function buildNotificationOps(intents: readonly NotificationIntent[]): BatchOp[] {
+export function buildNotificationOps(intents: readonly NotificationIntent[], client: Prisma.TransactionClient = db): BatchOp[] {
   if (intents.length === 0) return [];
 
   const notificationRows = intents.map((intent) => ({
@@ -138,10 +138,10 @@ export function buildNotificationOps(intents: readonly NotificationIntent[]): Ba
     }));
 
   const ops: BatchOp[] = [
-    db.notification.createMany({ data: notificationRows, skipDuplicates: true }),
+    client.notification.createMany({ data: notificationRows, skipDuplicates: true }),
   ];
   if (outboxRows.length > 0) {
-    ops.push(db.outboxEvent.createMany({ data: outboxRows, skipDuplicates: true }));
+    ops.push(client.outboxEvent.createMany({ data: outboxRows, skipDuplicates: true }));
   }
   return ops;
 }
@@ -153,6 +153,7 @@ export function buildNotificationOps(intents: readonly NotificationIntent[]): Ba
  */
 export async function buildPreferenceAwareNotificationOps(
   intents: readonly NotificationIntent[],
+  client: Prisma.TransactionClient = db,
 ): Promise<BatchOp[]> {
   if (intents.length === 0) return [];
 
@@ -167,7 +168,7 @@ export async function buildPreferenceAwareNotificationOps(
   ];
   const optedOut = new Set<string>();
   if (preferenceControlledIds.length > 0) {
-    const profiles = await db.homeownerProfile.findMany({
+    const profiles = await client.homeownerProfile.findMany({
       where: {
         userId: { in: preferenceControlledIds },
         notifyEmail: false,
@@ -182,6 +183,7 @@ export async function buildPreferenceAwareNotificationOps(
     intents.map((intent) =>
       optedOut.has(intent.userId) ? { ...intent, email: null } : intent,
     ),
+    client,
   );
   if (intents.some((intent) => Boolean(intent.email))) scheduleOutboxDrain();
   return ops;

@@ -5,11 +5,11 @@ import { loadStripe } from "@stripe/stripe-js";
 const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = key?.startsWith("pk_test_") ? loadStripe(key) : null;
 type Offer = { savedCards?: { reference: string; brand: string; last4: string }[]; title: string; scope: string; maximumCents: number; currency: string; totalOccurrences: number; recurrenceLabel: string | null; termsToken: string };
-async function post<T>(requestId: string, body: unknown): Promise<T> {
-  const response = await fetch(`/api/hoa/requests/${encodeURIComponent(requestId)}/enrollment`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+async function post<T>(requestId: string, body: unknown, sharedFlowToken?: string): Promise<T> {
+  const response = await fetch(sharedFlowToken ? `/api/public-enrollment/${encodeURIComponent(sharedFlowToken)}` : `/api/hoa/requests/${encodeURIComponent(requestId)}/enrollment`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sharedFlowToken && body && typeof body === "object" ? Object.fromEntries(Object.entries(body).filter(([name]) => name !== "consentId")) : body) });
   const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "Enrollment is unavailable."); return data;
 }
-export function EnrollmentBilling({ requestId, offer }: { requestId: string; offer: Offer }) {
+export function EnrollmentBilling({ requestId, offer, sharedFlowToken, onJoined }: { requestId: string; offer: Offer; sharedFlowToken?: string; onJoined?: () => void }) {
   const [accepted, setAccepted] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [secret, setSecret] = useState<string | null>(null), [joined, setJoined] = useState(false);
   const [selectedCard, setSelectedCard] = useState("");
   const [usingSavedCard, setUsingSavedCard] = useState(false);
@@ -17,26 +17,26 @@ export function EnrollmentBilling({ requestId, offer }: { requestId: string; off
   const maximum = new Intl.NumberFormat("en-US", { style: "currency", currency: offer.currency }).format(offer.maximumCents / 100);
   return <section className="bb-card bb-card-pad space-y-4"><p>{offer.scope}</p><p className="font-semibold">Maximum {maximum} for the full service term ({offer.totalOccurrences} visits{offer.recurrenceLabel ? `, ${offer.recurrenceLabel}` : ""}).</p>
     <p>Your price can fall as more homes join. Each completed visit is charged its share of the final total. No charge if the group does not reach its minimum.</p><p>Sandbox testing only: use a Stripe test card.</p>
-    {joined ? <p role="status">You’re enrolled. Your test card is saved; nothing has been charged.</p> : secret && consent.current && stripePromise ? <Elements stripe={stripePromise} options={{ clientSecret: secret }}><EnrollmentCard onRestart={() => { setSecret(null); setUsingSavedCard(false); setSelectedCard(""); consent.current = null; setAccepted(false); setError(null); }} clientSecret={secret} usingSavedCard={usingSavedCard} requestId={requestId} consentId={consent.current} onJoined={() => setJoined(true)} /></Elements> : <>
+    {joined ? <p role="status">You’re enrolled. Your test card is saved; nothing has been charged.</p> : secret && consent.current && stripePromise ? <Elements stripe={stripePromise} options={{ clientSecret: secret }}><EnrollmentCard onRestart={async () => { if (sharedFlowToken) await post(requestId, { action: "restart" }, sharedFlowToken); setSecret(null); setUsingSavedCard(false); setSelectedCard(""); consent.current = null; setAccepted(false); setError(null); }} clientSecret={secret} usingSavedCard={usingSavedCard} requestId={requestId} sharedFlowToken={sharedFlowToken} consentId={consent.current} onJoined={() => { setJoined(true); onJoined?.(); }} /></Elements> : <>
       {!!offer.savedCards?.length && <label className="block">Card<select aria-label="Card" className="block min-h-11 w-full" disabled={busy} value={selectedCard} onChange={event => { setSelectedCard(event.target.value); consent.current = null; setAccepted(false); }}><option value="">Use a new card</option>{offer.savedCards.map(card => <option key={card.reference} value={card.reference}>Use {card.brand} ending {card.last4}</option>)}</select></label>}
       <label className="flex gap-3"><input className="mt-1 h-5 w-5 shrink-0" type="checkbox" checked={accepted} disabled={busy} onChange={event => setAccepted(event.target.checked)} /><span>I authorize Bundleen to save my test card and charge only after completed visits, up to {maximum} in total for these services. The final total may be lower.</span></label>
       <button type="button" className="bb-btn bb-btn-primary min-h-11" disabled={!accepted || busy || !stripePromise} onClick={async () => {
         if (pending.current || !accepted) return; pending.current = true; setBusy(true); setError(null);
-        try { consent.current ??= crypto.randomUUID(); const result = await post<{ clientSecret: string; usingSavedCard?: boolean }>(requestId, { action: "start", consentId: consent.current, termsToken: offer.termsToken, accepted: true, ...(selectedCard ? { savedCardReference: selectedCard } : {}) }); setUsingSavedCard(result.usingSavedCard === true); setSecret(result.clientSecret); }
+        try { consent.current ??= crypto.randomUUID(); const result = await post<{ clientSecret: string; usingSavedCard?: boolean }>(requestId, { action: "start", consentId: consent.current, termsToken: offer.termsToken, accepted: true, ...(selectedCard ? { savedCardReference: selectedCard } : {}) }, sharedFlowToken); setUsingSavedCard(result.usingSavedCard === true); setSecret(result.clientSecret); }
         catch (caught) { setError(caught instanceof Error ? caught.message : "Please try again."); }
         finally { pending.current = false; setBusy(false); }
       }}>{busy ? "Preparing…" : "Save card and join"}</button>
     </>}{!stripePromise && <p role="status">Sandbox card setup is unavailable. Please try again later.</p>}{error && <p role="alert">{error}</p>}</section>;
 }
-function EnrollmentCard({ requestId, consentId, onJoined, clientSecret, usingSavedCard, onRestart }: { onRestart: () => void; clientSecret: string; usingSavedCard: boolean; requestId: string; consentId: string; onJoined: () => void }) {
+function EnrollmentCard({ requestId, sharedFlowToken, consentId, onJoined, clientSecret, usingSavedCard, onRestart }: { onRestart: () => void | Promise<void>; clientSecret: string; usingSavedCard: boolean; requestId: string; sharedFlowToken?: string; consentId: string; onJoined: () => void }) {
   const stripe = useStripe(), elements = useElements(); const confirmed = useRef<string | null>(null), pending = useRef(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   return <form className="space-y-4" onSubmit={async event => {
     event.preventDefault(); if (!stripe || !elements || pending.current) return; pending.current = true; setBusy(true); setError(null);
     try {
       if (!confirmed.current) { const result = usingSavedCard ? await stripe.confirmCardSetup(clientSecret) : await stripe.confirmSetup({ elements, redirect: "if_required" }); if (result.error || result.setupIntent?.status !== "succeeded") throw new Error(result.error?.message ?? "Card setup did not complete."); confirmed.current = result.setupIntent.id; }
-      await post(requestId, { action: "join", consentId, setupIntentId: confirmed.current }); onJoined();
+      const result = await post<{joined?: boolean}>(requestId, { action: "join", consentId, setupIntentId: confirmed.current }, sharedFlowToken); if (result.joined !== true) throw new Error("Enrollment is not confirmed. Please refresh before retrying."); onJoined();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Please retry enrollment."); }
     finally { pending.current = false; setBusy(false); }
-  }}>{usingSavedCard ? <p>Your saved card will be verified for this new enrollment. Your bank may request verification. Nothing is charged now.</p> : <PaymentElement />}<button className="bb-btn bb-btn-primary min-h-11" type="submit" disabled={busy || !stripe}>{busy ? "Joining…" : "Confirm card and join"}</button><button type="button" className="bb-btn bb-btn-secondary min-h-11" disabled={busy} onClick={onRestart}>Choose a different card</button>{error && <p role="alert">{error}</p>}</form>;
+  }}>{usingSavedCard ? <p>Your saved card will be verified for this new enrollment. Your bank may request verification. Nothing is charged now.</p> : <PaymentElement />}<button className="bb-btn bb-btn-primary min-h-11" type="submit" disabled={busy || !stripe}>{busy ? "Joining…" : "Confirm card and join"}</button><button type="button" className="bb-btn bb-btn-secondary min-h-11" disabled={busy} onClick={async () => { if (pending.current) return; pending.current = true; setBusy(true); setError(null); try { await onRestart(); } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not restart card setup."); } finally { pending.current = false; setBusy(false); } }}>Choose a different card</button>{error && <p role="alert">{error}</p>}</form>;
 }

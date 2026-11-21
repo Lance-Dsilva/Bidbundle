@@ -1,3 +1,6 @@
+import { cookies } from "next/headers";
+import { getSharedEnrollmentReturnPath } from "@/lib/server/shared-enrollment";
+import { SHARED_ENROLLMENT_COOKIE } from "@/lib/server/shared-enrollment-http";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -247,7 +250,16 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     if (!user) throw lastError ?? new Error("Profile persistence did not return a user.");
 
-    if (user.role === "homeowner") await placeInNeighborhood(user.id);
+    let sharedReturn: string | null = null;
+    const sharedToken = (await cookies()).get(SHARED_ENROLLMENT_COOKIE)?.value;
+    if (user.role === "homeowner" && sharedToken) {
+      try { sharedReturn = await getSharedEnrollmentReturnPath(sharedToken); }
+      catch { /* Profile is committed; a failed optional return must not undo it. */ }
+    }
+
+    // Shared HOA signup must prove its invitation before any community assignment.
+    // Otherwise automatic neighborhood placement would block the trusted HOA invitation.
+    if (user.role === "homeowner" && !sharedReturn) await placeInNeighborhood(user.id);
 
     // The provider's onboarding circle becomes their primary active area, but
     // only after the profile itself committed and only through the same
@@ -296,7 +308,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({
       profileReady: true,
       role: user.role,
-      redirectTo: DASHBOARD_BY_ROLE[user.role],
+      redirectTo: sharedReturn ?? DASHBOARD_BY_ROLE[user.role],
     });
   } catch (error) {
     if (error instanceof SuspendedProviderError) {

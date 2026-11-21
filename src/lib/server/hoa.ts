@@ -732,7 +732,7 @@ export async function acceptHoaInvitation(input: {
   });
 
   const now = new Date();
-  const acceptanceNotificationOps = await buildPreferenceAwareNotificationOps([
+  const acceptanceIntents: Parameters<typeof buildPreferenceAwareNotificationOps>[0] = [
     {
       userId: user.id,
       email,
@@ -759,7 +759,8 @@ export async function acceptHoaInvitation(input: {
           },
         ]
       : []),
-  ]);
+  ];
+  const acceptanceNotificationOps = isStaff ? await buildPreferenceAwareNotificationOps(acceptanceIntents) : [];
   if (isHoaStaffInvitationRole(invitation.role)) {
     if (invitation.role === "hoa_manager") {
       const currentManager = await db.communityStaffAssignment.findFirst({
@@ -844,8 +845,19 @@ export async function acceptHoaInvitation(input: {
   });
 
   try {
-    await db.$transaction([
-      db.communityMembership.upsert({
+    await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id"=${user.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "Community" WHERE "id"=${invitation.community.id} FOR SHARE`;
+      await tx.$queryRaw`SELECT "id" FROM "CommunityInvitation" WHERE "id"=${invitation.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "CommunityUnit" WHERE "id"=${unitId} FOR UPDATE`;
+      const live = await tx.communityInvitation.findUnique({ where: { id: invitation.id }, include: { unit: true, community: true } });
+      const actor = await tx.user.findUnique({ where: { id: user.id } });
+      if (!actor || !actor.isVerified || actor.role !== "homeowner" || actor.clerkUserId !== input.clerkUserId || normalizeEmail(actor.email) !== email || !live || live.role !== "homeowner" || live.email !== email || live.communityId !== invitation.community.id || live.unitId !== unitId || live.community.type !== "hoa" || live.community.status !== "active") throw new HoaWorkflowError("This invitation changed. Ask your HOA manager to review it.", 409);
+      if (live.status === "accepted" && live.acceptedByUserId === user.id) return;
+      if (live.status !== "pending" || live.revokedAt || live.acceptedByUserId || (live.expiresAt && live.expiresAt <= new Date()) || !live.unit || !["vacant", "invite_pending"].includes(live.unit.occupancyStatus)) throw new HoaWorkflowError("This invitation is no longer available.", 409);
+      if (await tx.communityMembership.findFirst({ where: { status: "active", OR: [{ unitId, userId: { not: user.id } }, { userId: user.id, communityId: { not: invitation.community.id } }] } })) throw new HoaWorkflowError("Your home needs manager review before accepting this invitation.", 409);
+      await Promise.all([
+      tx.communityMembership.upsert({
         where: {
           communityId_userId: { communityId: invitation.community.id, userId: user.id },
         },
@@ -867,15 +879,15 @@ export async function acceptHoaInvitation(input: {
           isAdminOverride: false,
         },
       }),
-      db.communityUnit.update({
+      tx.communityUnit.update({
         where: { id: unitId },
         data: { occupancyStatus: "occupied" },
       }),
-      db.communityInvitation.update({
+      tx.communityInvitation.update({
         where: { id: invitation.id },
         data: { status: "accepted", acceptedByUserId: user.id, acceptedAt: now },
       }),
-      db.adminAuditLog.create({
+      tx.adminAuditLog.create({
         data: buildAuditEntry({
           actorUserId: user.id,
           action: "community_invitation_accepted",
@@ -885,8 +897,9 @@ export async function acceptHoaInvitation(input: {
           metadata: { role: invitation.role, status: "accepted" },
         }),
       }),
-      ...acceptanceNotificationOps,
-    ]);
+      ...(await buildPreferenceAwareNotificationOps(acceptanceIntents, tx)),
+      ]);
+    });
   } catch (error) {
     if ((error as { code?: string }).code === "P2002") {
       // The one-active-resident-per-unit index caught a race with another
