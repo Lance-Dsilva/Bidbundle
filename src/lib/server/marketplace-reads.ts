@@ -7,6 +7,7 @@ import { parsePoolQuote, parsePoolTemplate } from "@/lib/pool-bid-template";
 import { redactPoolBidIdentity } from "@/lib/pool-bid-privacy";
 import type { BidSummary } from "@/lib/hoa-types";
 import { db } from "@/lib/server/db";
+import { getProviderTestPaymentTotals, type ProviderTestPaymentTotals } from "@/lib/server/stripe-test-payment-history";
 
 /**
  * Cross-cutting reads the dashboards need: a homeowner's incoming quotes and a
@@ -130,6 +131,8 @@ export async function listHomeownerBids(userId: string): Promise<HomeownerBidVie
 /* ── Provider: earnings ──────────────────────────────────────────────────── */
 
 export type ProviderEarnings = {
+  /** Verified sandbox ledger activity, separate from agreed work value. */
+  payments?: ProviderTestPaymentTotals;
   /** Agreed value of work that is fully complete, in whole cents. */
   earnedCents: number;
   /** Agreed value of active agreements not yet complete. */
@@ -159,9 +162,8 @@ export type ProviderEarnings = {
  *
  * Money is the agreement's snapshotted `amountCents` — the terms accepted at
  * award — not a recomputation from the current bid row, which the provider
- * could otherwise have edited. Bundleen holds no payment rails yet, so
- * "earned" means "work completed under an agreement", stated plainly rather
- * than dressed up as a payout balance.
+ * could otherwise have edited. Legacy agreement metrics remain work values;
+ * the optional payment section reports the separate sandbox ledger.
  */
 export async function getProviderEarnings(providerUserId: string): Promise<ProviderEarnings> {
   const monthStart = new Date();
@@ -202,6 +204,7 @@ export async function getProviderEarnings(providerUserId: string): Promise<Provi
     .reduce((sum, agreement) => sum + agreement.amountCents, 0);
 
   return {
+    ...(process.env.STRIPE_TEST_PAYMENTS === "1" ? { payments: await getProviderTestPaymentTotals(providerUserId) } : {}),
     earnedCents,
     pendingCents,
     thisMonthCents,
