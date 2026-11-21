@@ -47,13 +47,20 @@ export async function prepareStripeTestPayment(visitId: string) {
     if (!payer?.isVerified || !z.string().email().max(254).safeParse(receiptEmail).success) throw new HoaWorkflowError("The original payer must verify their account email before payment.", 409);
     const configuredFee = process.env.PLATFORM_FEE_BPS ?? "1000";
     if (!/^\d+$/.test(configuredFee) || Number(configuredFee) > 1000) throw new HoaWorkflowError("Platform fee must preserve the provider's 90% share.", 503);
-    const split = calculateStripePaymentAmounts(visit.allocatedVisitCents, Number(configuredFee));
+    await tx.$queryRaw`SELECT "id" FROM "Community" WHERE "id"=${agreement.communityId} FOR UPDATE`;
+    const shareCommunity = await tx.community.findUniqueOrThrow({ where: { id: agreement.communityId } });
+    const rate = shareCommunity.hoaRevenueShareBps;
+    if (rate > Number(configuredFee)) throw new HoaWorkflowError("HOA share exceeds the platform fee.", 409);
+    const split = calculateStripePaymentAmounts(visit.allocatedVisitCents, Number(configuredFee), rate);
+    const count = agreement.request.totalOccurrences;
+    const capAllocation = enrollment && count > 0 ? Math.floor(enrollment.maximumCents / count) + (visit.occurrence.sequence <= enrollment.maximumCents % count ? 1 : 0) : visit.allocatedVisitCents;
+    const residentSavingsCents = Math.max(0, capAllocation - visit.allocatedVisitCents);
     return tx.stripeTestPayment.create({ data: {
       visitId, receiptEmail, enrollmentAuthorizationId: enrollment?.id ?? null, requestId: agreement.requestId, agreementId: agreement.id, communityId: agreement.communityId,
       residentUserId: visit.billingPayerUserId, providerUserId: agreement.providerUserId, unitId: visit.unitId,
       customerId: consent.testCard.customerId, paymentMethodId: consent.testCard.paymentMethodId,
       providerAccountId: provider.providerProfile.stripeTestAccountId, termsToken: consent.termsToken,
-      amountCents: visit.allocatedVisitCents, platformFeeCents: split.platformFeeCents, hoaShareCents: 0,
+      amountCents: visit.allocatedVisitCents, platformFeeCents: split.platformFeeCents, hoaShareCents: split.hoaShareCents, hoaRevenueShareBps: rate, residentSavingsCents,
       providerAmountCents: split.providerAmountCents, currency: "usd",
     } });
   });

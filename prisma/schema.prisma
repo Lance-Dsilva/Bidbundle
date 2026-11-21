@@ -505,6 +505,9 @@ model AdminAccessGrant {
 /// `neighborhood` by a CHECK constraint in the migration — Prisma cannot
 /// express a conditional requirement.
 model Community {
+  hoaRevenueShareBps Int @default(0)
+  stripeTestHoaAccountId String? @unique
+  stripeTestHoaPayoutStatus String @default("not_started")
   id     String          @id @default(cuid())
   name   String
   type   CommunityType
@@ -2564,6 +2567,8 @@ model StripeTestCard {
 
 /// Durable sandbox-only economic identity: one charge intent per completed visit.
 model StripeTestPayment {
+  hoaRevenueShareBps Int?
+  residentSavingsCents Int @default(0)
   /// Verified original-payer address frozen before creating the payment intent. Historical rows remain null.
   receiptEmail String?
   reconciliationHoldReason String?
@@ -2765,4 +2770,54 @@ model ServiceQualityPhoto {
   checksum String
   createdAt DateTime @default(now())
   @@index([claimId, createdAt])
+}
+
+model HoaShareEntry {
+  id String @id @default(cuid())
+  communityId String
+  paymentVisitId String
+  sequence Int
+  kind String
+  amountCents Int
+  savingsCents Int
+  refundedCents Int
+  createdAt DateTime @default(now())
+  @@unique([paymentVisitId, sequence])
+  @@index([communityId, createdAt])
+}
+model HoaShareStatement {
+  id String @id @default(cuid())
+  communityId String
+  periodStart DateTime
+  periodEnd DateTime
+  totalCents Int
+  savingsCents Int
+  openingBalanceCents Int
+  closingBalanceCents Int
+  status String @default("accruing")
+  createdAt DateTime @default(now())
+  @@unique([communityId, periodStart])
+}
+model HoaSharePayout {
+  id String @id
+  statementId String @unique
+  communityId String
+  actorUserId String
+  method String
+  amountCents Int
+  accountId String?
+  reference String?
+  status String @default("pending")
+  stripeTransferId String? @unique
+  attemptedAt DateTime?
+  paidAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([communityId, status])
+}
+
+model HoaShareJobCursor {
+  id String @id
+  lastCommunityId String?
+  updatedAt DateTime @updatedAt
 }
