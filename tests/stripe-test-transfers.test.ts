@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ markAttempt: vi.fn(), payment: vi.fn(), update: vi.fn(), provider: vi.fn(), charge: vi.fn(), account: vi.fn(), transfer: vi.fn(), raw: vi.fn() }));
+const m = vi.hoisted(() => ({ refund: vi.fn(), markAttempt: vi.fn(), payment: vi.fn(), update: vi.fn(), provider: vi.fn(), charge: vi.fn(), account: vi.fn(), transfer: vi.fn(), raw: vi.fn() }));
 vi.mock("stripe", () => ({ default: class { charges = { retrieve: m.charge }; accounts = { retrieve: m.account }; transfers = { create: m.transfer }; } }));
-vi.mock("@/lib/server/db", () => { const tx = { $queryRaw: m.raw, stripeTestPayment: { findUniqueOrThrow: m.payment, update: m.update, updateMany: m.markAttempt }, user: { findUnique: m.provider } }; return { db: { ...tx, $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) } }; });
+vi.mock("@/lib/server/db", () => { const tx = { stripeTestRefund: { findFirst: m.refund }, $queryRaw: m.raw, stripeTestPayment: { findUniqueOrThrow: m.payment, update: m.update, updateMany: m.markAttempt }, user: { findUnique: m.provider } }; return { db: { ...tx, $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) } }; });
 import { transferStripeTestPayment } from "@/lib/server/stripe-test-transfers";
 const payment = { visitId: "visit", status: "succeeded", stripePaymentIntentId: "pi_fixture", stripeChargeId: "ch_fixture", stripeTransferId: null, amountCents: 1000, providerAmountCents: 900, currency: "usd", customerId: "cus_fixture", providerUserId: "provider", providerAccountId: "acct_fixture", requestId: "request" };
 const charge = { livemode: false, paid: true, disputed: false, amount_refunded: 0, amount: 1000, amount_captured: 1000, currency: "usd", payment_intent: "pi_fixture", customer: "cus_fixture" };
@@ -43,3 +43,5 @@ it("rejects live credentials before mutations", async () => {
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_fixture");
   await expect(transferStripeTestPayment("visit")).rejects.toMatchObject({ status: 503 }); expect(m.markAttempt).not.toHaveBeenCalled();
 });
+
+it("refuses an original transfer while a refund is reserved", async () => { m.refund.mockResolvedValue({ id: "refund" }); await expect(transferStripeTestPayment("visit")).rejects.toMatchObject({ status: 409 }); expect(m.transfer).not.toHaveBeenCalled(); });

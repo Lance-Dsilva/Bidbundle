@@ -1,3 +1,4 @@
+import { reconcileStripeTestRefunds } from "@/lib/server/stripe-test-refunds";
 import { reconcileStripeTestPayments } from "@/lib/server/stripe-test-reconciliation";
 import { timingSafeEqual } from "node:crypto";
 
@@ -49,7 +50,9 @@ async function drain(request: Request): Promise<NextResponse> {
     // Sandbox failures must not turn successful unrelated notification delivery into a failed job.
     let stripeTest: Awaited<ReturnType<typeof reconcileStripeTestPayments>> | null = null;
     try { stripeTest = await reconcileStripeTestPayments(); } catch { stripeTest = { processed: 0, refreshed: 0, failed: 1 }; }
-    return NextResponse.json({ ...result, remindersQueued, reconciled, credentials, stripeTest });
+    let stripeRefundsFailed = false;
+    try { await reconcileStripeTestRefunds(); } catch { stripeRefundsFailed = true; }
+    return NextResponse.json({ ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",
