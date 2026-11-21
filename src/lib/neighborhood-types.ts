@@ -38,6 +38,8 @@ export type NeighborhoodParticipant = {
 };
 
 export type NeighborhoodRequestView = {
+  priceLadderPending?: boolean;
+  priceLadder?: { tiers: import("@/lib/price-ladder").PriceLadderTier[]; guaranteedPerHomeCents: number } | null;
   id: string;
   communityId: string;
   communityName: string;

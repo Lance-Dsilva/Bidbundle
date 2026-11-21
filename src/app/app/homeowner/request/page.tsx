@@ -95,6 +95,7 @@ export default function HomeownerRequestPage() {
   const [description, setDescription] = useState("");
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
+  const [providerBackedPricing, setProviderBackedPricing] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -169,6 +170,7 @@ export default function HomeownerRequestPage() {
           description: description.trim(),
           budgetMinCents: minCents,
           budgetMaxCents: maxCents,
+          ...(providerBackedPricing ? { providerBackedPricing: true } : {}),
         }),
       });
 
@@ -499,6 +501,7 @@ export default function HomeownerRequestPage() {
             </p>
           ) : null}
 
+          <label className="my-4 flex gap-2 text-sm"><input type="checkbox" checked={providerBackedPricing} onChange={event=>setProviderBackedPricing(event.target.checked)} />Use a provider-backed group price ladder. Nobody joins, including me, until the provider commits to a maximum price. Lower unlocked prices stay protected.</label>
           <Button
             variant="warm"
             className="h-12 w-full rounded-full text-[14px] font-semibold"

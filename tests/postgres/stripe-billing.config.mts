@@ -27,7 +27,7 @@ export default defineConfig({
   } },
   test: {
     environment: "node",
-    include: ["tests/postgres/pool-template.postgres.ts"],
+    include: ["tests/postgres/pool-template.postgres.ts", "tests/postgres/price-ladder.postgres.ts"],
     fileParallelism: false,
     testTimeout: 30_000,
     hookTimeout: 30_000,

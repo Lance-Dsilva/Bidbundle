@@ -2,6 +2,7 @@ import { requireStripeTestAwardPayouts } from "@/lib/server/stripe-test-connect"
 import { buildStripeTestChargeIntent } from "@/lib/stripe-test-charge-intent";
 import { allocateVisitCents } from "@/lib/visit-billing";
 import "server-only";
+import { notifyPriceLadderUnlock } from "@/lib/server/price-ladder";
 
 import { providerVerificationSelect, providerVerificationState, type VerificationProfile } from "@/lib/provider-verification";
 
@@ -138,10 +139,12 @@ type RequestRow = {
   awardedAt: Date | null;
   createdAt: Date;
   participations: Array<{ userId: string | null; response: "joined" | "declined"; poolTier?: string | null }>;
+  priceCommitment?: { acceptedAt: Date | null; guaranteedPerHomeCents: number; tiers: { minHomes: number; perHomeCents: number }[] } | null;
   _count: { bids: number };
 };
 
 const requestInclude = {
+  priceCommitment: { include: { tiers: { orderBy: { minHomes: "asc" } } } },
   participations: { select: { userId: true, response: true, poolTier: true } },
   _count: { select: { bids: { where: { status: { in: ["submitted", "accepted", "rejected"] } } } } },
 } satisfies Prisma.HoaServiceRequestInclude;
@@ -177,6 +180,8 @@ function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: Revi
     maxHomes: row.maxHomes,
     participantsLockedAt: row.participantsLockedAt?.toISOString() ?? null,
     awardedAt: row.awardedAt?.toISOString() ?? null,
+    priceLadderPending: Boolean(row.priceCommitment && !row.priceCommitment.acceptedAt),
+    priceLadder: row.priceCommitment?.acceptedAt ? { tiers: row.priceCommitment.tiers.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })), guaranteedPerHomeCents: row.priceCommitment.guaranteedPerHomeCents } : null,
     joinedCount: joined.length,
     declinedCount: declined.length,
     bidCount: row._count.bids,
@@ -186,6 +191,7 @@ function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: Revi
 }
 
 type BidRow = {
+  priceTiers?: { minHomes: number; perHomeCents: number }[];
   id: string;
   requestId: string;
   providerUserId: string;
@@ -222,6 +228,7 @@ type BidRow = {
 };
 
 const bidInclude = {
+  priceTiers: { orderBy: { minHomes: "asc" } },
   request: {
     select: {
       totalOccurrences: true,
@@ -286,6 +293,7 @@ function serializeBid(row: BidRow, reviews?: ReviewStats): BidSummary {
     amountCents: row.amountCents,
     currency: row.currency,
     pricingBasis: row.pricingBasis,
+    priceLadder: row.priceTiers?.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })) ?? [],
     perHomeCents: row.perHomeCents,
     homeCount: row.request?._count?.participations,
     totalOccurrences: row.request?.totalOccurrences,
@@ -305,6 +313,7 @@ function serializeBid(row: BidRow, reviews?: ReviewStats): BidSummary {
 }
 
 type AgreementRow = {
+  bid?: { priceTiers: { minHomes: number; perHomeCents: number }[] };
   id: string;
   requestId: string;
   communityId: string;
@@ -327,6 +336,7 @@ type AgreementRow = {
 };
 
 const agreementInclude = {
+  bid: { select: { priceTiers: { select: { minHomes: true, perHomeCents: true }, orderBy: { minHomes: "asc" } } } },
   request: { select: { title: true } },
   community: { select: { name: true } },
   provider: {
@@ -348,6 +358,7 @@ function serializeAgreement(row: AgreementRow): AgreementSummary {
     amountCents: row.amountCents,
     currency: row.currency,
     pricingBasis: row.pricingBasis,
+    priceLadder: row.bid?.priceTiers ?? [],
     perHomeCents: row.perHomeCents,
     scope: row.scope,
     cadenceLabel: row.cadenceLabel,
@@ -1003,6 +1014,7 @@ export async function respondToOptionalRequest(
     where: { id: requestId },
     select: {
       id: true,
+      priceCommitment: { select: { id: true } },
       communityId: true,
       kind: true,
       status: true,
@@ -1047,6 +1059,8 @@ export async function respondToOptionalRequest(
           (live.enrollmentClosesAt && live.enrollmentClosesAt <= new Date())) {
         throw new HoaWorkflowError("Sign-ups for this request have closed or locked.", 409);
       }
+      const ladderBefore = request.priceCommitment ? await tx.priceLadderCommitment.findUnique({ where: { requestId }, select: { guaranteedPerHomeCents: true, acceptedAt: true } }) : null;
+      if (ladderBefore && !ladderBefore.acceptedAt && input.response === "joined") throw new HoaWorkflowError("The provider must accept the price commitment before enrollment opens.", 409);
       const existing = await tx.hoaRequestParticipation.findFirst({
         where: { requestId, unitId: membership.unitId }, select: { id: true, response: true },
       });
@@ -1060,6 +1074,7 @@ export async function respondToOptionalRequest(
       } else {
         await tx.hoaRequestParticipation.create({ data: { id: randomUUID(), requestId, unitId: membership.unitId, ...data } });
       }
+      if (request.priceCommitment) await notifyPriceLadderUnlock(tx, requestId, ladderBefore?.guaranteedPerHomeCents ?? null);
       // Database authority and tier guards recheck membership, locking and
       // wall-clock deadlines after any resident/authority lock waits.
     });
@@ -2024,6 +2039,7 @@ export async function awardBid(
   const request = await db.hoaServiceRequest.findUnique({
     where: { id: requestId },
     include: {
+      priceCommitment: true,
       community: { select: { id: true, name: true, type: true, hoaProfile: { select: { minimumInsuranceCoverageCents: true, requiresAdditionalInsured: true } } } },
       participations: {
         where: { response: "joined" },
@@ -2065,7 +2081,10 @@ export async function awardBid(
   if (bid.status !== "submitted") {
     throw new HoaWorkflowError("Only a submitted bid can be accepted.");
   }
-  if (bid.pricingBasis !== "total") {
+  const ladderCommitment = request.priceCommitment;
+  const isLadderBid = ladderCommitment && bid.id === `ladder:${ladderCommitment.id}`;
+  if (ladderCommitment && !isLadderBid) throw new HoaWorkflowError("Award the provider commitment residents enrolled against.", 409);
+  if (bid.pricingBasis !== "total" && !isLadderBid) {
     throw new HoaWorkflowError(
       request.status === "open_for_bids"
         ? "This legacy quote uses unit pricing and cannot be awarded. Ask the provider for a whole-job total while bidding is open."
@@ -2156,7 +2175,13 @@ export async function awardBid(
   // produces either `{ unitId }` or the homeowner id plus the frozen address —
   // exactly one target, which is what the database CHECK requires.
   const snapshotBilling = request.community.type === "hoa" &&
-    request.kind === "optional_group" && bid.pricingBasis === "total";
+    request.kind === "optional_group" && (bid.pricingBasis === "total" || Boolean(isLadderBid));
+  if (snapshotBilling && isLadderBid && (!ladderCommitment.acceptedAt ||
+      bid.pricingBasis !== "per_home" || bid.providerUserId !== ladderCommitment.providerUserId ||
+      bid.currency !== "usd" || bid.perHomeCents !== ladderCommitment.guaranteedPerHomeCents ||
+      bid.amountCents !== ladderCommitment.guaranteedPerHomeCents * targets.length)) {
+    throw new HoaWorkflowError("The committed price no longer matches the locked homes. Refresh before awarding.", 409);
+  }
   const billingIndexByUnit = new Map(
     targets.flatMap((target) => target.kind === "unit" ? [target.unitId] : [])
       .sort()
