@@ -67,7 +67,7 @@ export async function scheduleQualityRedo(actorId: string, claimId: string, serv
     if (!["active", "completed"].includes(original.occurrence.agreement.status) || original.status !== "completed" || original.redoOfVisitId || !Number.isFinite(serviceDate.getTime()) || serviceDate.getTime() < Date.now()) throw new HoaWorkflowError("Choose a future date for the completed visit's redo.", 409);
     await tx.$queryRaw`SELECT "id" FROM "ServiceAgreement" WHERE "id"=${original.occurrence.agreementId} FOR UPDATE`;
     const latest = await tx.serviceOccurrence.aggregate({ where: { agreementId: original.occurrence.agreementId }, _max: { sequence: true } });
-    const occurrence = await tx.serviceOccurrence.create({ data: { agreementId: original.occurrence.agreementId, sequence: (latest._max.sequence ?? 0) + 1, serviceDate, schedulePublishedAt: new Date() } });
+    const occurrence = await tx.serviceOccurrence.create({ data: { agreementId: original.occurrence.agreementId, recurringRedoOfVisitId:original.recurringSubscriptionId?original.id:null, sequence: (latest._max.sequence ?? 0) + 1, serviceDate, schedulePublishedAt: new Date() } });
     const redo = await tx.serviceVisit.create({ data: { occurrenceId: occurrence.id, redoOfVisitId: original.id,
       unitId: original.unitId, homeownerUserId: original.homeownerUserId, billingPayerUserId: original.billingPayerUserId,
       allocatedVisitCents: 0, requiresAfterPhoto: original.requiresAfterPhoto, scheduledDate: serviceDate, status: "scheduled", stopRank: 1,
