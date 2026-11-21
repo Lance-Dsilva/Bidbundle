@@ -1,6 +1,6 @@
 # Issue 44: association revenue share
 
-Stage: combined backend, UI/API/export and database implementation reviewed and locally verified; preparing stacked PR handoff. Branch `codex/issue-44-hoa-share`, based on `85d7e170a96a45af30b4fd292ffa901daf9b4bf8` (PR73). Backend commit `e36e053` and UI commit `c34a529` are integrated at `02de030`. Issue remains open; no production deployment or live Stripe call occurred.
+Stage: combined backend, UI/API/export and database implementation reviewed and locally verified; draft PR #78 published: https://github.com/Lance-Dsilva/Bidbundle/pull/78. Branch `codex/issue-44-hoa-share`, based on `85d7e170a96a45af30b4fd292ffa901daf9b4bf8` (PR73). Backend commit `e36e053` and UI commit `c34a529` are integrated at `02de030`. Issue remains open; no production deployment or live Stripe call occurred.
 
 ## Acceptance and implementation
 
@@ -31,4 +31,4 @@ Stage: combined backend, UI/API/export and database implementation reviewed and 
 
 Combined evidence: 2,922 unit/component/API tests across 179 files passed, strengthened 9/9 PostgreSQL tests passed, TypeScript and independent combined source review passed. Direct Next production build passed; both statement routes trace the required licensed Unicode fonts. The initial sandbox build could not resolve fonts.googleapis.com; the network-enabled build passed without source changes. No migration script or deployment was run.
 
-Next: push reviewed scoped branch and open a draft PR stacked on PR73. Park external sandbox Connect/onboarding/transfer and signed-in browser verification until the usable test key/webhook prerequisite is supplied. Engineering owns final verification and dependency integration; user owns secret provisioning outside chat. Do not close #44 or merge before those release gates and PR73 dependency are satisfied. Continue independent backlog issues while parked.
+Published implementation head: c29da6e9cf981c337422da0c73d6038e8890216d. Current-head Vercel check pending at handoff. PR78 is stacked on PR73. Next: inspect CI and review feedback; Park external sandbox Connect/onboarding/transfer and signed-in browser verification until the usable test key/webhook prerequisite is supplied. Engineering owns final verification and dependency integration; user owns secret provisioning outside chat. Do not close #44 or merge before those release gates and PR73 dependency are satisfied. Continue independent backlog issues while parked.
