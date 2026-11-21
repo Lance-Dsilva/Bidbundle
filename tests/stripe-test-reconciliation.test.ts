@@ -14,7 +14,7 @@ it("does no work when both test features are disabled", async () => {
 it("uses an owned payment reference and leaves failures retryable", async () => {
   m.events.mockResolvedValue([{ id: "evt_1", eventType: "payment_intent.succeeded", objectId: "pi_owned", accountId: null }]);
   m.payment.mockResolvedValue({ visitId: "visit" }); m.charge.mockRejectedValueOnce(new Error("timeout"));
-  expect((await reconcileStripeTestPayments()).failed).toBe(1); expect(m.mark).not.toHaveBeenCalled();
+  expect((await reconcileStripeTestPayments()).failed).toBe(1); expect(m.mark).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ attempts: { increment: 1 } }) }));
   expect((await reconcileStripeTestPayments()).processed).toBe(1); expect(m.charge).toHaveBeenCalledWith("visit");
 });
 it("never creates a payment from an unrelated signed Stripe fixture", async () => {
@@ -38,6 +38,6 @@ it("recovers pending intent state without requiring another webhook", async () =
 it("leaves failed notification delivery retryable without losing the payment event", async () => {
   m.events.mockResolvedValue([{ id: "evt_1", eventType: "payment_intent.payment_failed", objectId: "pi_owned", accountId: null }]);
   m.payment.mockResolvedValue({ visitId: "visit" }); m.notify.mockRejectedValueOnce(new Error("queue unavailable"));
-  expect((await reconcileStripeTestPayments()).failed).toBe(1); expect(m.mark).not.toHaveBeenCalled();
+  expect((await reconcileStripeTestPayments()).failed).toBe(1); expect(m.mark).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ attempts: { increment: 1 } }) }));
   expect((await reconcileStripeTestPayments()).processed).toBe(1);
 });
