@@ -23,7 +23,7 @@ async function verifiedIntent(stripe: Stripe, payment: StripeTestPayment, reader
   const intent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId!);
   const methods = await reader.stripeTestPaymentAttempt.findMany({ where: { visitId: payment.visitId }, select: { paymentMethodId: true } });
   if (intent.livemode !== false || intent.id !== payment.stripePaymentIntentId || intent.amount !== payment.amountCents ||
-      intent.currency !== payment.currency || intent.customer !== payment.customerId || intent.metadata.bundleenVisitId !== payment.visitId ||
+      intent.currency !== payment.currency || (payment.receiptEmail && intent.receipt_email !== payment.receiptEmail) || intent.customer !== payment.customerId || intent.metadata.bundleenVisitId !== payment.visitId ||
       (intent.payment_method !== payment.paymentMethodId && !methods.some(row => row.paymentMethodId === intent.payment_method) && !(intent.payment_method === null && intent.status === "requires_payment_method"))) {
     throw new HoaWorkflowError("Payment requires billing review.", 409);
   }

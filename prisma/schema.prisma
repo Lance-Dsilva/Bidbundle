@@ -2564,6 +2564,8 @@ model StripeTestCard {
 
 /// Durable sandbox-only economic identity: one charge intent per completed visit.
 model StripeTestPayment {
+  /// Verified original-payer address frozen before creating the payment intent. Historical rows remain null.
+  receiptEmail String?
   reconciliationHoldReason String?
   observedChargeRefundedCents Int @default(0)
   observedProviderReversedCents Int @default(0)

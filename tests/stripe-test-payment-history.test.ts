@@ -3,7 +3,7 @@ const m = vi.hoisted(() => ({ list: vi.fn(), find: vi.fn(), actor: vi.fn(), tota
 vi.mock("@/lib/server/db", () => ({ db: { stripeTestPayment: { findMany: m.list, findFirst: m.find }, user: { findUnique: m.actor }, $queryRaw: m.totals } }));
 vi.mock("stripe", () => ({ default: class { charges = { retrieve: m.charge }; } }));
 import { getProviderTestPaymentTotals, getResidentTestReceipt, listAdminTestPayments, listProviderTestPayments, listResidentTestPayments } from "@/lib/server/stripe-test-payment-history";
-const row = { visitId: "visit", requestId: "request", status: "succeeded", amountCents: 1000, amountRefundedCents: 200, providerAmountCents: 900, providerReversedCents: 180, platformFeeCents: 100, currency: "usd", stripeChargeId: "ch_owned", stripeTransferId: "tr_owned", stripePaymentIntentId: "pi_owned", customerId: "cus_owned", paymentMethodId: "pm_private", termsToken: "private-consent", residentUserId: "payer", createdAt: new Date("2026-11-21T00:00:00Z"), visit: { occurrence: { sequence: 1, agreement: { request: { title: "Pool care" }, community: { name: "Synthetic community" } } } } };
+const row = { receiptEmail: "private-receipt@example.invalid", visitId: "visit", requestId: "request", status: "succeeded", amountCents: 1000, amountRefundedCents: 200, providerAmountCents: 900, providerReversedCents: 180, platformFeeCents: 100, currency: "usd", stripeChargeId: "ch_owned", stripeTransferId: "tr_owned", stripePaymentIntentId: "pi_owned", customerId: "cus_owned", paymentMethodId: "pm_private", termsToken: "private-consent", residentUserId: "payer", createdAt: new Date("2026-11-21T00:00:00Z"), visit: { occurrence: { sequence: 1, agreement: { request: { title: "Pool care" }, community: { name: "Synthetic community" } } } } };
 const charge = { id: "ch_owned", livemode: false, paid: true, payment_intent: "pi_owned", customer: "cus_owned", amount: 1000, currency: "usd", receipt_url: "https://pay.stripe.com/receipts/payment/fixture" };
 const totals = { paymentCount: BigInt(10), chargedCents: BigInt(10000), refundedCents: BigInt(2000), transferredCents: BigInt(9000), reversedCents: BigInt(1800), awaitingTransferCents: BigInt(0), uncollectedCents: BigInt(900), grossFeeCents: BigInt(1000) };
 beforeEach(() => {
@@ -17,10 +17,11 @@ it("scopes resident history to the original payer without current unit membershi
   const history = await listResidentTestPayments("original-payer");
   expect(m.list.mock.calls[0][0].where).toEqual({ residentUserId: "original-payer" });
   expect(history.payments[0]).toMatchObject({ amountCents: 1000, refundedCents: 200, transferredCents: 900, reversedCents: 180, receiptAvailable: true });
-  expect(JSON.stringify(history)).not.toMatch(/cus_owned|pm_private|private-consent|pi_owned|ch_owned|tr_owned/);
+  expect(JSON.stringify(history)).not.toMatch(/cus_owned|pm_private|private-consent|private-receipt|pi_owned|ch_owned|tr_owned/);
 });
 it("scopes provider history to that provider", async () => {
-  await listProviderTestPayments("provider-owned");
+  const history = await listProviderTestPayments("provider-owned");
+  expect(JSON.stringify(history)).not.toContain("private-receipt");
   expect(m.list.mock.calls[0][0].where).toEqual({ providerUserId: "provider-owned" });
 });
 it("uses a bounded page and an owned cursor", async () => {
