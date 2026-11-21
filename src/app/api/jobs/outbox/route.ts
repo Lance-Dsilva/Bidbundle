@@ -1,3 +1,4 @@
+import { reconcileQualityResolutions } from "@/lib/server/service-quality-resolution";
 import { reconcileStripeTestRefunds } from "@/lib/server/stripe-test-refunds";
 import { reconcileStripeTestPayments } from "@/lib/server/stripe-test-reconciliation";
 import { timingSafeEqual } from "node:crypto";
@@ -52,7 +53,9 @@ async function drain(request: Request): Promise<NextResponse> {
     try { stripeTest = await reconcileStripeTestPayments(); } catch { stripeTest = { processed: 0, refreshed: 0, failed: 1 }; }
     let stripeRefundsFailed = false;
     try { await reconcileStripeTestRefunds(); } catch { stripeRefundsFailed = true; }
-    return NextResponse.json({ ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
+    let qualityResolutionsFailed = false;
+    try { await reconcileQualityResolutions(); } catch { qualityResolutionsFailed = true; }
+    return NextResponse.json({ qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

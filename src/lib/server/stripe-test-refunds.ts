@@ -11,7 +11,7 @@ function client() {
   if (process.env.STRIPE_TEST_REFUNDS !== "1" || !key || !/^(sk|rk)_test_[A-Za-z0-9]+$/.test(key)) throw new HoaWorkflowError("Sandbox refunds are unavailable.", 503);
   return new Stripe(key, { timeout: 8000, maxNetworkRetries: 0 });
 }
-async function owner(tx: Prisma.TransactionClient, actorId: string) {
+export async function requireStripeRefundOwner(tx: Prisma.TransactionClient, actorId: string) {
   await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id"=${actorId} FOR SHARE`;
   await tx.$queryRaw`SELECT "userId" FROM "AdminAccessGrant" WHERE "userId"=${actorId} FOR SHARE`;
   const user = await tx.user.findUnique({ where: { id: actorId }, include: { adminAccess: true } });
@@ -33,8 +33,16 @@ export async function requestStripeTestRefund(actorId: string, visitId: string, 
   client();
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 1) throw new HoaWorkflowError("Enter a positive refund amount in cents.", 400);
   return db.$transaction(async tx => {
+    return reserveStripeTestRefund(tx, actorId, visitId, input);
+  });
+}
+
+/** Caller owns the transaction; used to atomically bind a quality decision. */
+export async function reserveStripeTestRefund(tx: Prisma.TransactionClient, actorId: string, visitId: string, input: { id: string; amountCents: number; reason: "service_quality" | "duplicate" | "requested_by_customer" }) {
+  client();
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 1) throw new HoaWorkflowError("Enter a positive refund amount in cents.", 400);
     await lockPayment(tx, visitId);
-    await owner(tx, actorId);
+    await requireStripeRefundOwner(tx, actorId);
     const existing = await tx.stripeTestRefund.findUnique({ where: { id: input.id } });
     if (existing) {
       if (existing.visitId !== visitId || existing.actorUserId !== actorId || existing.amountCents !== input.amountCents || existing.reason !== input.reason) throw new HoaWorkflowError("Refund request identity changed.", 409);
@@ -52,14 +60,13 @@ export async function requestStripeTestRefund(actorId: string, visitId: string, 
       chargeId: payment.stripeChargeId, transferId: payment.stripeTransferId } });
     await audit(tx, payment, operation, "requested", actorId);
     return operation;
-  });
 }
 
 export async function retryStripeTestRefund(actorId: string, visitId: string, id: string) {
   client();
   await db.$transaction(async tx => {
     await lockPayment(tx, visitId);
-    await owner(tx, actorId);
+    await requireStripeRefundOwner(tx, actorId);
     const operation = await tx.stripeTestRefund.findUnique({ where: { id } });
     if (!operation || operation.visitId !== visitId) throw new HoaWorkflowError("Refund not found.", 404);
   });
@@ -135,7 +142,7 @@ export async function processStripeTestRefund(id: string) {
   if (op.state !== "reversal_pending" || !op.transferId) return op;
 
   const transfer = await stripe.transfers.retrieve(op.transferId);
-  if (transfer.livemode !== false || transfer.amount !== payment.providerAmountCents || transfer.currency !== payment.currency ||
+  if (transfer.livemode !== false || transfer.amount !== (payment.transferAmountCents ?? payment.providerAmountCents) || transfer.currency !== payment.currency ||
       objectId(transfer.destination) !== payment.providerAccountId || objectId(transfer.source_transaction) !== op.chargeId) throw new HoaWorkflowError("Provider transfer needs reconciliation.", 409);
   let reversal: Stripe.TransferReversal | undefined;
   if (op.stripeReversalId) reversal = await stripe.transfers.retrieveReversal(op.transferId, op.stripeReversalId);
