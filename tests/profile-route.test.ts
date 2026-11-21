@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   sharedCookie: vi.fn(),
+  placement: vi.fn(),
   sharedReturn: vi.fn(),
   clerkUserId: "user_clerk_123" as string | null,
   clerkUser: {
@@ -43,6 +44,7 @@ const state = vi.hoisted(() => ({
   queuedEmails: [] as Array<Record<string, unknown>>,
 }));
 
+vi.mock("@/lib/server/communities", () => ({ syncNeighborhoodMembership: state.placement }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: state.sharedCookie }) }));
 vi.mock("@/lib/server/shared-enrollment", () => ({ getSharedEnrollmentReturnPath: state.sharedReturn }));
 
@@ -176,6 +178,7 @@ function profileRequest(body: unknown, headers: Record<string, string> = {}): Re
 }
 
 beforeEach(() => {
+  state.placement.mockReset().mockResolvedValue(undefined);
   state.sharedCookie.mockReset().mockReturnValue(undefined);
   state.sharedReturn.mockReset().mockResolvedValue(null);
   state.clerkUserId = "user_clerk_123";
@@ -456,17 +459,20 @@ describe("shared enrollment signup continuation", () => {
   const response=await POST(profileRequest({role:"homeowner"}));
   expect(response.status).toBe(200); expect((await response.json()).redirectTo).toBe(path);
   expect(state.sharedReturn).toHaveBeenCalledWith(token);
+  expect(state.placement).not.toHaveBeenCalled();
  });
  it("falls back to homeowner dashboard for expired share intent", async () => {
   state.sharedCookie.mockReturnValue({value:token});
   const response=await POST(profileRequest({role:"homeowner"}));
   expect(response.status).toBe(200); expect((await response.json()).redirectTo).toBe("/app/homeowner/dashboard");
+  expect(state.placement).toHaveBeenCalledWith("user_db_1");
  });
  it("preserves successful profile creation when share lookup fails", async () => {
   state.sharedCookie.mockReturnValue({value:token}); state.sharedReturn.mockRejectedValue(new Error("synthetic failure"));
   vi.spyOn(console,"error").mockImplementation(()=>undefined);
   const response=await POST(profileRequest({role:"homeowner"}));
   expect(response.status).toBe(200); expect((await response.json()).redirectTo).toBe("/app/homeowner/dashboard");
+  expect(state.placement).toHaveBeenCalledWith("user_db_1");
  });
  it("ignores shared intent for an existing provider even when homeowner is requested", async () => {
   state.existingRole="provider"; state.sharedCookie.mockReturnValue({value:token}); state.sharedReturn.mockResolvedValue(path);

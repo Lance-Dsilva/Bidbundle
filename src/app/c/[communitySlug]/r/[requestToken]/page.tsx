@@ -1,3 +1,4 @@
+import { ServiceGuarantee } from "@/components/sharing/ServiceGuarantee";
 import { StartSharedEnrollment } from "@/components/sharing/StartSharedEnrollment";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -19,6 +20,7 @@ export default async function RequestSharePage({ params }: Props) {
     <p className="mt-4 text-slate-600">{request.providerName ? `Awarded provider: ${request.providerName}` : `${request.verifiedBidders} verified ${request.verifiedBidders === 1 ? "provider" : "providers"} bidding`}</p>
     {request.priceLadder && <div className="mt-6"><PriceLadder tiers={request.priceLadder.tiers} joinedHomes={request.joinedHomes} guaranteedPerHomeCents={request.priceLadder.guaranteedPerHomeCents} /></div>}
     <section className="mt-8 rounded-2xl bg-teal-50 p-6"><h2 className="text-lg font-semibold">Review the details before joining</h2><p className="mt-2">Your home must be on the community roster. Pricing and enrollment details are available in your resident workspace.</p><StartSharedEnrollment communityToken={communitySlug} requestToken={requestToken} /></section>
+    <ServiceGuarantee />
     <p className="mt-6 text-sm text-slate-600">This page shows totals only. It does not list residents, home addresses or private service instructions.</p>
   </main>;
 }

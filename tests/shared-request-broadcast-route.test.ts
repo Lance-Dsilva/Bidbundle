@@ -1,0 +1,13 @@
+import {beforeEach,expect,it,vi} from "vitest";
+const m=vi.hoisted(()=>({authorize:vi.fn(),guard:vi.fn(),preview:vi.fn(),send:vi.fn()}));
+vi.mock("@/lib/server/auth",()=>({authorizeRequest:m.authorize}));
+vi.mock("@/lib/server/auth-guard",async original=>({...await original<typeof import("@/lib/server/auth-guard")>(),guardHoaMutation:m.guard}));
+vi.mock("@/lib/server/shared-request-broadcast",()=>({previewSharedRequestBroadcast:m.preview,sendSharedRequestBroadcast:m.send}));
+import {POST} from "@/app/api/hoa/requests/[requestId]/share/broadcast/route";
+const context={params:Promise.resolve({requestId:"scoped-request"})};
+const request=(body:unknown,origin="https://bundleen.test")=>new Request("https://bundleen.test/api/hoa/requests/scoped-request/share/broadcast",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:JSON.stringify(body)});
+beforeEach(()=>{vi.clearAllMocks();m.authorize.mockResolvedValue({ok:true,user:{id:"manager",role:"hoa_staff"}});m.guard.mockResolvedValue(null);m.preview.mockResolvedValue({enabled:true});m.send.mockResolvedValue({queued:true})});
+it("resolves actor and request from authenticated routing, with private output",async()=>{const r=await POST(request({action:"preview"}),context);expect(r.status).toBe(200);expect(m.preview).toHaveBeenCalledWith("manager","scoped-request");expect(r.headers.get("Cache-Control")).toBe("private, no-store")});
+it.each([{action:"preview",communityId:"other"},{action:"send",previewToken:"reviewed",recipients:["other"]},{action:"send",previewToken:"reviewed",body:"injected"},{action:"send"}])("rejects injected audience/content or missing review %j",async body=>{expect((await POST(request(body),context)).status).toBe(400);expect(m.send).not.toHaveBeenCalled();expect(m.preview).not.toHaveBeenCalled()});
+it("rejects cross-origin writes",async()=>{expect((await POST(request({action:"preview"},"https://other.test"),context)).status).toBe(403);expect(m.authorize).not.toHaveBeenCalled()});
+it("passes only the reviewed snapshot to queueing",async()=>{expect((await POST(request({action:"send",previewToken:"snapshot"}),context)).status).toBe(200);expect(m.send).toHaveBeenCalledWith("manager","scoped-request","snapshot")});

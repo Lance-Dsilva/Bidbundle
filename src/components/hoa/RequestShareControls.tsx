@@ -1,4 +1,5 @@
 "use client";
+import { SharedRequestBroadcast } from "@/components/sharing/SharedRequestBroadcast";
 import { useRef, useState } from "react";
 export function RequestShareControls({ requestId }: { requestId: string }) {
   const [path, setPath] = useState<string | null>(null);
@@ -25,6 +26,7 @@ export function RequestShareControls({ requestId }: { requestId: string }) {
     <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="bb-btn bb-btn-secondary min-h-11" disabled={busy} onClick={() => void act("enable")}>Get share link</button>
     {path && <><button type="button" className="bb-btn bb-btn-secondary min-h-11" disabled={busy} onClick={() => void copy(path)}>Copy request link</button><a className="bb-btn bb-btn-secondary min-h-11" href={path} target="_blank" rel="noreferrer">Preview public page</a><a className="bb-btn bb-btn-secondary min-h-11" href={`/api/hoa/requests/${encodeURIComponent(requestId)}/share/flyer`}>Download QR flyer</a>{communityPath && <button type="button" className="bb-btn bb-btn-secondary min-h-11" onClick={() => void copy(communityPath)}>Copy community link</button>}<button type="button" className="bb-btn bb-btn-secondary min-h-11" disabled={busy} onClick={() => void act("rotate")}>Replace request link</button></>}
     <button type="button" className="bb-btn bb-btn-secondary min-h-11" disabled={busy} onClick={() => void act("disable")}>Disable sharing</button></div>
+    {path && <SharedRequestBroadcast key={path} requestId={requestId} />}
     {message && <p role="status" className="mt-2 text-sm">{message}</p>}
   </div>;
 }
