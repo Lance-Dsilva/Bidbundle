@@ -2527,6 +2527,9 @@ model CommunityInterest {
 }
 
 model StripeTestEvent {
+  financialObservation StripeTestFinancialObservation?
+  nextAttemptAt DateTime?
+  attempts Int @default(0)
   id          String    @id
   eventType   String
   objectId    String
@@ -2536,6 +2539,7 @@ model StripeTestEvent {
   processedAt DateTime?
 
   @@index([processedAt, receivedAt])
+  @@index([processedAt, nextAttemptAt, receivedAt], map: "StripeTestEvent_retry_queue")
 }
 
 /// Sandbox-only verified card reference. Never stores card numbers or client secrets.
@@ -2556,6 +2560,12 @@ model StripeTestCard {
 
 /// Durable sandbox-only economic identity: one charge intent per completed visit.
 model StripeTestPayment {
+  reconciliationHoldReason String?
+  observedChargeRefundedCents Int @default(0)
+  observedProviderReversedCents Int @default(0)
+  observedDisputeId String?
+  observedDisputeStatus String?
+  financialObservations StripeTestFinancialObservation[]
   enrollmentAuthorizationId String?
   refunds StripeTestRefund[]
   amountRefundedCents Int @default(0)
@@ -2694,4 +2704,18 @@ model StripeTestRefund {
   updatedAt DateTime @updatedAt
   @@index([state, updatedAt])
   @@index([visitId, createdAt])
+}
+
+model StripeTestFinancialObservation {
+  eventId String @id
+  event StripeTestEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  visitId String
+  payment StripeTestPayment @relation(fields: [visitId], references: [visitId], onDelete: Restrict)
+  refundedCents Int
+  reversedCents Int
+  disputeId String?
+  disputeStatus String?
+  holdReason String?
+  observedAt DateTime @default(now())
+  @@index([visitId, observedAt])
 }

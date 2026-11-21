@@ -62,6 +62,7 @@ async function lockConsent(tx: Prisma.TransactionClient, key: { agreementId: str
 export async function chargeStripeTestVisit(visitId: string) {
   const stripe = client();
   let payment = await prepareStripeTestPayment(visitId);
+  if (payment.reconciliationHoldReason) throw new HoaWorkflowError("Payment requires financial reconciliation.", 409);
   if (["succeeded", "refunded", "partially_refunded", "disputed"].includes(payment.status)) return;
   if (!payment.stripePaymentIntentId) {
     const intent = await stripe.paymentIntents.create({
@@ -78,8 +79,11 @@ export async function chargeStripeTestVisit(visitId: string) {
   // Serialize confirmation against retries and consent deletion. All confirmation retries
   // use the persisted intent, never a new charge identity after Stripe's key retention expires.
   await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "ServiceVisit" WHERE "id" = ${visitId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "visitId" FROM "StripeTestPayment" WHERE "visitId" = ${visitId} FOR UPDATE`;
     const current = await tx.stripeTestPayment.findUniqueOrThrow({ where: { visitId } });
+    if (current.reconciliationHoldReason) throw new HoaWorkflowError("Payment requires financial reconciliation.", 409);
+    if (["refunded", "partially_refunded", "disputed"].includes(current.status)) return;
     if (!current.stripePaymentIntentId) throw new HoaWorkflowError("Missing payment identity.", 409);
     const attempts = await tx.stripeTestPaymentAttempt.findMany({ where: { visitId }, orderBy: { sequence: "desc" } });
     const recovery = attempts[0];

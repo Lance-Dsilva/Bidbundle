@@ -16,6 +16,7 @@ async function ownedPayment(payerId: string, visitId: string) {
   // The original payer retains responsibility after moving out. A current unit
   // occupant gains no access to that payer's payment or client secret.
   if (!payment || payment.residentUserId !== payerId || !payment.stripePaymentIntentId) throw new HoaWorkflowError("Payment not found.", 404);
+  if (payment.reconciliationHoldReason) throw new HoaWorkflowError("Payment requires financial reconciliation.", 409);
   return payment;
 }
 async function verifiedIntent(stripe: Stripe, payment: StripeTestPayment, reader: Pick<Prisma.TransactionClient, "stripeTestPaymentAttempt"> = db) {
@@ -58,9 +59,11 @@ export async function retryStripeTestPayment(payerId: string, visitId: string, a
     throw new HoaWorkflowError("No verified replacement card was found for this payment.", 409);
   }
   await db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "ServiceVisit" WHERE "id" = ${visitId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "visitId" FROM "StripeTestPayment" WHERE "visitId" = ${visitId} FOR UPDATE`;
     const current = await tx.stripeTestPayment.findUniqueOrThrow({ where: { visitId } });
     if (current.residentUserId !== payerId || current.stripePaymentIntentId !== payment.stripePaymentIntentId) throw new HoaWorkflowError("Payment not found.", 404);
+    if (current.reconciliationHoldReason) throw new HoaWorkflowError("Payment requires financial reconciliation.", 409);
     const existing = await tx.stripeTestPaymentAttempt.findUnique({ where: { id: attemptId } });
     if (existing) {
       if (existing.visitId !== visitId || existing.setupIntentId !== setupIntentId || existing.paymentMethodId !== method.id) throw new HoaWorkflowError("Recovery attempt changed. Refresh and try again.", 409);
