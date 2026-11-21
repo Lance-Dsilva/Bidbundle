@@ -1,3 +1,4 @@
+import { generateHoaMonthlyStatements } from "@/lib/server/hoa-revenue-share";
 import { reconcileQualityResolutions } from "@/lib/server/service-quality-resolution";
 import { reconcileStripeTestRefunds } from "@/lib/server/stripe-test-refunds";
 import { reconcileStripeTestPayments } from "@/lib/server/stripe-test-reconciliation";
@@ -55,7 +56,10 @@ async function drain(request: Request): Promise<NextResponse> {
     try { await reconcileStripeTestRefunds(); } catch { stripeRefundsFailed = true; }
     let qualityResolutionsFailed = false;
     try { await reconcileQualityResolutions(); } catch { qualityResolutionsFailed = true; }
-    return NextResponse.json({ qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
+    let hoaStatements: Awaited<ReturnType<typeof generateHoaMonthlyStatements>> | null = null;
+    let hoaStatementsFailed = false;
+    try { hoaStatements = await generateHoaMonthlyStatements(); hoaStatementsFailed = hoaStatements.failed > 0; } catch { hoaStatementsFailed = true; }
+    return NextResponse.json({ hoaStatements, hoaStatementsFailed, qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",

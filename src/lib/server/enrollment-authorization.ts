@@ -12,5 +12,5 @@ export async function readEnrollmentAuthorization(tx: Prisma.TransactionClient, 
       consent.payerUserId !== payerUserId || consent.unitId !== unitId || consent.providerUserId !== agreement?.providerUserId ||
       consent.requestId !== agreement.requestId || consent.currency !== agreement.currency || authorization.authorizedTotalCents !== agreement.perHomeCents ||
       authorization.authorizedTotalCents > consent.maximumCents) throw new HoaWorkflowError("Enrollment authorization requires billing review.", 409);
-  return { id: authorization.id, termsToken: consent.termsToken, acceptedAt: consent.acceptedAt, card: consent.card };
+  return { maximumCents: consent.maximumCents, id: authorization.id, termsToken: consent.termsToken, acceptedAt: consent.acceptedAt, card: consent.card };
 }
