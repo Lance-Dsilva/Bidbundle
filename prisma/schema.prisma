@@ -1033,6 +1033,7 @@ model ServiceAgreement {
 
 /// One recurring cycle (or the single date of a one-off service).
 model ServiceOccurrence {
+  recurringRedoOfVisitId String? @unique
   recurringPlanId String?
   recurringLocalDate String?
   @@unique([recurringPlanId, recurringLocalDate])

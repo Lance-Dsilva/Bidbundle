@@ -252,3 +252,24 @@ it('foreign transfer ownership cannot bind a provider transfer and leaves a revi
  await reconcileRecurringFinancialEvent(event.id);
  expect(await first.recurringCharge.findUniqueOrThrow({where:{id:c.id}})).toMatchObject({stripeTransferId:null,reconciliationHoldReason:'unknown_transfer'});
 });
+import { scheduleQualityRedo, reconcileQualityResolution } from '@/lib/server/service-quality-resolution';
+it('recurring visit105 has an audited zero-charge redo without bypassing finite boundaries',async()=>{
+ const f=await financialFixture();
+ const originalDay=await first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:105,serviceDate:new Date('2025-02-05T18:00:00Z'),recurringPlanId:f.planId,recurringLocalDate:'2025-02-05'}});
+ const original=await first.serviceVisit.create({data:{occurrenceId:originalDay.id,unitId:f.residents[0].unit.id,billingPayerUserId:f.residents[0].user.id,allocatedVisitCents:2501,requiresAfterPhoto:false,recurringSubscriptionId:f.subscriptionId,recurringMonth:'2025-02'}});
+ await saveDayPlan(f.provider.id,originalDay.id,{publish:true,stops:[{visitId:original.id,stopRank:1,windowStart:'10:00',windowEnd:'11:00'}]});await updateVisitStatus(f.provider.id,original.id,{status:'completed',completionNote:null});
+ const claim=await reportServiceQuality(f.residents[0].user.id,original.id,{reason:'incomplete',description:'Synthetic recurring visit needs a no-charge redo.'});
+ await first.serviceQualityClaim.update({where:{id:claim.id},data:{resolution:'redo_pending',resolutionRequestedAt:new Date(),resolutionRequestedBy:f.admin.id}});
+ const date=new Date(Date.now()+86400000);
+ await expect(first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:106,serviceDate:date,recurringRedoOfVisitId:original.id}})).rejects.toThrow('unique linked no-charge visit');
+ await expect(first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:106,serviceDate:date,recurringRedoOfVisitId:f.ownVisit.id}})).rejects.toThrow('original completed service');
+ await expect(first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:106,serviceDate:date}})).rejects.toThrow('ServiceOccurrence_sequence');
+ const result=await scheduleQualityRedo(f.admin.id,claim.id,date,'Synthetic approved repeat service.');const redo=await first.serviceVisit.findUniqueOrThrow({where:{id:result.redoVisitId},include:{occurrence:true}});
+ expect(redo).toMatchObject({redoOfVisitId:original.id,allocatedVisitCents:0,recurringSubscriptionId:null,recurringMonth:null});expect(redo.occurrence).toMatchObject({sequence:106,recurringRedoOfVisitId:original.id,recurringPlanId:null});
+ await expect(first.serviceVisit.update({where:{id:redo.id},data:{occurrenceId:f.occurrence.id}})).rejects.toThrow('immutable');
+ await expect(first.serviceQualityClaim.update({where:{id:claim.id},data:{redoVisitId:null}})).rejects.toThrow('immutable');
+ await expect(first.serviceQualityClaim.update({where:{id:claim.id},data:{resolution:'refund_pending'}})).rejects.toThrow('redo identity');
+ await updateVisitStatus(f.provider.id,redo.id,{status:'completed',completionNote:null});await reconcileQualityResolution(claim.id);
+ expect((await first.serviceQualityClaim.findUniqueOrThrow({where:{id:claim.id}})).resolution).toBe('redo_complete');
+ expect(await first.recurringChargeLine.count({where:{visitId:redo.id}})).toBe(0);expect(await first.recurringBillLine.count({where:{visitId:redo.id}})).toBe(0);expect(await first.stripeTestPayment.count({where:{visitId:redo.id}})).toBe(0);expect(await first.outboxEvent.count({where:{dedupeKey:`stripe-test-charge:${redo.id}`}})).toBe(0);
+});
