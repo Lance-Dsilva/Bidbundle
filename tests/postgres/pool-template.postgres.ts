@@ -502,7 +502,7 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     await expect(first.stripeTestPayment.delete({ where: { visitId: visit.id } })).rejects.toThrow(/cannot be deleted/i);
     // Include its dependent recovery ledger so PostgreSQL reaches our explicit
     // no-truncate guards rather than stopping at the foreign-key precheck.
-    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt", "StripeTestRefund"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
     await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);
@@ -636,5 +636,61 @@ describe("sandbox recovery consent ledger", () => {
     await append(first, payment, 2);
     const rows = await first.$queryRaw<Array<{ sequence: number }>>`SELECT "sequence" FROM "StripeTestPaymentAttempt" WHERE "visitId" = ${payment.visitId} ORDER BY "sequence"`;
     expect(rows).toEqual([{ sequence: 1 }, { sequence: 2 }]);
+  });
+});
+
+describe("sandbox refund reservations", () => {
+  async function paid() {
+    vi.stubEnv("STRIPE_TEST_REFUNDS", "1"); vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_syntheticOnly");
+    const f = await seed(); await open(f); const agreementId = await award(f, await submit(f));
+    await first.adminAccessGrant.update({ where: { userId: f.admin.id }, data: { level: "owner" } });
+    const visit = await first.serviceVisit.findFirstOrThrow({ where: { occurrence: { agreementId } } });
+    const payment = await first.stripeTestPayment.create({ data: {
+      visitId: visit.id, requestId: f.requestId, agreementId, communityId: f.community.id,
+      residentUserId: visit.billingPayerUserId!, providerUserId: f.provider.id, unitId: visit.unitId!,
+      customerId: `cus_${visit.id}`, paymentMethodId: `pm_${visit.id}`, providerAccountId: `acct_${f.provider.id}`,
+      termsToken: `terms_${visit.id}`, amountCents: 1000, platformFeeCents: 100, hoaShareCents: 0, providerAmountCents: 900,
+      currency: "usd", stripePaymentIntentId: `pi_${visit.id}`, stripeChargeId: `ch_${visit.id}`, stripeTransferId: `tr_${visit.id}`, status: "succeeded",
+    } });
+    return { ...f, payment };
+  }
+  const reserve = async (db: PrismaClient, f: Awaited<ReturnType<typeof paid>>, id: string = randomUUID(), amountCents = 400) => {
+    const { requestStripeTestRefund } = await import("@/lib/server/stripe-test-refunds");
+    return run(db, () => requestStripeTestRefund(f.admin.id, f.payment.visitId, { id, amountCents, reason: "service_quality" }));
+  };
+  it("atomically reserves only one concurrent refund and its audit", async () => {
+    const f = await paid();
+    const results = await Promise.allSettled([reserve(first, f), reserve(second, f)]);
+    expect(results.filter(row => row.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(row => row.status === "rejected")).toHaveLength(1);
+    const rows = await first.stripeTestRefund.findMany({ where: { visitId: f.payment.visitId } });
+    expect(rows).toHaveLength(1); expect(rows[0]).toMatchObject({ amountCents: 400, reversalCents: 360, state: "pending", stripeRefundId: null });
+    expect(await first.adminAuditLog.count({ where: { targetId: f.payment.visitId, action: "marketplace_recovery_action" } })).toBe(1);
+    expect((await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: f.payment.visitId } })).amountRefundedCents).toBe(0);
+  });
+  it("requires current owner authority even for replay and rejects over-refund", async () => {
+    const f = await paid(); await expect(reserve(first, f, randomUUID(), 1001)).rejects.toThrow(/exceeds/i);
+    const op = await reserve(first, f); expect((await reserve(first, f, op.id)).id).toBe(op.id);
+    await first.user.update({ where: { id: f.admin.id }, data: { isVerified: false } });
+    await expect(reserve(first, f, op.id)).rejects.toThrow(/administrator/i);
+    expect(await first.stripeTestRefund.count({ where: { visitId: f.payment.visitId } })).toBe(1);
+  });
+  it("prevents mutation, deletion, fake completion and resetting durable clocks", async () => {
+    const f = await paid(); const op = await reserve(first, f);
+    await expect(first.stripeTestRefund.update({ where: { id: op.id }, data: { amountCents: 300 } })).rejects.toThrow();
+    await expect(first.stripeTestRefund.update({ where: { id: op.id }, data: { state: "succeeded" } })).rejects.toThrow();
+    await expect(first.stripeTestRefund.delete({ where: { id: op.id } })).rejects.toThrow();
+    await expect(first.$executeRaw`TRUNCATE "StripeTestRefund"`).rejects.toThrow();
+    await first.stripeTestRefund.update({ where: { id: op.id }, data: { refundAttemptedAt: new Date() } });
+    await expect(first.stripeTestRefund.update({ where: { id: op.id }, data: { refundAttemptedAt: null } })).rejects.toThrow();
+  });
+  it("rejects direct SQL reservation with incorrect balance, allocation or prefilled processor evidence", async () => {
+    const f = await paid();
+    const base = { id: randomUUID(), visitId: f.payment.visitId, actorUserId: f.admin.id, reason: "service_quality", amountCents: 400,
+      refundedBeforeCents: 0, cumulativeRefundCents: 400, reversedBeforeCents: 0, reversalCents: 360, chargeId: f.payment.stripeChargeId!, transferId: f.payment.stripeTransferId };
+    for (const change of [{ chargeId: "ch_wrong" }, { reversalCents: 359 }, { refundedBeforeCents: 1, cumulativeRefundCents: 401 }, { state: "failed" }, { stripeRefundId: "re_invented" }, { refundAttemptedAt: new Date() }]) {
+      await expect(first.stripeTestRefund.create({ data: { ...base, ...change } })).rejects.toThrow();
+    }
+    expect(await first.stripeTestRefund.count({ where: { visitId: f.payment.visitId } })).toBe(0);
   });
 });

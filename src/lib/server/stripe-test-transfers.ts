@@ -16,6 +16,7 @@ export async function transferStripeTestPayment(visitId: string) {
     await tx.$queryRaw`SELECT "visitId" FROM "StripeTestPayment" WHERE "visitId" = ${visitId} FOR UPDATE`;
     const payment = await tx.stripeTestPayment.findUniqueOrThrow({ where: { visitId } });
     if (payment.stripeTransferId) return;
+    if (payment.amountRefundedCents > 0 || await tx.stripeTestRefund.findFirst({ where: { visitId, state: { not: "failed" } } })) throw new HoaWorkflowError("A refund blocks the original provider transfer. Reconcile the remaining balance first.", 409);
     if (payment.status !== "succeeded" || !payment.stripePaymentIntentId || !payment.stripeChargeId || !payment.transferAttemptedAt) throw new HoaWorkflowError("No paid sandbox visit is available for transfer.", 409);
     if (Date.now() - payment.transferAttemptedAt.getTime() > 23 * 60 * 60 * 1000) {
       // Stripe may prune idempotency keys after 24h. Never blindly recreate an uncertain transfer.

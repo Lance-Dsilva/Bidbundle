@@ -2557,6 +2557,10 @@ model StripeTestCard {
 /// Durable sandbox-only economic identity: one charge intent per completed visit.
 model StripeTestPayment {
   enrollmentAuthorizationId String?
+  refunds StripeTestRefund[]
+  amountRefundedCents Int @default(0)
+  providerReversedCents Int @default(0)
+  refundedAt DateTime?
   recoveryAttempts StripeTestPaymentAttempt[]
   lastRecoveryAttemptId String?
   visitId String @id
@@ -2665,4 +2669,29 @@ model AgreementBillingAuthorization {
   authorizedTotalCents Int
   createdAt DateTime @default(now())
   @@unique([agreementId, unitId])
+}
+
+model StripeTestRefund {
+  id String @id
+  visitId String
+  payment StripeTestPayment @relation(fields: [visitId], references: [visitId], onDelete: Restrict)
+  actorUserId String
+  reason String
+  amountCents Int
+  refundedBeforeCents Int
+  cumulativeRefundCents Int
+  reversedBeforeCents Int
+  reversalCents Int
+  chargeId String
+  transferId String?
+  state String @default("pending")
+  stripeRefundId String? @unique
+  stripeReversalId String? @unique
+  refundAttemptedAt DateTime?
+  reversalAttemptedAt DateTime?
+  failureCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([state, updatedAt])
+  @@index([visitId, createdAt])
 }
