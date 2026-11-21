@@ -76,7 +76,7 @@ function RevenueShareContent({ communityId, admin }: { communityId: string; admi
       </div> : null}
       <div className="space-y-4"><h3 className="font-semibold">Monthly statements</h3>{data.statements.length === 0 ? <p>No monthly statements yet.</p> : data.statements.map(statement => <article key={statement.id} className="rounded-xl border border-[var(--line)] p-4 space-y-3">
         <h4 className="font-semibold">{statement.periodStart.slice(0, 7)} · {statement.status.replaceAll("_", " ")}</h4>
-        <dl className="grid gap-2 sm:grid-cols-3"><div><dt>Net earned in period</dt><dd>{dollars(statement.totalCents)}</dd></div><div><dt>Paid to association</dt><dd>{dollars(statement.distributedCents)}</dd></div><div><dt>Closing balance</dt><dd>{dollars(statement.closingBalanceCents)}</dd></div></dl>
+        <dl className="grid gap-2 sm:grid-cols-3"><div><dt>Net earned in period</dt><dd>{dollars(statement.totalCents)}</dd></div><div><dt>Paid to association</dt><dd>{dollars(statement.distributedCents)}</dd></div><div><dt>Balance at period end</dt><dd>{dollars(statement.closingBalanceCents)}</dd></div></dl>
         {statement.reference ? <p className="text-sm break-words">Payment reference: {statement.reference}</p> : null}
         <div className="flex flex-wrap gap-3">{["csv", "pdf"].map(format => <a key={format} className="bb-btn bb-btn-secondary min-h-11" href={`${endpoint}/statements/${encodeURIComponent(statement.id)}?format=${format}`}>Download {format.toUpperCase()}</a>)}</div>
         {admin && statement.status !== "paid" ? <div className="space-y-3">

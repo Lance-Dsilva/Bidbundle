@@ -27,7 +27,7 @@ export function hoaShareCsv(view: HoaShareStatementExport) {
     ["Status", view.status], ["Payment reference", view.reference ?? ""], ["Currency", "USD"],
     ["Opening balance cents", view.openingBalanceCents], ["Net earned cents", view.totalCents],
     ["Resident savings cents", view.savingsCents], ["Distributed cents", view.distributedCents],
-    ["Closing balance cents", view.closingBalanceCents], [],
+    ["Period-end balance cents", view.closingBalanceCents], [],
     ["Date UTC", "Entry", "Share cents", "Resident savings cents"],
     ...view.lines.map(line => [line.date, line.kind, line.amountCents, line.savingsCents]),
   ];
@@ -71,7 +71,7 @@ export async function hoaSharePdf(view: HoaShareStatementExport): Promise<Uint8A
     paragraph("Association revenue statement", 22);
     paragraph(view.communityName, 15);
     paragraph(`Statement: ${view.id}\nPeriod: ${view.periodStart.slice(0, 10)} to ${view.periodEnd.slice(0, 10)} (end exclusive, UTC)\nStatus: ${view.status.replaceAll("_", " ")}`);
-    paragraph(`Opening balance: ${amount(view.openingBalanceCents)}\nNet earned during period: ${amount(view.totalCents)}\nResident savings: ${amount(view.savingsCents)}\nDistributed to association: ${amount(view.distributedCents)}\nClosing balance: ${amount(view.closingBalanceCents)}`, 12);
+    paragraph(`Opening balance: ${amount(view.openingBalanceCents)}\nNet earned during period: ${amount(view.totalCents)}\nResident savings: ${amount(view.savingsCents)}\nDistributed to association: ${amount(view.distributedCents)}\nBalance at period end: ${amount(view.closingBalanceCents)}`, 12);
     paragraph(`Payment reference: ${view.reference ?? "No payment reference recorded"}\nPaid at: ${view.paidAt ?? "Not recorded"}`);
     paragraph("Association shares are funded from Bundleen's fee. Refund adjustments can create a negative balance carried against future earnings. A statement alone does not prove payment.");
     paragraph("Ledger entries", 14);
