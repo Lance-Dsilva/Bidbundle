@@ -183,3 +183,15 @@ it("saved-card setup retry retains exact consent and Stripe idempotency identity
  expect(m.createSetup.mock.calls[0]).toEqual(m.createSetup.mock.calls[1]);
  expect(m.createParticipation).not.toHaveBeenCalled();
 });
+
+it("does not release a setup secret after independent consent revocation during final shared authorization", async () => {
+  const authorize = vi.fn().mockImplementation(async () => { if (authorize.mock.calls.length === 2) m.requiredConsent.mockResolvedValue({ ...accepted, revokedAt: new Date() }); });
+  await expect(startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, undefined, authorize)).rejects.toMatchObject({ status: 409 });
+  expect(authorize).toHaveBeenCalledTimes(2);
+  expect(m.createParticipation).not.toHaveBeenCalled();
+});
+it("rejects revoked shared capability before any enrollment write during confirmation", async () => {
+  const authorize = vi.fn().mockRejectedValue(new Error("Shared capability revoked"));
+  await expect(confirmEnrollmentBilling("payer", "request", "consent", setup.id, authorize)).rejects.toThrow("Shared capability revoked");
+  expect(m.createCard).not.toHaveBeenCalled(); expect(m.createParticipation).not.toHaveBeenCalled();
+});

@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/server/db";
 import { HoaWorkflowError } from "@/lib/server/hoa";
 import { notifyPriceLadderUnlock } from "@/lib/server/price-ladder";
+export type EnrollmentAuthorization = (tx: Prisma.TransactionClient) => Promise<void>;
 const VERSION = "capped-completed-visit-v1";
 function stripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -55,10 +56,11 @@ export async function getEnrollmentBillingOffer(payerId: string, requestId: stri
   return { savedCards: cards.map(({ reference, brand, last4 }) => ({ reference, brand, last4 })), title: s.request.title, scope: s.commitment.scope, maximumCents: s.commitment.guaranteedPerHomeCents, currency: "usd",
     totalOccurrences: s.request.totalOccurrences, recurrenceLabel: s.request.recurrenceLabel, termsToken: token(s.immutableTerms, s.commitment.guaranteedPerHomeCents) };
 }
-export async function startEnrollmentBilling(payerId: string, requestId: string, consentId: string, termsToken: string, savedCardReference?: string) {
+export async function startEnrollmentBilling(payerId: string, requestId: string, consentId: string, termsToken: string, savedCardReference?: string, authorize?: EnrollmentAuthorization) {
   const stripe = stripeClient();
   const consent = await db.$transaction(async tx => {
     const s = await lockSnapshot(tx, payerId, requestId);
+    await authorize?.(tx);
     const existing = await tx.enrollmentBillingConsent.findUnique({ where: { id: consentId } });
     if (existing) {
       if (existing.requestId !== requestId || existing.payerUserId !== payerId || existing.unitId !== s.membership.unitId || existing.revokedAt ||
@@ -97,9 +99,19 @@ export async function startEnrollmentBilling(payerId: string, requestId: string,
   const current = await snapshot(db, payerId, requestId);
   const liveConsent = await db.enrollmentBillingConsent.findUniqueOrThrow({ where: { id: consent.id } });
   if (liveConsent.revokedAt || current.payer.stripeTestCustomerId !== setup.customer || token(current.immutableTerms, consent.maximumCents) !== consent.termsToken) throw new HoaWorkflowError("Enrollment changed. Start again.", 409);
+  if (authorize) await db.$transaction(async tx => {
+    const locked = await lockSnapshot(tx, payerId, requestId);
+    await authorize(tx);
+    await tx.$queryRaw`SELECT "id" FROM "EnrollmentBillingConsent" WHERE "id"=${consent.id} FOR SHARE`;
+    const currentConsent = await tx.enrollmentBillingConsent.findUniqueOrThrow({ where: { id: consent.id } });
+    if (currentConsent.revokedAt || currentConsent.requestId !== requestId || currentConsent.payerUserId !== payerId ||
+        currentConsent.membershipId !== locked.membership.id || currentConsent.unitId !== locked.membership.unitId ||
+        currentConsent.termsToken !== consent.termsToken || token(locked.immutableTerms, currentConsent.maximumCents) !== currentConsent.termsToken ||
+        locked.payer.stripeTestCustomerId !== setup.customer) throw new HoaWorkflowError("Enrollment changed. Start again.", 409);
+  });
   return { clientSecret: setup.client_secret, ...(savedMethodId ? { usingSavedCard: true } : {}) };
 }
-export async function confirmEnrollmentBilling(payerId: string, requestId: string, consentId: string, setupIntentId: string) {
+export async function confirmEnrollmentBilling(payerId: string, requestId: string, consentId: string, setupIntentId: string, authorize?: EnrollmentAuthorization) {
   const stripe = stripeClient();
   const prepared = await db.enrollmentBillingConsent.findUnique({ where: { id: consentId } });
   if (!prepared || prepared.requestId !== requestId || prepared.payerUserId !== payerId || prepared.revokedAt) throw new HoaWorkflowError("Enrollment not found.", 404);
@@ -109,6 +121,7 @@ export async function confirmEnrollmentBilling(payerId: string, requestId: strin
       !card || typeof card === "string" || card.livemode !== false || !card.card || setup.customer !== card.customer) throw new HoaWorkflowError("A verified sandbox card is required.", 409);
   await db.$transaction(async tx => {
     const s = await lockSnapshot(tx, payerId, requestId, false);
+    await authorize?.(tx);
     await tx.$queryRaw`SELECT "id" FROM "EnrollmentBillingConsent" WHERE "id"=${consentId} FOR UPDATE`;
     const consent = await tx.enrollmentBillingConsent.findUniqueOrThrow({ where: { id: consentId }, include: { card: true } });
     if (!s.request.stripeTestEnrollmentRequired || consent.revokedAt || consent.membershipId !== s.membership.id || consent.unitId !== s.membership.unitId ||

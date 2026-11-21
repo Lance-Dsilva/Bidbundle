@@ -2784,3 +2784,18 @@ model ServiceQualityPhoto {
   createdAt DateTime @default(now())
   @@index([claimId, createdAt])
 }
+
+/// Short-lived signup continuation. It never grants residency or billing consent.
+model SharedEnrollmentFlow {
+  token String @id
+  requestId String
+  communityTokenHash String
+  requestTokenHash String
+  userId String?
+  consentId String @unique
+  confirmedMembershipId String?
+  confirmedUnitId String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([expiresAt])
+}
