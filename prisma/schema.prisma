@@ -2744,6 +2744,7 @@ model StripeTestFinancialObservation {
 model ServiceQualityClaim {
   financialPayerUserId String?
   refundOperationId String? @unique
+  recurringRefundOperationId String? @unique
   redoVisitId String? @unique
   resolvedAt DateTime?
   id String @id @default(cuid())
@@ -2782,7 +2783,8 @@ model ServiceQualityPhoto {
 model HoaShareEntry {
   id String @id @default(cuid())
   communityId String
-  paymentVisitId String
+  paymentVisitId String?
+  recurringChargeId String?
   sequence Int
   kind String
   amountCents Int
@@ -2790,6 +2792,7 @@ model HoaShareEntry {
   refundedCents Int
   createdAt DateTime @default(now())
   @@unique([paymentVisitId, sequence])
+  @@unique([recurringChargeId, sequence])
   @@index([communityId, createdAt])
 }
 model HoaShareStatement {
@@ -2907,4 +2910,130 @@ model RecurringBillLine {
   statusAtSeal String
   completedAt DateTime?
   @@index([billId])
+}
+
+// Separate recurring money identity; never aliases a finite visit payment.
+model RecurringCharge {
+  id String @id @default(cuid())
+  monthlyBillId String? @unique
+  sourceVisitId String? @unique
+  planId String
+  subscriptionId String
+  agreementId String
+  communityId String
+  payerUserId String
+  providerUserId String
+  unitId String
+  localMonth String
+  customerId String
+  paymentMethodId String
+  receiptEmail String
+  providerAccountId String
+  termsToken String
+  currency String @default("usd")
+  amountCents Int
+  platformFeeCents Int
+  providerAmountCents Int
+  hoaShareCents Int
+  feeBps Int
+  hoaBps Int
+  status String @default("pending")
+  failureCode String?
+  reconciliationHoldReason String?
+  stripePaymentIntentId String? @unique
+  stripeChargeId String? @unique
+  createAttemptedAt DateTime?
+  confirmAttemptedAt DateTime?
+  lastRecoveryAttemptId String?
+  stripeTransferId String? @unique
+  transferAttemptedAt DateTime?
+  transferAmountCents Int?
+  transferBaseProviderDebitCents Int?
+  refundedCents Int @default(0)
+  providerReversedCents Int @default(0)
+  observedRefundedCents Int @default(0)
+  observedReversedCents Int @default(0)
+  paidAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([planId, createdAt])
+  @@index([status, updatedAt])
+}
+model RecurringChargeLine {
+  id String @id @default(cuid())
+  chargeId String
+  visitId String @unique
+  localDate String
+  grossCents Int
+  feeCents Int
+  providerCents Int
+  hoaCents Int
+  refundedCents Int @default(0)
+  createdAt DateTime @default(now())
+  @@index([chargeId])
+}
+model RecurringChargeRecovery {
+  id String @id @default(cuid())
+  chargeId String
+  sequence Int
+  payerUserId String
+  paymentMethodId String
+  setupIntentId String @unique
+  termsToken String
+  termsVersion String @default("recurring-recovery-exact-v1")
+  acceptedAt DateTime @default(now())
+  @@unique([chargeId, sequence])
+}
+model RecurringChargeRefund {
+  id String @id @default(cuid())
+  chargeId String
+  lineId String
+  actorUserId String
+  reason String
+  amountCents Int
+  previousLineRefundCents Int
+  providerDebitCents Int
+  hoaDebitCents Int
+  providerReversalCents Int
+  status String @default("pending")
+  stripeRefundId String? @unique
+  stripeReversalId String? @unique
+  refundAttemptedAt DateTime?
+  reversalAttemptedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([chargeId, status])
+}
+model RecurringRecoverySetup {
+  id String @id @default(cuid())
+  chargeId String
+  sequence Int
+  payerUserId String
+  customerId String
+  termsToken String
+  attemptedAt DateTime @default(now())
+  setupIntentId String? @unique
+  @@unique([chargeId, sequence])
+}
+model RecurringFinancialCursor {
+  id String @id
+  lastKey String?
+  updatedAt DateTime @updatedAt
+}
+model RecurringFinancialObservation {
+  id String @id @default(cuid())
+  eventId String @unique
+  chargeId String
+  eventType String
+  objectId String
+  processorChargeId String?
+  processorTransferId String?
+  refundedCents Int
+  reversedCents Int
+  disputed Boolean
+  disputeId String?
+  disputeStatus String?
+  holdReason String?
+  observedAt DateTime @default(now())
+  @@index([chargeId, observedAt])
 }

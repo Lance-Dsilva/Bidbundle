@@ -1,4 +1,6 @@
 import "server-only";
+import { lockRecurringCharge } from "@/lib/server/recurring-payments";
+import { reserveRecurringRefund, processRecurringRefund } from "@/lib/server/recurring-refunds";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/server/db";
@@ -8,6 +10,8 @@ import { processStripeTestRefund, reserveStripeTestRefund, requireStripeRefundOw
 async function lockedClaim(tx: Prisma.TransactionClient, claimId: string) {
   const identity = await tx.serviceQualityClaim.findUnique({ where: { id: claimId }, select: { visitId: true } });
   if (!identity) throw new HoaWorkflowError("That report is unavailable.", 404);
+  const recurringLine=await tx.recurringChargeLine.findUnique({where:{visitId:identity.visitId}});
+  if(recurringLine)await lockRecurringCharge(tx,recurringLine.chargeId);
   await tx.$queryRaw`SELECT "id" FROM "ServiceVisit" WHERE "id"=${identity.visitId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "visitId" FROM "StripeTestPayment" WHERE "visitId"=${identity.visitId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "id" FROM "ServiceQualityClaim" WHERE "id"=${claimId} FOR UPDATE`;
@@ -29,6 +33,15 @@ export async function executeQualityRefund(actorId: string, claimId: string, inp
     await requireStripeRefundOwner(tx, actorId);
     if (!["refund_pending", "refund_complete"].includes(claim.resolution)) throw new HoaWorkflowError("Request a refund resolution first.", 409);
     if (claim.refundOperationId && claim.refundOperationId !== input.operationId) throw new HoaWorkflowError("This claim already has a refund operation. Retry that operation.", 409);
+    const line=await tx.recurringChargeLine.findUnique({where:{visitId:claim.visitId}});
+    if(line){
+      if(claim.refundOperationId||(claim.recurringRefundOperationId&&claim.recurringRefundOperationId!==input.operationId))throw new HoaWorkflowError("This claim already has another refund operation.",409);
+      const charge=await tx.recurringCharge.findUniqueOrThrow({where:{id:line.chargeId}});
+      if(charge.payerUserId!==claim.financialPayerUserId)throw new HoaWorkflowError("Original recurring payer mismatch.",409);
+      const op=await reserveRecurringRefund(tx,actorId,claim.visitId,{id:input.operationId,amountCents:input.amountCents,reason:"service_quality"});
+      if(!claim.recurringRefundOperationId){await tx.serviceQualityClaim.update({where:{id:claimId},data:{recurringRefundOperationId:op.id}});await activity(tx,claim,actorId,"refund_reserved",`Approved recurring service refund of ${(input.amountCents/100).toFixed(2)} ${charge.currency.toUpperCase()}. ${input.note}`);}
+      return {id:op.id,recurring:true};
+    }
     const payment = await tx.stripeTestPayment.findUnique({ where: { visitId: claim.visitId } });
     if (!payment || !claim.financialPayerUserId || payment.residentUserId !== claim.financialPayerUserId) throw new HoaWorkflowError("The original paid visit needs billing review.", 409);
     if ((payment as typeof payment & { reconciliationHoldReason?: string | null }).reconciliationHoldReason) throw new HoaWorkflowError("Payment reconciliation is required before a refund.", 409);
@@ -37,9 +50,9 @@ export async function executeQualityRefund(actorId: string, claimId: string, inp
       await tx.serviceQualityClaim.update({ where: { id: claimId }, data: { refundOperationId: op.id } });
       await activity(tx, claim, actorId, "refund_reserved", `Approved refund of ${(input.amountCents / 100).toFixed(2)} ${payment.currency.toUpperCase()} as the resolution for this claim. ${input.note}`);
     }
-    return op;
+    return {id:op.id,recurring:false};
   });
-  await processStripeTestRefund(operation.id);
+  if(operation.recurring)await processRecurringRefund(operation.id);else await processStripeTestRefund(operation.id);
   return reconcileQualityResolution(claimId);
 }
 
@@ -49,7 +62,7 @@ export async function scheduleQualityRedo(actorId: string, claimId: string, serv
     const claim = await lockedClaim(tx, claimId);
     await requireStripeRefundOwner(tx, actorId);
     if (claim.redoVisitId) return { redoVisitId: claim.redoVisitId, resolution: claim.resolution };
-    if (claim.resolution !== "redo_pending" || claim.refundOperationId) throw new HoaWorkflowError("Request a redo resolution first.", 409);
+    if (claim.resolution !== "redo_pending" || claim.refundOperationId || claim.recurringRefundOperationId) throw new HoaWorkflowError("Request a redo resolution first.", 409);
     const original = await tx.serviceVisit.findUniqueOrThrow({ where: { id: claim.visitId }, include: { occurrence: { include: { agreement: true } } } });
     if (!["active", "completed"].includes(original.occurrence.agreement.status) || original.status !== "completed" || original.redoOfVisitId || !Number.isFinite(serviceDate.getTime()) || serviceDate.getTime() < Date.now()) throw new HoaWorkflowError("Choose a future date for the completed visit's redo.", 409);
     await tx.$queryRaw`SELECT "id" FROM "ServiceAgreement" WHERE "id"=${original.occurrence.agreementId} FOR UPDATE`;
@@ -77,6 +90,11 @@ export async function reconcileQualityResolution(claimId: string) {
       const refund = await tx.stripeTestRefund.findUnique({ where: { id: claim.refundOperationId } });
       if (refund?.visitId === claim.visitId && refund.state === "succeeded") resolution = "refund_complete";
     }
+    if(claim.resolution==="refund_pending"&&claim.recurringRefundOperationId){
+      const refund=await tx.recurringChargeRefund.findUnique({where:{id:claim.recurringRefundOperationId}});
+      const line=refund?await tx.recurringChargeLine.findUnique({where:{id:refund.lineId}}):null;
+      if(line?.visitId===claim.visitId&&refund?.status==="succeeded")resolution="refund_complete";
+    }
     if (claim.resolution === "redo_pending" && claim.redoVisitId) {
       const redo = await tx.serviceVisit.findUnique({ where: { id: claim.redoVisitId } });
       if (redo?.redoOfVisitId === claim.visitId && redo.status === "completed" && redo.completedAt) resolution = "redo_complete";
@@ -88,6 +106,6 @@ export async function reconcileQualityResolution(claimId: string) {
   });
 }
 export async function reconcileQualityResolutions() {
-  const claims = await db.serviceQualityClaim.findMany({ where: { resolvedAt: null, OR: [{ refundOperationId: { not: null } }, { redoVisitId: { not: null } }] }, orderBy: { createdAt: "asc" }, take: 100 });
+  const claims = await db.serviceQualityClaim.findMany({ where: { resolvedAt: null, OR: [{ recurringRefundOperationId: { not: null } }, { refundOperationId: { not: null } }, { redoVisitId: { not: null } }] }, orderBy: { createdAt: "asc" }, take: 100 });
   for (const claim of claims) await reconcileQualityResolution(claim.id);
 }

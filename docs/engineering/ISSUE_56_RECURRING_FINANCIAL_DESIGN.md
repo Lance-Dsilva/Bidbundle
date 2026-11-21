@@ -1,6 +1,6 @@
 # Issue 56 recurring financial adapter — implementation design
 
-Status: design only. The foundation is under independent PostgreSQL verification. Do not enable recurring money dispatch or claim this adapter exists yet.
+Status: active implementation. Foundation ff6c736 passed 2,953 unit tests and 4 independent PostgreSQL cases. Financial adapter has passed scoped independent source/SQL review and local checks; parent integration/build and real sandbox end-to-end remain gates. Do not enable it or claim issue completion yet.
 
 ## Immutable source and ownership
 
@@ -37,3 +37,17 @@ Provider transfer/refund/reversal operations each record identity and attempt cl
 ## Required evidence before enabling
 
 Independent tests must cover aggregate source collision, per-visit exclusion, exact prorating and rounding, card/owner mismatch, monthly charge replay, lost remote response, requires-action recovery, partial/full line refunds before/after transfer, claim races, duplicate and unknown webhooks, one HOA accrual, immutable receipt, and actual database concurrency. Full unit/type/build and sandbox end-to-end gates follow. Foundation completion alone is not issue completion.
+
+## Active implementation checkpoint (after foundation ff6c736)
+
+Financial models and source implement distinct charge identity, original-payer history/receipt, two-phase PI create/confirm, versioned same-PI recovery, line refunds, residual transfers, notifications, financial-event observations, quality-claim linkage, shared HOA accrual and fair financial jobs. `RECURRING_TEST_PAYMENTS=0` remains the default. Jobs check all required flags; no real processor calls or shared migrations occurred in this implementation checkout.
+
+13000–16000 were independently reviewed and applied only to the owned synthetic database (62 migrations total). Preserve applied history. Runtime PG testing exposed generic trigger CASE field binding to a nonexistent `NEW.chargeId`; additive 15000 corrected only the two dispatches to IF/ELSE. 14000 supplies the cursor and recurring claim-refund linkage; 16000 supplies immutable sanitized financial-event observations. No migration in this checkpoint is authorized for shared resources.
+
+Existing-visit lock order is Visit (sorted) before Agreement/Plan and Charge, matching completion and claims. Claim execution discovers aggregate ownership and locks all source visits before the target claim. Financial mutations recheck remote identities and balances. Read-only metadata recovery precedes new mutations. Unknown refund/reversal/dispute/transfer observations produce sticky holds; later matching totals do not silently clear them. Administrative reconciliation requires a separate authorized action. Webhook handling records existing refunds only and never initiates an operation based on metadata. HOA entries have exactly one finite or recurring source, and both families share payout liability/hold locks.
+
+Reviewer-driven fixes include exact persisted PI checks; settled refund/dispute status preservation; fresh original-payer/hold checks before secret release; durable recovery setup sequence/clock with a 23-hour uncertainty cutoff; fresh remote charge/account checks before payout; current owner checks before refunds; immutable clocks and transfer baselines; deferred settled ledger consistency. Bundleen's possible negative one-cent residual fee is represented explicitly, never taken from provider or HOA.
+
+Verification: full backend suite 3,081 tests across 186 files; final affected tests 122/122 and typecheck passed after the last narrow event/identity changes. Independent PostgreSQL suite 8/8 passed over 62 migrations: concurrent single aggregate/source immutability; one HOA accrual and refund ceiling; null-baseline rejection with legal control; observed pending-refund/HOA payout wait; claim wrong-line and pending-reversal rejection followed by truthful completion; observed Visit-before-Agreement ordering; duplicate immutable observations/unknown refund hold; and foreign transfer ownership hold. All processor operations in these tests are synthetic mocks, not live sandbox proof. Historical service dates use the reviewed synthetic fixture helper; this is not production chronology evidence. The HOA wait case establishes lock/recheck behavior with a zero-balance payout rejection, not a successful positive payout. Final cleanup found zero temporary helper artifacts.
+
+Parent owns final UI integration, combined full suite/type/build, PR handoff and any release decision. Root-owned history/event tests and verifier-owned financial tests are included only after their explicit release. Remaining external gate is real sandbox end-to-end with Connect availability, plus applicable deployment/migration approval. No issue resolution or production completion is claimed by this implementation commit.

@@ -36,11 +36,17 @@ async function totals(tx: Tx, communityId: string, excludePayout?: string) {
   return { earned: earned._sum.amountCents ?? 0, savings: earned._sum.savingsCents ?? 0, available: (earned._sum.amountCents ?? 0) - (paid._sum.amountCents ?? 0) };
 }
 async function hold(tx: Tx, communityId: string) {
+  const recurring = await tx.recurringCharge.findMany({where:{communityId,hoaShareCents:{gt:0}},select:{id:true,status:true,reconciliationHoldReason:true}});
+  if(recurring.some(c=>c.reconciliationHoldReason||c.status==="disputed"))return "A recurring payment requires financial reconciliation.";
+  const chargeIds=recurring.map(c=>c.id);
+  if(await tx.recurringChargeRefund.findFirst({where:{chargeId:{in:chargeIds},status:{not:"succeeded"}}}))return "A recurring refund is still processing.";
+  const recurringLines=await tx.recurringChargeLine.findMany({where:{chargeId:{in:chargeIds}},select:{visitId:true}});
+  if(await tx.serviceQualityClaim.findFirst({select:{id:true},where:{visitId:{in:recurringLines.map(l=>l.visitId)},resolution:{in:["reported","redo_pending","refund_pending"]}}}))return "A recurring service quality claim is unresolved.";
   const payments = await tx.stripeTestPayment.findMany({ where: { communityId, hoaShareCents: { gt: 0 } }, select: { visitId: true, reconciliationHoldReason: true, status: true } });
   if (payments.some(p => p.reconciliationHoldReason || p.status === "disputed")) return "A resident payment requires financial reconciliation.";
   const visits = payments.map(p => p.visitId);
   if (await tx.stripeTestRefund.findFirst({ where: { visitId: { in: visits }, state: { notIn: ["succeeded", "failed"] } } })) return "A resident refund is still processing.";
-  if (await tx.serviceQualityClaim.findFirst({ where: { visitId: { in: visits }, resolution: { in: ["reported", "redo_pending", "refund_pending"] } } })) return "A service quality claim is unresolved.";
+  if (await tx.serviceQualityClaim.findFirst({ select:{id:true}, where: { visitId: { in: visits }, resolution: { in: ["reported", "redo_pending", "refund_pending"] } } })) return "A service quality claim is unresolved.";
   return null;
 }
 function view(row: HoaShareStatement, payout: HoaSharePayout | null, available: number): HoaShareStatementView {

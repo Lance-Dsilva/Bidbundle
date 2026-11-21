@@ -1,3 +1,4 @@
+import { runRecurringFinancialWorker } from "@/lib/server/recurring-financial-worker";
 import { runRecurringPlanLifecycle } from "@/lib/server/recurring-plans";
 import { generateHoaMonthlyStatements } from "@/lib/server/hoa-revenue-share";
 import { reconcileQualityResolutions } from "@/lib/server/service-quality-resolution";
@@ -62,7 +63,9 @@ async function drain(request: Request): Promise<NextResponse> {
     try { hoaStatements = await generateHoaMonthlyStatements(); hoaStatementsFailed = hoaStatements.failed > 0; } catch { hoaStatementsFailed = true; }
     let recurringPlans: Awaited<ReturnType<typeof runRecurringPlanLifecycle>> | null = null;
     try { recurringPlans = await runRecurringPlanLifecycle(); } catch { recurringPlans = { processed: 0, generated: 0, failed: 1 }; }
-    return NextResponse.json({ recurringPlans, hoaStatements, hoaStatementsFailed, qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
+    let recurringFinancial: Awaited<ReturnType<typeof runRecurringFinancialWorker>> | null = null;
+    try { recurringFinancial = await runRecurringFinancialWorker(); } catch { recurringFinancial = {prepared:0,reconciled:0,transferred:0,refunded:0,failed:1}; }
+    return NextResponse.json({ recurringPlans, recurringFinancial, hoaStatements, hoaStatementsFailed, qualityResolutionsFailed, ...result, remindersQueued, reconciled, credentials, stripeTest, stripeRefundsFailed });
   } catch (error) {
     console.error("[outbox] drain failed", {
       name: error instanceof Error ? error.name : "UnknownError",
