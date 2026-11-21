@@ -24,3 +24,5 @@ Verify setup/join/close/capacity and residence races, price drops during setup, 
 ## External configuration
 
 Preview Stripe API variables exist (metadata only verified). Sandbox webhook signing variables still need engineering setup. No secrets are recorded here. No shared database migration, production deployment or live money operation occurred.
+
+The four baseline failures were traced to incomplete approved-credential fixtures and different clocks in nested eligibility checks. Ported the minimal existing PR71 fixture fix (complete credentials and controlled clock), preserving all production code and denial assertions. Independent review approved; the entire 60-test reconciliation file now passes. Full combined suite will rerun after payment recovery integration.
