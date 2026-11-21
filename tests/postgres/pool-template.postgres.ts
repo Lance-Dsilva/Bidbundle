@@ -507,7 +507,7 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     await expect(first.stripeTestPayment.delete({ where: { visitId: visit.id } })).rejects.toThrow(/cannot be deleted/i);
     // Include its dependent recovery ledger so PostgreSQL reaches our explicit
     // no-truncate guards rather than stopping at the foreign-key precheck.
-    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt", "StripeTestRefund", "StripeTestFinancialObservation", "ServiceQualityClaim", "ServiceQualityPhoto"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt", "StripeTestRefund", "StripeTestFinancialObservation", "ServiceQualityClaim", "ServiceQualityPhoto", "HoaShareEntry"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
     await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);

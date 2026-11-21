@@ -103,6 +103,11 @@ it('serializes duplicate generation and freezes original payer, allocation and s
  const results=await Promise.all([generateRecurringMonth(f.plan.id,month),generateRecurringMonth(f.plan.id,month)]);
  const visits=await first.serviceVisit.findMany({where:{recurringSubscriptionId:f.subscription.id}});
  expect(visits.length).toBeGreaterThan(0);expect(results.reduce((sum,r)=>sum+r.created,0)).toBe(visits.length);
+ let finiteBoundary=false;await expect(first.$transaction(async tx=>{await tx.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:104,serviceDate:new Date()}});finiteBoundary=true;throw new Error('rollback finite104 control');})).rejects.toThrow('rollback finite104 control');expect(finiteBoundary).toBe(true);
+ await expect(first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:105,serviceDate:new Date()}})).rejects.toThrow('ServiceOccurrence_sequence');
+ const recurringDay=await first.serviceOccurrence.findUniqueOrThrow({where:{id:visits[0].occurrenceId}});
+ await expect(first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:0,serviceDate:recurringDay.serviceDate,recurringPlanId:f.plan.id,recurringLocalDate:recurringDay.recurringLocalDate}})).rejects.toThrow('ServiceOccurrence_sequence');
+ await expect(first.serviceOccurrence.update({where:{id:f.occurrence.id},data:{recurringPlanId:f.plan.id,recurringLocalDate:f.anchorDate}})).rejects.toThrow('immutable');
  expect(visits.every(v=>v.billingPayerUserId===f.subscription.payerUserId)).toBe(true);
  await expect(first.serviceVisit.update({where:{id:visits[0].id},data:{status:'completed',completedAt:new Date()}})).rejects.toThrow('Recurring service is future or outside notice coverage');
  await expect(first.serviceVisit.create({data:{occurrenceId:visits[0].occurrenceId,unitId:f.subscription.unitId,billingPayerUserId:f.subscription.payerUserId,allocatedVisitCents:visits[0].allocatedVisitCents,requiresAfterPhoto:visits[0].requiresAfterPhoto,recurringSubscriptionId:f.subscription.id,recurringMonth:month,status:'completed',completedAt:new Date()}})).rejects.toThrow('New recurring service must start unscheduled');
@@ -172,6 +177,10 @@ it('seals historical completed allocations once, excludes skipped cents and free
  expect(await first.recurringBillLine.count({where:{billId:bills[0].id}})).toBe(5);
  await expect(first.serviceVisit.update({where:{id:visits[1].id},data:{status:'completed',completedAt:new Date()}})).rejects.toThrow();
  await expect(first.recurringMonthlyBill.update({where:{id:bills[0].id},data:{amountCents:10001}})).rejects.toThrow();
+ const now=new Date(),nextMonth=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString().slice(0,7);
+ expect((await generateRecurringMonth(planId,nextMonth)).created).toBeGreaterThan(0);
+ expect(await first.serviceOccurrence.count({where:{recurringPlanId:planId,sequence:105}})).toBe(1);
+ await expect(first.serviceOccurrence.create({data:{agreementId:f.agreementId,sequence:10000,serviceDate:new Date()}})).rejects.toThrow('ServiceOccurrence_sequence');
 });
 
 async function elapsedPauseFixture<T>(subscriptionId:string,work:()=>Promise<T>) {
@@ -193,7 +202,8 @@ it('fresh consent resumes the same future service day without overwriting cancel
  await generateRecurringMonth(f.plan.id,month);
  const oldVisits=await first.serviceVisit.findMany({where:{recurringSubscriptionId:f.subscription.id,recurringMonth:month}});expect(oldVisits.length).toBeGreaterThan(0);
  await elapsedPauseFixture(f.subscription.id,()=>requestRecurringStop(f.subscription.payerUserId,f.subscription.id,'pause'));
- await runRecurringPlanLifecycle();
+ const planCount=await first.recurringPlan.count({where:{status:{in:['active','ending']}}});
+ for(let batch=0;batch<Math.ceil(planCount/25)+2;batch++){await runRecurringPlanLifecycle();if((await first.recurringSubscription.findUniqueOrThrow({where:{id:f.subscription.id}})).status==='paused')break;}
  expect((await first.recurringSubscription.findUniqueOrThrow({where:{id:f.subscription.id}})).status).toBe('paused');
  expect(await first.serviceVisit.count({where:{id:{in:oldVisits.map(v=>v.id)},status:'cancelled'}})).toBe(oldVisits.length);
  await expect(closeOccurrence(f.manager.id,oldVisits[0].occurrenceId)).rejects.toThrow('A future recurring service day cannot be closed');
