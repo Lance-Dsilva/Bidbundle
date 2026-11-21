@@ -15,7 +15,7 @@ export default async function CommunityPayments({ params, searchParams }: { para
   const history = await listAdminTestPayments(user.id, communityId, requestId, typeof filters.after === "string" ? filters.after : undefined);
   const canRefund = process.env.STRIPE_TEST_REFUNDS === "1" && user.adminAccessLevel === "owner";
   const payments = canRefund ? await db.stripeTestPayment.findMany({ where: { communityId, visitId: { in: history.payments.map(row => row.visitId) } }, orderBy: { createdAt: "desc" }, take: 50,
-    select: { visitId: true, status: true, amountCents: true, amountRefundedCents: true, updatedAt: true, refunds: { orderBy: { createdAt: "desc" }, select: { id: true, state: true, amountCents: true } } } }) : [];
+    select: { reconciliationHoldReason: true, visitId: true, status: true, amountCents: true, amountRefundedCents: true, updatedAt: true, refunds: { orderBy: { createdAt: "desc" }, select: { id: true, state: true, amountCents: true } } } }) : [];
   const baseHref = `/app/admin/communities/${encodeURIComponent(communityId)}/payments`;
   return <div className="space-y-5"><Link href={`/app/admin/communities/${encodeURIComponent(communityId)}`}>Back to community</Link>
     <h1 className="bb-page-heading">Test payments and refunds</h1><p>Sandbox only. Shows 50 payments per page. Refunds and provider reversals are tracked separately until both finish.</p>
@@ -23,6 +23,6 @@ export default async function CommunityPayments({ params, searchParams }: { para
     <PaymentHistory history={history} audience="admin" baseHref={requestId ? `${baseHref}?requestId=${encodeURIComponent(requestId)}` : baseHref} />
     {canRefund && payments.length > 0 && <h2 className="text-lg font-semibold">Refund controls</h2>}
     {payments.map(payment => <div key={`${payment.visitId}:${payment.updatedAt.toISOString()}:${payment.refunds.map(r => r.id + r.state).join(":")}`}><p className="font-semibold">Visit {payment.visitId} · {payment.status.replaceAll("_", " ")}</p>
-      <AdminPaymentRefund visitId={payment.visitId} amountCents={payment.amountCents} refundedCents={payment.amountRefundedCents} operations={payment.refunds} eligible={["succeeded", "partially_refunded"].includes(payment.status)} /></div>)}
+      {payment.reconciliationHoldReason ? <p className="text-sm text-amber-800">Refund controls are paused until billing reconciliation is complete.</p> : <AdminPaymentRefund visitId={payment.visitId} amountCents={payment.amountCents} refundedCents={payment.amountRefundedCents} operations={payment.refunds} eligible={["succeeded", "partially_refunded"].includes(payment.status)} />}</div>)}
   </div>;
 }

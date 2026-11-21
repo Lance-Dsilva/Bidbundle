@@ -8,6 +8,7 @@ function enabled() {
   if (process.env.STRIPE_TEST_PAYMENTS !== "1") throw new HoaWorkflowError("Sandbox payment history is unavailable.", 404);
 }
 const historySelect = {
+  observedChargeRefundedCents: true, observedProviderReversedCents: true, reconciliationHoldReason: true,
   visitId: true, requestId: true, status: true, amountCents: true, amountRefundedCents: true,
   providerAmountCents: true, providerReversedCents: true, platformFeeCents: true, currency: true,
   stripeChargeId: true, stripeTransferId: true, createdAt: true,
@@ -19,8 +20,9 @@ type HistoryRow = Prisma.StripeTestPaymentGetPayload<{ select: typeof historySel
 function serialize(row: HistoryRow) {
   return {
     visitId: row.visitId, requestId: row.requestId, status: row.status, amountCents: row.amountCents,
-    refundedCents: row.amountRefundedCents, providerCents: row.providerAmountCents,
-    transferredCents: row.stripeTransferId ? row.providerAmountCents : 0, reversedCents: row.providerReversedCents,
+    refundedCents: Math.max(row.amountRefundedCents, row.observedChargeRefundedCents ?? 0),
+    requiresReview: Boolean(row.reconciliationHoldReason), providerCents: row.providerAmountCents,
+    transferredCents: row.stripeTransferId ? row.providerAmountCents : 0, reversedCents: Math.max(row.providerReversedCents, row.observedProviderReversedCents ?? 0),
     feeCents: row.platformFeeCents, currency: row.currency, createdAt: row.createdAt.toISOString(),
     title: row.visit.occurrence.agreement.request.title, communityName: row.visit.occurrence.agreement.community.name,
     visitNumber: row.visit.occurrence.sequence,
@@ -58,18 +60,19 @@ export async function listAdminTestPayments(actorUserId: string, communityId: st
 export type ProviderTestPaymentTotals = {
   chargedCents: number; refundedCents: number; transferredCents: number; reversedCents: number;
   awaitingTransferCents: number; uncollectedCents: number; grossFeeCents: number;
-  paymentCount: number; currency: "usd";
+  paymentCount: number; reviewPaymentCount: number; currency: "usd";
 };
 /** All persisted payments, not only the visible page or the 200 agreement limit. */
 export async function getProviderTestPaymentTotals(providerUserId: string): Promise<ProviderTestPaymentTotals> {
   enabled();
   const [row] = await db.$queryRaw<Array<Record<Exclude<keyof ProviderTestPaymentTotals, "currency">, bigint>>>`
     SELECT COUNT(*)::bigint AS "paymentCount",
+      COUNT(*) FILTER (WHERE "reconciliationHoldReason" IS NOT NULL)::bigint AS "reviewPaymentCount",
       COALESCE(SUM(CASE WHEN "status" IN ('succeeded','partially_refunded','refunded','disputed') THEN "amountCents" ELSE 0 END),0)::bigint AS "chargedCents",
-      COALESCE(SUM("amountRefundedCents"),0)::bigint AS "refundedCents",
+      COALESCE(SUM(GREATEST("amountRefundedCents", "observedChargeRefundedCents")),0)::bigint AS "refundedCents",
       COALESCE(SUM(CASE WHEN "stripeTransferId" IS NOT NULL THEN "providerAmountCents" ELSE 0 END),0)::bigint AS "transferredCents",
-      COALESCE(SUM("providerReversedCents"),0)::bigint AS "reversedCents",
-      COALESCE(SUM(CASE WHEN "status" IN ('succeeded','partially_refunded') AND "stripeTransferId" IS NULL
+      COALESCE(SUM(GREATEST("providerReversedCents", "observedProviderReversedCents")),0)::bigint AS "reversedCents",
+      COALESCE(SUM(CASE WHEN "status" IN ('succeeded','partially_refunded') AND "stripeTransferId" IS NULL AND "reconciliationHoldReason" IS NULL
         THEN "providerAmountCents" - FLOOR("providerAmountCents"::numeric * "amountRefundedCents" / "amountCents") ELSE 0 END),0)::bigint AS "awaitingTransferCents",
       COALESCE(SUM(CASE WHEN "status" IN ('pending','failed','requires_action') THEN "providerAmountCents" ELSE 0 END),0)::bigint AS "uncollectedCents",
       COALESCE(SUM(CASE WHEN "status" IN ('succeeded','partially_refunded','refunded','disputed') THEN "platformFeeCents" ELSE 0 END),0)::bigint AS "grossFeeCents"

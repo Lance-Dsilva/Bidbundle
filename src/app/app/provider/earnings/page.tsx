@@ -73,6 +73,7 @@ export default function ProviderEarningsPage() {
           ["Original platform fees", earnings.payments.grossFeeCents],
         ].map(([label, amount]) => <div key={label} className="p-4" style={card}><dt className="text-sm">{label}</dt><dd className="font-semibold">{fmt(Number(amount))}</dd></div>)}</dl>
         <p className="text-sm">Resident charges: {fmt(earnings.payments.chargedCents)} · Resident refunds: {fmt(earnings.payments.refundedCents)} · Provider transfer reversals: {fmt(earnings.payments.reversedCents)}. Original fees are shown before refund adjustments.</p>
+        {earnings.payments.reviewPaymentCount > 0 && <p className="text-sm text-amber-800">{earnings.payments.reviewPaymentCount} payments need billing review and are excluded from pending transfers.</p>}
         <Link className="inline-flex min-h-11 items-center underline" href="/app/provider/earnings/payments">View test payment history</Link>
       </section>}
 
