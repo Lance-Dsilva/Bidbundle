@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 import { BaseSequencer, type TestSpecification } from "vitest/node";
 class BillingFixtureOrder extends BaseSequencer {
   async sort(files: TestSpecification[]) {
-    const order = ["pool-template", "price-ladder", "stripe-enrollment", "service-quality", "stripe-history"];
+    const order = ["pool-template", "price-ladder", "stripe-enrollment", "service-quality", "stripe-history", "stripe-receipts"];
     return files.sort((a, b) => order.findIndex(name => a.moduleId.endsWith(`${name}.postgres.ts`)) - order.findIndex(name => b.moduleId.endsWith(`${name}.postgres.ts`)));
   }
 }
@@ -34,7 +34,7 @@ export default defineConfig({
   } },
   test: {
     environment: "node",
-    include: ["tests/postgres/pool-template.postgres.ts", "tests/postgres/price-ladder.postgres.ts", "tests/postgres/stripe-enrollment.postgres.ts", "tests/postgres/stripe-history.postgres.ts", "tests/postgres/service-quality.postgres.ts"],
+    include: ["tests/postgres/pool-template.postgres.ts", "tests/postgres/price-ladder.postgres.ts", "tests/postgres/stripe-enrollment.postgres.ts", "tests/postgres/stripe-history.postgres.ts", "tests/postgres/service-quality.postgres.ts", "tests/postgres/stripe-receipts.postgres.ts"],
     fileParallelism: false,
     sequence: { sequencer: BillingFixtureOrder },
     testTimeout: 30_000,
