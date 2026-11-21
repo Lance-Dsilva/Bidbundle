@@ -187,10 +187,9 @@ it("claim committed while holding Community authority blocks a waiting manual pa
   const claim=first.$transaction(async tx=>{
    await tx.$queryRaw`SELECT "id" FROM "ServiceVisit" WHERE "id"=${f.ownVisit.id} FOR UPDATE`;
    await tx.$queryRaw`SELECT "visitId" FROM "StripeTestPayment" WHERE "visitId"=${f.ownVisit.id} FOR UPDATE`;
-   await tx.$queryRaw`SELECT "id" FROM "Community" WHERE "id"=${f.community.id} FOR UPDATE`;
-   const [{pid}]=await tx.$queryRaw<Array<{pid:number}>>`SELECT pg_backend_pid() AS pid`;ready(pid);await gate;
    const ticket=await tx.supportTicket.create({data:{ticketNumber:randomUUID(),requesterUserId:f.residents[0].user.id,requesterRole:"homeowner",category:"service_quality",subject:"Owned race",communityId:f.community.id}});
    await tx.serviceQualityClaim.create({data:{visitId:f.ownVisit.id,ticketId:ticket.id,requesterUserId:f.residents[0].user.id,providerUserId:f.provider.id,reason:"incomplete"}});
+   const [{pid}]=await tx.$queryRaw<Array<{pid:number}>>`SELECT pg_backend_pid() AS pid`;ready(pid);await gate;
   },{timeout:15000});
   const blocker=await acquired;const payment=markHoaShareStatementPaid(f.admin.id,f.community.id,s.id,"RACE-CHECK").then(()=>null,error=>error);
   try{await waitBlocked(blocker);}finally{release();}await claim;
@@ -228,11 +227,16 @@ it("direct payout transition rechecks owner verification and holds and stamps fi
   await expect(first.hoaSharePayout.update({where:{id:opId},data:{attemptedAt:new Date("2099-01-01")}})).rejects.toThrow();
   await expect(first.hoaSharePayout.update({where:{id:opId},data:{status:"paid"}})).rejects.toThrow();
 });
-it("rejects forged savings, provider binding, and ledger kind through direct SQL",async()=>{
+it("rejects forged savings and provider binding against a valid completed-visit control",async()=>{
  const f=await fixture();
+ await updateVisitStatus(f.provider.id,f.otherVisit.id,{status:"completed",completionNote:null});
  const data={...f.payment,visitId:f.otherVisit.id,unitId:f.residents[1].unit.id,residentUserId:f.residents[1].user.id};
- await expect(first.stripeTestPayment.create({data:{...data,residentSavingsCents:1}})).rejects.toThrow();
- await expect(first.stripeTestPayment.create({data:{...data,providerUserId:f.manager.id}})).rejects.toThrow();
+ const rollback=new Error("rollback successful positive control");
+ await expect(first.$transaction(async tx=>{const control=await tx.stripeTestPayment.create({data});expect(control).toMatchObject({visitId:f.otherVisit.id,hoaShareCents:50,providerAmountCents:901});throw rollback;})).rejects.toBe(rollback);
+ expect(await first.stripeTestPayment.findUnique({where:{visitId:f.otherVisit.id}})).toBeNull();
+ await expect(first.stripeTestPayment.create({data:{...data,residentSavingsCents:1}})).rejects.toThrow(/savings snapshot/i);
+ await expect(first.stripeTestPayment.create({data:{...data,providerUserId:f.manager.id}})).rejects.toThrow(/original completed resident visit/i);
  await paid(f);
+ // Duplicate zero-delta insertion is rejected; this is not isolated proof of the kind discriminator.
  await expect(first.hoaShareEntry.create({data:{id:randomUUID(),communityId:f.community.id,paymentVisitId:f.ownVisit.id,sequence:2,kind:"forged",amountCents:0,savingsCents:0,refundedCents:0}})).rejects.toThrow();
 });
