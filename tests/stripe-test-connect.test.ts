@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ profile: vi.fn(), update: vi.fn(), create: vi.fn(), retrieve: vi.fn(), link: vi.fn() }));
 vi.mock("stripe", () => ({ default: class { accounts = { create: m.create, retrieve: m.retrieve }; accountLinks = { create: m.link }; } }));
 vi.mock("@/lib/server/db", () => ({ db: { providerProfile: { findUnique: m.profile, updateMany: m.update } } }));
-import { startStripeTestOnboarding, refreshStripeTestPayouts, stripeTestPayoutStatus } from "@/lib/server/stripe-test-connect";
+import { startStripeTestOnboarding, refreshStripeTestPayouts, stripeTestPayoutStatus, requireStripeTestAwardPayouts } from "@/lib/server/stripe-test-connect";
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("STRIPE_TEST_CONNECT", "1"); vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fixture"); vi.stubEnv("STRIPE_TEST_APP_URL", "https://preview.example.invalid");
   m.profile.mockResolvedValue({ accountStatus: "active", stripeTestAccountId: "acct_fixture" });
@@ -50,5 +50,32 @@ describe("sandbox Connect", () => {
     expect(stripeTestPayoutStatus(account)).toBe("active");
     expect(stripeTestPayoutStatus({ ...account, payouts_enabled: false })).toBe("pending");
     expect(stripeTestPayoutStatus({ ...account, requirements: { disabled_reason: "requirements.past_due", past_due: ["external_account"] } })).toBe("restricted");
+  });
+});
+
+describe("authoritative sandbox award check", () => {
+  const active = { id: "acct_fixture", metadata: { bundleenProviderUserId: "provider" }, charges_enabled: true, payouts_enabled: true, capabilities: { transfers: "active" }, requirements: { past_due: [] } };
+  it("returns only the freshly retrieved owning account", async () => {
+    m.retrieve.mockResolvedValue(active);
+    await expect(requireStripeTestAwardPayouts("provider")).resolves.toBe("acct_fixture");
+    expect(m.retrieve).toHaveBeenCalledWith("acct_fixture");
+  });
+  it.each([false, true])("rejects pending/restricted payouts (restricted=%s)", async (restricted) => {
+    m.retrieve.mockResolvedValue({ ...active, payouts_enabled: false, requirements: { disabled_reason: restricted ? "requirements.past_due" : null } });
+    await expect(requireStripeTestAwardPayouts("provider")).rejects.toMatchObject({ status: 409 });
+  });
+  it("rejects a missing account without attempting Stripe", async () => {
+    m.profile.mockResolvedValue({ accountStatus: "active", stripeTestAccountId: null });
+    await expect(requireStripeTestAwardPayouts("provider")).rejects.toMatchObject({ status: 409 });
+    expect(m.retrieve).not.toHaveBeenCalled();
+  });
+  it("rejects suspension or account replacement during the Stripe read", async () => {
+    m.retrieve.mockResolvedValue(active); m.update.mockResolvedValue({ count: 0 });
+    await expect(requireStripeTestAwardPayouts("provider")).rejects.toMatchObject({ status: 409 });
+  });
+  it("fails closed on Stripe failure instead of trusting cached status", async () => {
+    m.retrieve.mockRejectedValue(new Error("timeout"));
+    await expect(requireStripeTestAwardPayouts("provider")).rejects.toThrow("timeout");
+    expect(m.update).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { requireStripeTestAwardPayouts } from "@/lib/server/stripe-test-connect";
 import { buildStripeTestChargeIntent } from "@/lib/stripe-test-charge-intent";
 import { allocateVisitCents } from "@/lib/visit-billing";
 import "server-only";
@@ -103,6 +104,7 @@ function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
   if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
   if (codes.includes("P1710")) return new HoaWorkflowError("This visit or its required after photo changed. Refresh and add the required proof before completing it.", 409);
   if (codes.includes("P1711")) return new HoaWorkflowError("This visit's photo or provider access changed. Refresh before trying again.", 409);
+  if (codes.includes("P1743")) return new HoaWorkflowError("The provider’s sandbox payout account changed or is not active. Refresh payout setup before awarding.", 409);
   if (codes.includes("P1712")) return new HoaWorkflowError("Photo consent or household access changed. Refresh before trying again.", 409);
   return null;
 }
@@ -2092,6 +2094,10 @@ export async function awardBid(
     throw new HoaWorkflowError("That provider does not meet this HOA’s insurance coverage and additional-insured requirements.", 409);
   }
 
+  const verifiedPayoutAccountId = process.env.STRIPE_TEST_PAYMENTS === "1" &&
+    request.community.type === "hoa" && request.kind === "optional_group"
+    ? await requireStripeTestAwardPayouts(bid.providerUserId) : null;
+
   // Resolve the service targets *before* anything is written. A neighbourhood
   // participant with no verified address aborts the whole award here, with a
   // list the manager can act on, rather than producing an agreement whose
@@ -2226,6 +2232,9 @@ export async function awardBid(
         },
       }),
       assertPreparedManager(userId, request.id, authority.via),
+      // Held through all award writes; fail closed if suspension, webhook status
+      // changes or account replacement occurred after the authoritative read.
+      ...(verifiedPayoutAccountId ? [db.$executeRaw(Prisma.sql`SELECT "bundleen_assert_stripe_test_award_payouts"(${bid.providerUserId}, ${verifiedPayoutAccountId})`)] : []),
       db.serviceBid.update({
         where: { id: bid.id, version: bid.version, status: "submitted" },
         data: { status: "accepted", decidedAt: now },

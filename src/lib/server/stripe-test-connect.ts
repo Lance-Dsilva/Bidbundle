@@ -51,7 +51,7 @@ export function stripeTestPayoutStatus(account: { charges_enabled: boolean; payo
   if (account.requirements?.disabled_reason || account.requirements?.past_due?.length) return "restricted";
   return account.charges_enabled && account.payouts_enabled && account.capabilities?.transfers === "active" ? "active" : "pending";
 }
-export async function refreshStripeTestPayouts(userId: string) {
+async function verifyStripeTestPayouts(userId: string) {
   const stripe = stripeClient(); const current = await profile(userId);
   if (!current.stripeTestAccountId) return { status: "not_connected" };
   const account = await stripe.accounts.retrieve(current.stripeTestAccountId);
@@ -61,5 +61,19 @@ export async function refreshStripeTestPayouts(userId: string) {
   const status = stripeTestPayoutStatus(account);
   const updated = await db.providerProfile.updateMany({ where: { userId, accountStatus: "active", stripeTestAccountId: account.id }, data: { stripeTestPayoutStatus: status } });
   if (updated.count !== 1) throw new HoaWorkflowError("Provider account changed. Please retry.", 409);
-  return { status };
+  return { status, accountId: account.id };
+}
+
+export async function refreshStripeTestPayouts(userId: string) {
+  const result = await verifyStripeTestPayouts(userId);
+  return { status: result.status };
+}
+
+/** A redirect or cached active status is never enough to authorize an award. */
+export async function requireStripeTestAwardPayouts(userId: string): Promise<string> {
+  const result = await verifyStripeTestPayouts(userId);
+  if (result.status !== "active" || !result.accountId) {
+    throw new HoaWorkflowError("This provider must finish sandbox payout setup before this request can be awarded.", 409);
+  }
+  return result.accountId;
 }

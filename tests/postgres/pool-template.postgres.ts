@@ -527,3 +527,55 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     expect(await first.serviceBidRevision.count({where:{bidId:bid.id}})).toBe(0);
   });
 });
+
+describe("sandbox award payout transaction guard", () => {
+  it("accepts the exact active account and rejects replacement, restriction and inactive identity", async () => {
+    const p = await provider(`payout-${randomUUID()}`);
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestAccountId: `acct_${p.id}`, stripeTestPayoutStatus: "active" } });
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${`acct_${p.id}`})`).resolves.toBeDefined();
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${"acct_replaced"})`).rejects.toThrow();
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestPayoutStatus: "restricted" } });
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${`acct_${p.id}`})`).rejects.toThrow();
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestPayoutStatus: "active", accountStatus: "suspended" } });
+    await expect(first.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${`acct_${p.id}`})`).rejects.toThrow();
+  });
+
+  it.each(["suspension", "replacement"])("rechecks a concurrent %s after acquiring its lock and rolls back earlier writes", async (change) => {
+    const p = await provider(`payout-race-${randomUUID()}`);
+    const account = `acct_${p.id}`;
+    await first.providerProfile.update({ where: { userId: p.id }, data: { stripeTestAccountId: account, stripeTestPayoutStatus: "active" } });
+    const locked = deferred(), release = deferred(); releases.push(release);
+    let mutatorPid = 0, awardPid = 0;
+    const mutation = run(second, () => second.$transaction(async (tx) => {
+      mutatorPid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0].pid;
+      await tx.providerProfile.update({ where: { userId: p.id }, data: change === "suspension" ? { accountStatus: "suspended" } : { stripeTestAccountId: `acct_replacement_${p.id}` } });
+      locked.resolve(); await release.promise;
+    }));
+    await reached(locked);
+    // The first update is intentionally before the guard: rejection must roll
+    // back the entire batch, as with the award's request-status update.
+    const assertionStarted = deferred();
+    const attempt = run(first, () => first.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: p.id }, data: { fullName: "must roll back" } });
+      awardPid = (await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`)[0].pid;
+      assertionStarted.resolve();
+      await tx.$executeRaw`SELECT bundleen_assert_stripe_test_award_payouts(${p.id}, ${account})`;
+    }));
+    await reached(assertionStarted);
+    const observer = new PgClient({ connectionString: process.env.TEST_DATABASE_URL! });
+    await observer.connect();
+    try {
+      const deadline = Date.now() + 3000;
+      let blocked = false;
+      while (Date.now() < deadline) {
+        const observation = await observer.query<{ blockers: number[] }>("SELECT pg_blocking_pids($1) AS blockers", [awardPid]);
+        if (observation.rows[0].blockers.includes(mutatorPid)) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, "award assertion must actually wait for the provider mutation lock").toBe(true);
+    } finally { await observer.end(); release.resolve(); }
+    await mutation;
+    await expect(attempt).rejects.toThrow();
+    expect((await first.user.findUniqueOrThrow({ where: { id: p.id } })).fullName).toBe("PRIVATE_PROVIDER_NAME");
+  });
+});

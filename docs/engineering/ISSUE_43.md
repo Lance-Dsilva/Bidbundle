@@ -26,7 +26,7 @@ Configuration (no values in source):
 
 Remaining acceptance gates:
 1. Integrate provider-backed enrollment cap (#49), saving the card at join and binding final charges to accepted prices.
-2. Award gate using verified active sandbox payouts; do not infer activation from onboarding redirect.
+2. Application award payout gate implemented: optional HOA awards with sandbox payments enabled perform a fresh owned Stripe account read and lock/recheck that same active provider/account inside the award transaction. Direct SQL callers are not globally gated by an application environment flag; persisted request billing policy remains part of enrollment integration.
 3. Verify durable Payment/operation records and completion outbox against real Stripe. Persistent intent identity and mocked remote-success recovery are implemented; failed-payment retry with a replacement card and notifications remain. USD allocations below 50 cents stop for billing review rather than overcharging.
 4. Implement provider transfers after success and failed/action-required resident notifications/recovery. Core charges only completed eligible visits, with signed-event/pending reconciliation; transfers/refunds/disputes are not implemented.
 5. Admin refund and matching transfer reversal, audit/history/earnings and notifications; integrate HOA share (#44), claims (#50), monthly billing (#56).
@@ -41,3 +41,15 @@ Reconciliation is bounded to three events plus three pending payments per drain;
 Sandbox transfer milestone: `transferStripeTestPayment` checks the paid, unrefunded, undisputed source charge and current owning provider/Stripe account, sends only the frozen provider share, and stores a durable attempt timestamp before the network operation. Retries reuse one transfer key and stop for manual reconciliation after 23 hours instead of risking a duplicate after idempotency expiry. Transfer IDs and attempt times cannot be overwritten. Ten focused tests and PostgreSQL immutability checks pass.
 
 This helper is deliberately NOT wired to scheduled processing. Before activation it must check unresolved service-quality claims under the same visit lock, implement refund/reversal recovery, and pass real sandbox verification. Issue #50's 72-hour rule is a reporting window; its default extra transfer hold is none. No blanket 72-hour payment hold is implied.
+
+## Resumed team verification
+
+Remote PR head `3e47b3e5cf956d0ff2922e16fa208af1d447058c` was recovered into an isolated checkout after the previous temporary checkout disappeared. GitHub reports the PR open and draft, with Vercel success at that head.
+
+Vercel metadata confirms `STRIPE_SECRET_KEY` is configured for Preview and Development and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` for Preview/Development. Values were not retrieved or printed; key validity has not been proved with Stripe. Neither webhook signing variable appeared in the metadata. The earlier request for API keys is therefore no longer the current prerequisite; engineering must configure and verify sandbox webhooks and full flow.
+
+Current bounded milestone: enforce active, freshly verified sandbox provider payouts at the application award entry point, with a transaction recheck against account replacement or suspension. Independent implementation, verification and review ownership assigned. Transfers remain unwired.
+
+Independent source review approved the bounded award gate. Direct Next production build passed without applying shared migrations. The PostgreSQL assertion migration is for the owned synthetic test database only; no production or shared Preview schema was changed. Preview key presence is confirmed, not live sandbox completion. Next implementation work remains card-at-join/price-cap integration and refund/reversal recovery before transfer activation.
+
+Final award-gate verification: 145 unique focused tests across 15 files, 36 real PostgreSQL tests, TypeScript, direct Next build and diff whitespace checks passed. Race tests observe the exact mutator PID blocking the assertion before releasing the lock, then verify rejection and transaction rollback. Reviewer found no implementation blocker. Existing synthetic schema has no Prisma migration history, so only the reviewed new function SQL was applied there; no history baseline or shared migration was performed.

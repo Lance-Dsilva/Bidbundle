@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { approvedProviderVerification } from "./fixtures/provider-verification";
 
 /**
@@ -9,6 +9,10 @@ import { approvedProviderVerification } from "./fixtures/provider-verification";
  */
 
 type Op = { model: string; action: string; args: Record<string, unknown> };
+
+const payouts = vi.hoisted(() => ({ verify: vi.fn() }));
+vi.mock("@/lib/server/stripe-test-connect", () => ({ requireStripeTestAwardPayouts: payouts.verify }));
+afterEach(() => vi.unstubAllEnvs());
 
 const state = vi.hoisted(() => ({
   request: null as Record<string, unknown> | null,
@@ -160,6 +164,8 @@ describe("areaCoversLocation", () => {
 describe("awardBid", () => {
   beforeEach(() => {
     state.batches = [];
+    payouts.verify.mockReset().mockResolvedValue("acct_verified");
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "0");
     // `requireCommunityManager` reads the community first, so the type it
     // returns is what decides whether HOA or neighbourhood rules apply.
     state.community = { id: "hoa-1", name: "Cedar Park HOA", type: "hoa", status: "active" };
@@ -220,6 +226,30 @@ describe("awardBid", () => {
       { user: { id: "resident-1", email: "resident1@example.com" } },
     ];
     state.emailOptOutUserIds = [];
+  });
+
+  it("requires verified payouts only for enabled optional HOA awards and locks the exact account in the award batch", async () => {
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "1");
+    state.request!.kind = "optional_group";
+    await awardBid("manager-1", "request-1", { bidId: "bid-1" });
+    expect(payouts.verify).toHaveBeenCalledWith("provider-1");
+    const batch = state.batches[0];
+    const guard = batch.findIndex((op) => JSON.stringify(op.args).includes("bundleen_assert_stripe_test_award_payouts"));
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(batch.findIndex((op) => op.model === "serviceBid" && op.action === "update"));
+    expect(JSON.stringify(batch[guard].args)).toContain("acct_verified");
+  });
+  it("does not write an award when authoritative payouts are unavailable", async () => {
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", "1"); state.request!.kind = "optional_group";
+    payouts.verify.mockRejectedValue(new HoaWorkflowError("Finish payout setup", 409));
+    await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+  it.each([false, true])("preserves flag-off optional and enabled compulsory awards (enabled=%s)", async (enabled) => {
+    vi.stubEnv("STRIPE_TEST_PAYMENTS", enabled ? "1" : "0");
+    state.request!.kind = enabled ? "compulsory_recurring" : "optional_group";
+    await awardBid("manager-1", "request-1", { bidId: "bid-1" });
+    expect(payouts.verify).not.toHaveBeenCalled();
   });
 
   it.each(["per_home", "per_visit"])("refuses a new legacy %s award before all writes", async (pricingBasis) => {
