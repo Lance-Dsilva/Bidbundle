@@ -54,7 +54,7 @@ export default async function HomeownerCommunityPage() {
         </div>
       ) : null}
 
-      {process.env.STRIPE_TEST_CARD_SETUP === "1" && <Link className="bb-btn bb-btn-secondary min-h-11" href="/app/homeowner/billing">Review service payment setup</Link>}
+      {(process.env.STRIPE_TEST_CARD_SETUP === "1" || process.env.STRIPE_TEST_PAYMENTS === "1") && <Link className="bb-btn bb-btn-secondary min-h-11" href="/app/homeowner/billing">View service payments and receipts</Link>}
       <ResidentHoaWorkspace hub={residentHoa} qualityReportingEnabled={process.env.SERVICE_QUALITY_INTAKE === "1"} />
 
       {neighborhoodManagement.map(({ community, roleLabels, members }) => {
