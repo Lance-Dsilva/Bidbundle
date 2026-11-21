@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ request: vi.fn(), membership: vi.fn(), payer: vi.fn(), readConsent: vi.fn(), requiredConsent: vi.fn(), createConsent: vi.fn(), count: vi.fn(), readParticipation: vi.fn(), createParticipation: vi.fn(), updateParticipation: vi.fn(), createCard: vi.fn(), updateRequest: vi.fn(), raw: vi.fn(), createCustomer: vi.fn(), createSetup: vi.fn(), retrieveSetup: vi.fn(), notify: vi.fn() }));
+const m = vi.hoisted(() => ({ request: vi.fn(), membership: vi.fn(), payer: vi.fn(), readConsent: vi.fn(), requiredConsent: vi.fn(), createConsent: vi.fn(), count: vi.fn(), readParticipation: vi.fn(), createParticipation: vi.fn(), updateParticipation: vi.fn(), createCard: vi.fn(), updateRequest: vi.fn(), raw: vi.fn(), createCustomer: vi.fn(), createSetup: vi.fn(), retrieveSetup: vi.fn(), notify: vi.fn(), cards: vi.fn(), exactCards: vi.fn(), retrieveMethod: vi.fn() }));
 vi.mock("stripe", () => ({ default: class {
   customers = { create: m.createCustomer };
+  paymentMethods = { retrieve: m.retrieveMethod };
   setupIntents = { create: m.createSetup, retrieve: m.retrieveSetup };
 } }));
 vi.mock("@/lib/server/price-ladder", () => ({ notifyPriceLadderUnlock: m.notify }));
@@ -13,7 +14,8 @@ vi.mock("@/lib/server/db", () => {
     user: { findUnique: m.payer, findUniqueOrThrow: m.payer, updateMany: vi.fn() },
     enrollmentBillingConsent: { findUnique: m.readConsent, findUniqueOrThrow: m.requiredConsent, create: m.createConsent },
     hoaRequestParticipation: { findFirst: m.readParticipation, count: m.count, create: m.createParticipation, update: m.updateParticipation },
-    enrollmentBillingCard: { create: m.createCard },
+    enrollmentBillingCard: { create: m.createCard, findMany: m.cards },
+    stripeTestCard: { findMany: m.exactCards },
   };
   return { db: { ...tx, $transaction: async (fn: (client: typeof tx) => unknown) => fn(tx) } };
 });
@@ -28,6 +30,7 @@ let accepted: { id: string; requestId: string; payerUserId: string; unitId: stri
 let setup: { id: string; livemode: boolean; status: string; customer: string; client_secret: string; payment_method: typeof method; metadata: { bundleenEnrollmentConsentId: string; bundleenTermsToken: string } };
 beforeEach(async () => {
   vi.resetAllMocks(); vi.stubEnv("STRIPE_TEST_PAYMENTS", "1"); vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fixture");
+  m.cards.mockResolvedValue([]); m.exactCards.mockResolvedValue([]);
   m.request.mockResolvedValue(request); m.membership.mockResolvedValue(membership); m.payer.mockResolvedValue(payer); m.count.mockResolvedValue(0); m.readParticipation.mockResolvedValue(null);
   const offer = await getEnrollmentBillingOffer("payer", "request");
   accepted = { id: "consent", requestId: "request", payerUserId: "payer", unitId: "unit", membershipId: "membership", commitmentId: "commitment", providerUserId: "provider", maximumCents: 12000, currency: "usd", termsToken: offer.termsToken, termsVersion: "capped-completed-visit-v1", revokedAt: null, acceptedAt: new Date("2026-01-02"), card: null };
@@ -137,4 +140,46 @@ it("fails closed on live credentials before enrollment mutations", async () => {
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_fixture");
   await expect(startEnrollmentBilling("payer", "request", "consent", accepted.termsToken)).rejects.toMatchObject({ status: 503 });
   expect(m.createConsent).not.toHaveBeenCalled(); expect(m.createSetup).not.toHaveBeenCalled();
+});
+
+const oldCard = { consentId: "old-consent", setupIntentId: "seti_old", customerId: "cus_owned", paymentMethodId: "pm_owned", brand: "visa", last4: "4242" };
+async function savedReference() { m.cards.mockResolvedValue([oldCard]); const offer = await getEnrollmentBillingOffer("payer", "request"); return offer.savedCards[0].reference; }
+it("offers only opaque descriptions from the current payer customer", async () => {
+  const reference = await savedReference();
+  expect(reference).toMatch(/^[a-f0-9]{64}$/);
+  expect(m.cards).toHaveBeenLastCalledWith(expect.objectContaining({ where: { customerId: "cus_owned", consent: { payerUserId: "payer" } } }));
+  expect(m.exactCards).toHaveBeenLastCalledWith(expect.objectContaining({ where: { customerId: "cus_owned", payerUserId: "payer" } }));
+  expect(JSON.stringify((await getEnrollmentBillingOffer("payer", "request")).savedCards)).not.toMatch(/pm_owned|seti_old|cus_owned/);
+});
+it("reuses the owned card through a fresh consent-bound off-session setup without joining or charging", async () => {
+  const reference = await savedReference(); m.readConsent.mockResolvedValue(null);
+  m.retrieveMethod.mockResolvedValue({ ...method, type: "card" });
+  await expect(startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, reference)).resolves.toMatchObject({ usingSavedCard: true });
+  expect(m.createConsent).toHaveBeenCalled();
+  expect(m.retrieveMethod).toHaveBeenCalledWith("pm_owned");
+  expect(m.createSetup).toHaveBeenCalledWith(expect.objectContaining({ payment_method: "pm_owned", usage: "off_session", metadata: setup.metadata }), { idempotencyKey: "enrollment_setup_consent" });
+  expect(m.createParticipation).not.toHaveBeenCalled();
+});
+it("rejects a foreign or stale opaque source before calling Stripe", async () => {
+  await expect(startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, "b".repeat(64))).rejects.toMatchObject({ status: 409 });
+  expect(m.retrieveMethod).not.toHaveBeenCalled(); expect(m.createSetup).not.toHaveBeenCalled();
+});
+it.each([{ customer: null }, { customer: "cus_foreign" }, { livemode: true }, { type: "us_bank_account" }, { id: "pm_other" }, { card: null }])("rejects changed processor saved-card identity %j", async change => {
+  const reference = await savedReference(); m.retrieveMethod.mockResolvedValue({ ...method, type: "card", ...change });
+  await expect(startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, reference)).rejects.toMatchObject({ status: 409 });
+  expect(m.createSetup).not.toHaveBeenCalled();
+});
+
+it("rejects unexpected setup selection rather than verifying another card", async () => {
+ const reference = await savedReference(); m.retrieveMethod.mockResolvedValue({ ...method, type: "card" });
+ m.createSetup.mockResolvedValue({ ...setup, payment_method: "pm_other" });
+ await expect(startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, reference)).rejects.toMatchObject({ status: 503 });
+ expect(m.createParticipation).not.toHaveBeenCalled();
+});
+it("saved-card setup retry retains exact consent and Stripe idempotency identity", async () => {
+ const reference = await savedReference(); m.retrieveMethod.mockResolvedValue({ ...method, type: "card" });
+ await startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, reference);
+ await startEnrollmentBilling("payer", "request", "consent", accepted.termsToken, reference);
+ expect(m.createSetup.mock.calls[0]).toEqual(m.createSetup.mock.calls[1]);
+ expect(m.createParticipation).not.toHaveBeenCalled();
 });

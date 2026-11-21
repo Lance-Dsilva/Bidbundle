@@ -36,13 +36,26 @@ async function lockSnapshot(tx: Prisma.TransactionClient, payerId: string, reque
   return live;
 }
 function token(terms: unknown[], maximumCents: number) { return createHash("sha256").update(JSON.stringify([...terms, "usd", maximumCents])).digest("hex"); }
+/** Card references are opaque; prior consent never authorizes this new request. */
+async function reusableCards(payerId: string, customerId: string | null) {
+  if (!customerId) return [];
+  const [enrollment, exact] = await Promise.all([
+    db.enrollmentBillingCard.findMany({ where: { customerId, consent: { payerUserId: payerId } }, orderBy: { verifiedAt: "desc" }, take: 10 }),
+    db.stripeTestCard.findMany({ where: { customerId, payerUserId: payerId }, orderBy: { verifiedAt: "desc" }, take: 10 }),
+  ]);
+  const seen = new Set<string>();
+  return [...enrollment, ...exact].filter(card => { if (seen.has(card.paymentMethodId)) return false; seen.add(card.paymentMethodId); return true; }).map(card => ({
+    ...card, reference: createHash("sha256").update(`saved-card:${card.setupIntentId}`).digest("hex"),
+  }));
+}
 export async function getEnrollmentBillingOffer(payerId: string, requestId: string) {
   if (process.env.STRIPE_TEST_PAYMENTS !== "1") throw new HoaWorkflowError("Sandbox enrollment is unavailable.", 503);
   const s = await snapshot(db, payerId, requestId);
-  return { title: s.request.title, scope: s.commitment.scope, maximumCents: s.commitment.guaranteedPerHomeCents, currency: "usd",
+  const cards = await reusableCards(payerId, s.payer.stripeTestCustomerId);
+  return { savedCards: cards.map(({ reference, brand, last4 }) => ({ reference, brand, last4 })), title: s.request.title, scope: s.commitment.scope, maximumCents: s.commitment.guaranteedPerHomeCents, currency: "usd",
     totalOccurrences: s.request.totalOccurrences, recurrenceLabel: s.request.recurrenceLabel, termsToken: token(s.immutableTerms, s.commitment.guaranteedPerHomeCents) };
 }
-export async function startEnrollmentBilling(payerId: string, requestId: string, consentId: string, termsToken: string) {
+export async function startEnrollmentBilling(payerId: string, requestId: string, consentId: string, termsToken: string, savedCardReference?: string) {
   const stripe = stripeClient();
   const consent = await db.$transaction(async tx => {
     const s = await lockSnapshot(tx, payerId, requestId);
@@ -69,13 +82,22 @@ export async function startEnrollmentBilling(payerId: string, requestId: string,
     payer = await db.user.findUniqueOrThrow({ where: { id: payerId }, select: { stripeTestCustomerId: true } });
   }
   if (!payer.stripeTestCustomerId) throw new HoaWorkflowError("Sandbox customer setup failed.", 503);
-  const setup = await stripe.setupIntents.create({ customer: payer.stripeTestCustomerId, usage: "off_session", allowed_payment_method_types: ["card"],
+  let savedMethodId: string | undefined;
+  if (savedCardReference) {
+    const source = (await reusableCards(payerId, payer.stripeTestCustomerId)).find(card => card.reference === savedCardReference);
+    if (!source) throw new HoaWorkflowError("That saved card is unavailable. Choose another card.", 409);
+    const method = await stripe.paymentMethods.retrieve(source.paymentMethodId);
+    if (method.id !== source.paymentMethodId || method.livemode !== false || method.type !== "card" || !method.card || method.customer !== payer.stripeTestCustomerId) throw new HoaWorkflowError("That saved card is no longer available. Choose another card.", 409);
+    savedMethodId = method.id;
+  }
+  const setup = await stripe.setupIntents.create({ customer: payer.stripeTestCustomerId, usage: "off_session", allowed_payment_method_types: ["card"], ...(savedMethodId ? { payment_method: savedMethodId } : {}),
     metadata: { bundleenEnrollmentConsentId: consent.id, bundleenTermsToken: consent.termsToken } }, { idempotencyKey: `enrollment_setup_${consent.id}` });
-  if (setup.livemode !== false || setup.customer !== payer.stripeTestCustomerId || !setup.client_secret) throw new HoaWorkflowError("Sandbox card setup failed.", 503);
+  if (setup.livemode !== false || setup.customer !== payer.stripeTestCustomerId || !setup.client_secret ||
+      (savedMethodId && (typeof setup.payment_method === "string" ? setup.payment_method : setup.payment_method?.id) !== savedMethodId)) throw new HoaWorkflowError("Sandbox card setup failed.", 503);
   const current = await snapshot(db, payerId, requestId);
   const liveConsent = await db.enrollmentBillingConsent.findUniqueOrThrow({ where: { id: consent.id } });
   if (liveConsent.revokedAt || current.payer.stripeTestCustomerId !== setup.customer || token(current.immutableTerms, consent.maximumCents) !== consent.termsToken) throw new HoaWorkflowError("Enrollment changed. Start again.", 409);
-  return { clientSecret: setup.client_secret };
+  return { clientSecret: setup.client_secret, ...(savedMethodId ? { usingSavedCard: true } : {}) };
 }
 export async function confirmEnrollmentBilling(payerId: string, requestId: string, consentId: string, setupIntentId: string) {
   const stripe = stripeClient();
