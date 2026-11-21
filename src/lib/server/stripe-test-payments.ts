@@ -1,3 +1,4 @@
+import { readEnrollmentAuthorization } from "@/lib/server/enrollment-authorization";
 import "server-only";
 import Stripe from "stripe";
 import type { Prisma } from "@/generated/prisma/client";
@@ -33,15 +34,18 @@ export async function prepareStripeTestPayment(visitId: string) {
         provider.providerProfile.stripeTestPayoutStatus !== "active" || !provider.providerProfile.stripeTestAccountId) throw new HoaWorkflowError("The provider must finish sandbox payout setup before charging.", 409);
     const key = { agreementId: agreement.id, payerUserId: visit.billingPayerUserId, unitId: visit.unitId };
     await lockConsent(tx, key);
-    const consent = await tx.visitBillingConsent.findUnique({ where: { agreementId_payerUserId_unitId: key }, include: { testCard: true } });
-    if (!consent?.testCard || consent.termsVersion !== "completed-visit-charge-v1" || consent.acceptedAt > visit.completedAt || consent.testCard.verifiedAt > visit.completedAt) throw new HoaWorkflowError("The resident must accept prices and save a card before service completion.", 409);
+    const exactConsent = await tx.visitBillingConsent.findUnique({ where: { agreementId_payerUserId_unitId: key }, include: { testCard: true } });
+    const enrollment = agreement.request.stripeTestEnrollmentRequired ? await readEnrollmentAuthorization(tx, agreement.id, key.payerUserId, key.unitId) : null;
+    const consent = enrollment ? { termsToken: enrollment.termsToken, acceptedAt: enrollment.acceptedAt, testCard: enrollment.card } : exactConsent;
+    if (!consent?.testCard || (!enrollment && exactConsent?.termsVersion !== "completed-visit-charge-v1") || consent.acceptedAt > visit.completedAt || consent.testCard.verifiedAt > visit.completedAt ||
+        (agreement.request.stripeTestEnrollmentRequired && !enrollment)) throw new HoaWorkflowError("The resident must accept prices and save a card before service completion.", 409);
     const payer = await tx.user.findUnique({ where: { id: visit.billingPayerUserId }, select: { stripeTestCustomerId: true } });
     if (payer?.stripeTestCustomerId !== consent.testCard.customerId) throw new HoaWorkflowError("The saved card customer has changed.", 409);
     const configuredFee = process.env.PLATFORM_FEE_BPS ?? "1000";
     if (!/^\d+$/.test(configuredFee) || Number(configuredFee) > 1000) throw new HoaWorkflowError("Platform fee must preserve the provider's 90% share.", 503);
     const split = calculateStripePaymentAmounts(visit.allocatedVisitCents, Number(configuredFee));
     return tx.stripeTestPayment.create({ data: {
-      visitId, requestId: agreement.requestId, agreementId: agreement.id, communityId: agreement.communityId,
+      visitId, enrollmentAuthorizationId: enrollment?.id ?? null, requestId: agreement.requestId, agreementId: agreement.id, communityId: agreement.communityId,
       residentUserId: visit.billingPayerUserId, providerUserId: agreement.providerUserId, unitId: visit.unitId,
       customerId: consent.testCard.customerId, paymentMethodId: consent.testCard.paymentMethodId,
       providerAccountId: provider.providerProfile.stripeTestAccountId, termsToken: consent.termsToken,
@@ -94,7 +98,10 @@ export async function chargeStripeTestVisit(visitId: string) {
     }
     const consentKey = { agreementId: current.agreementId, payerUserId: current.residentUserId, unitId: current.unitId };
     await lockConsent(tx, consentKey);
-    const consent = await tx.visitBillingConsent.findUnique({ where: { agreementId_payerUserId_unitId: consentKey }, include: { testCard: true } });
+    const exactConsent = await tx.visitBillingConsent.findUnique({ where: { agreementId_payerUserId_unitId: consentKey }, include: { testCard: true } });
+    const enrollment = current.enrollmentAuthorizationId ? await readEnrollmentAuthorization(tx, current.agreementId, current.residentUserId, current.unitId) : null;
+    const consent = enrollment ? { termsToken: enrollment.termsToken, testCard: enrollment.card } : exactConsent;
+    if (current.enrollmentAuthorizationId && enrollment?.id !== current.enrollmentAuthorizationId) throw new HoaWorkflowError("Payment enrollment authorization changed.", 409);
     if (!recovery && (consent?.termsToken !== current.termsToken || consent.testCard?.customerId !== current.customerId || consent.testCard.paymentMethodId !== current.paymentMethodId)) throw new HoaWorkflowError("Payment consent or card has changed. Billing review required.", 409);
     await tx.$queryRaw`SELECT visit."id" FROM "ServiceVisit" visit
       JOIN "ServiceOccurrence" occurrence ON occurrence."id" = visit."occurrenceId"

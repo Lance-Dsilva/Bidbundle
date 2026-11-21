@@ -183,6 +183,7 @@ export type BidSummary = {
 };
 
 export type HoaRequestSummary = {
+  stripeTestEnrollmentRequired?: boolean;
   priceLadderPending?: boolean;
   priceLadder?: { tiers: import("@/lib/price-ladder").PriceLadderTier[]; guaranteedPerHomeCents: number } | null;
   id: string;

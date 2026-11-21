@@ -105,6 +105,7 @@ function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
   if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
   if (codes.includes("P1710")) return new HoaWorkflowError("This visit or its required after photo changed. Refresh and add the required proof before completing it.", 409);
   if (codes.includes("P1711")) return new HoaWorkflowError("This visit's photo or provider access changed. Refresh before trying again.", 409);
+  if (codes.includes("P1744")) return new HoaWorkflowError("Enrollment authorization changed. Each home must complete card setup and accept its maximum price before award.", 409);
   if (codes.includes("P1743")) return new HoaWorkflowError("The provider’s sandbox payout account changed or is not active. Refresh payout setup before awarding.", 409);
   if (codes.includes("P1712")) return new HoaWorkflowError("Photo consent or household access changed. Refresh before trying again.", 409);
   return null;
@@ -128,6 +129,7 @@ type RequestRow = {
   totalOccurrences: number;
   poolTemplate?: unknown;
   requiresAfterPhoto?: boolean;
+  stripeTestEnrollmentRequired?: boolean;
   status: HoaRequestSummary["status"];
   opensAt: Date | null;
   enrollmentClosesAt: Date | null;
@@ -180,6 +182,7 @@ function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: Revi
     maxHomes: row.maxHomes,
     participantsLockedAt: row.participantsLockedAt?.toISOString() ?? null,
     awardedAt: row.awardedAt?.toISOString() ?? null,
+    stripeTestEnrollmentRequired: Boolean(row.stripeTestEnrollmentRequired || (process.env.STRIPE_TEST_PAYMENTS === "1" && row.priceCommitment?.acceptedAt)),
     priceLadderPending: Boolean(row.priceCommitment && !row.priceCommitment.acceptedAt),
     priceLadder: row.priceCommitment?.acceptedAt ? { tiers: row.priceCommitment.tiers.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })), guaranteedPerHomeCents: row.priceCommitment.guaranteedPerHomeCents } : null,
     joinedCount: joined.length,
@@ -733,6 +736,7 @@ export async function transitionHoaRequest(
     where: { id: requestId },
     include: {
       community: { select: { type: true } },
+      priceCommitment: { select: { acceptedAt: true } },
       participations: { select: { unitId: true, userId: true, response: true, poolTier: true } },
       agreement: { select: { id: true, status: true, providerUserId: true } },
     },
@@ -820,6 +824,7 @@ export async function transitionHoaRequest(
             },
             data: {
               status: isCompulsory ? "open_for_bids" : "collecting_interest",
+              ...(!isCompulsory && !isNeighborhood && process.env.STRIPE_TEST_PAYMENTS === "1" && request.priceCommitment?.acceptedAt ? { stripeTestEnrollmentRequired: true } : {}),
               opensAt: request.opensAt ?? now,
               participantsLockedAt: isCompulsory ? now : null,
               ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
@@ -1014,6 +1019,7 @@ export async function respondToOptionalRequest(
     where: { id: requestId },
     select: {
       id: true,
+      stripeTestEnrollmentRequired: true,
       priceCommitment: { select: { id: true } },
       communityId: true,
       kind: true,
@@ -1026,6 +1032,7 @@ export async function respondToOptionalRequest(
     },
   });
   if (!request) throw new HoaWorkflowError("That HOA request does not exist.", 404);
+  if (input.response === "joined" && (request.stripeTestEnrollmentRequired || (process.env.STRIPE_TEST_PAYMENTS === "1" && request.priceCommitment))) throw new HoaWorkflowError("Save a test card and accept the maximum price before joining.", 409);
   const membership = await requireActiveResident(userId, request.communityId);
   if (!membership.unitId) {
     throw new HoaWorkflowError("Your membership is not linked to a home. Contact your HOA manager.");
@@ -2113,7 +2120,7 @@ export async function awardBid(
     throw new HoaWorkflowError("That provider does not meet this HOA’s insurance coverage and additional-insured requirements.", 409);
   }
 
-  const verifiedPayoutAccountId = process.env.STRIPE_TEST_PAYMENTS === "1" &&
+  const verifiedPayoutAccountId = (process.env.STRIPE_TEST_PAYMENTS === "1" || request.stripeTestEnrollmentRequired) &&
     request.community.type === "hoa" && request.kind === "optional_group"
     ? await requireStripeTestAwardPayouts(bid.providerUserId) : null;
 

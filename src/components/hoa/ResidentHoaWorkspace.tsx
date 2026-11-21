@@ -174,13 +174,13 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                               className="h-9 rounded-xl bg-[var(--teal-800)] px-4 text-xs font-semibold text-white disabled:opacity-60"
                               disabled={busy !== null || request.viewerResponse === "joined" || request.priceLadderPending}
                               onClick={() =>
-                                void run(`join-${request.id}`, () =>
-                                  post(`/api/hoa/requests/${request.id}/join`, { response: "joined" }),
-                                )
+                                request.stripeTestEnrollmentRequired
+                                  ? router.push(`/app/homeowner/enrollment/${encodeURIComponent(request.id)}`)
+                                  : void run(`join-${request.id}`, () => post(`/api/hoa/requests/${request.id}/join`, { response: "joined" }))
                               }
                               type="button"
                             >
-                              {request.viewerResponse === "joined" ? "Joined" : "Join"}
+                              {request.viewerResponse === "joined" ? "Joined" : request.stripeTestEnrollmentRequired ? "Review price and save card" : "Join"}
                             </button>
                             <button
                               className="h-9 rounded-xl border px-4 text-xs font-semibold text-[var(--muted)] disabled:opacity-60"

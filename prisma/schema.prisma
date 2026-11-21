@@ -816,6 +816,7 @@ model HoaServiceRequest {
   participantsLockedAt DateTime?
   awardedAt            DateTime?
 
+  stripeTestEnrollmentRequired Boolean @default(false)
   requiresPriceCommitment Boolean @default(false)
   priceCommitment PriceLadderCommitment?
   participations HoaRequestParticipation[]
@@ -846,6 +847,7 @@ model HoaRequestParticipation {
   unitId    String?
   unit      CommunityUnit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
+  enrollmentConsentId String?
   maximumPriceCents Int?
   response  ParticipationResponse @default(joined)
   /// Resident-selected applicable pool size, frozen with the audience.
@@ -2554,6 +2556,7 @@ model StripeTestCard {
 
 /// Durable sandbox-only economic identity: one charge intent per completed visit.
 model StripeTestPayment {
+  enrollmentAuthorizationId String?
   recoveryAttempts StripeTestPaymentAttempt[]
   lastRecoveryAttemptId String?
   visitId String @id
@@ -2624,4 +2627,42 @@ model ServiceBidPriceTier {
   perHomeCents Int
   @@unique([commitmentId, minHomes])
   @@index([bidId])
+}
+
+model EnrollmentBillingConsent {
+  id String @id
+  requestId String
+  payerUserId String
+  unitId String
+  membershipId String
+  commitmentId String
+  providerUserId String
+  maximumCents Int
+  currency String
+  termsToken String
+  termsVersion String
+  acceptedAt DateTime @default(now())
+  revokedAt DateTime?
+  card EnrollmentBillingCard?
+  @@index([requestId, payerUserId])
+}
+model EnrollmentBillingCard {
+  consentId String @id
+  consent EnrollmentBillingConsent @relation(fields: [consentId], references: [id], onDelete: Restrict)
+  customerId String
+  paymentMethodId String
+  setupIntentId String @unique
+  brand String
+  last4 String
+  verifiedAt DateTime @default(now())
+}
+model AgreementBillingAuthorization {
+  id String @id
+  agreementId String
+  enrollmentConsentId String @unique
+  payerUserId String
+  unitId String
+  authorizedTotalCents Int
+  createdAt DateTime @default(now())
+  @@unique([agreementId, unitId])
 }
