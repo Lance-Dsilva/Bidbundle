@@ -11,7 +11,7 @@ const historySelect = {
   observedChargeRefundedCents: true, observedProviderReversedCents: true, reconciliationHoldReason: true,
   visitId: true, requestId: true, status: true, amountCents: true, amountRefundedCents: true,
   providerAmountCents: true, providerReversedCents: true, platformFeeCents: true, currency: true,
-  stripeChargeId: true, stripeTransferId: true, createdAt: true,
+  stripeChargeId: true, stripeTransferId: true, transferAmountCents: true, createdAt: true,
   visit: { select: { occurrence: { select: { sequence: true, agreement: { select: {
     request: { select: { title: true } }, community: { select: { name: true } },
   } } } } } },
@@ -22,7 +22,7 @@ function serialize(row: HistoryRow) {
     visitId: row.visitId, requestId: row.requestId, status: row.status, amountCents: row.amountCents,
     refundedCents: Math.max(row.amountRefundedCents, row.observedChargeRefundedCents ?? 0),
     requiresReview: Boolean(row.reconciliationHoldReason), providerCents: row.providerAmountCents,
-    transferredCents: row.stripeTransferId ? row.providerAmountCents : 0, reversedCents: Math.max(row.providerReversedCents, row.observedProviderReversedCents ?? 0),
+    transferredCents: row.stripeTransferId ? (row.transferAmountCents ?? row.providerAmountCents) : 0, reversedCents: Math.max(row.providerReversedCents, row.observedProviderReversedCents ?? 0),
     feeCents: row.platformFeeCents, currency: row.currency, createdAt: row.createdAt.toISOString(),
     title: row.visit.occurrence.agreement.request.title, communityName: row.visit.occurrence.agreement.community.name,
     visitNumber: row.visit.occurrence.sequence,
@@ -70,7 +70,7 @@ export async function getProviderTestPaymentTotals(providerUserId: string): Prom
       COUNT(*) FILTER (WHERE "reconciliationHoldReason" IS NOT NULL)::bigint AS "reviewPaymentCount",
       COALESCE(SUM(CASE WHEN "status" IN ('succeeded','partially_refunded','refunded','disputed') THEN "amountCents" ELSE 0 END),0)::bigint AS "chargedCents",
       COALESCE(SUM(GREATEST("amountRefundedCents", "observedChargeRefundedCents")),0)::bigint AS "refundedCents",
-      COALESCE(SUM(CASE WHEN "stripeTransferId" IS NOT NULL THEN "providerAmountCents" ELSE 0 END),0)::bigint AS "transferredCents",
+      COALESCE(SUM(CASE WHEN "stripeTransferId" IS NOT NULL THEN COALESCE("transferAmountCents", "providerAmountCents") ELSE 0 END),0)::bigint AS "transferredCents",
       COALESCE(SUM(GREATEST("providerReversedCents", "observedProviderReversedCents")),0)::bigint AS "reversedCents",
       COALESCE(SUM(CASE WHEN "status" IN ('succeeded','partially_refunded') AND "stripeTransferId" IS NULL AND "reconciliationHoldReason" IS NULL
         THEN "providerAmountCents" - FLOOR("providerAmountCents"::numeric * "amountRefundedCents" / "amountCents") ELSE 0 END),0)::bigint AS "awaitingTransferCents",

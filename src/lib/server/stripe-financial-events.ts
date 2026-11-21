@@ -85,9 +85,9 @@ export async function reconcileStripeFinancialEvent(eventId: string) {
     let reversed = 0;
     if (payment.stripeTransferId) {
       const transfer = await stripe.transfers.retrieve(payment.stripeTransferId);
-      if (transfer.id !== payment.stripeTransferId || transfer.livemode !== false || transfer.amount !== payment.providerAmountCents || transfer.currency !== payment.currency ||
+      if (transfer.id !== payment.stripeTransferId || transfer.livemode !== false || transfer.amount !== (payment.transferAmountCents ?? payment.providerAmountCents) || transfer.currency !== payment.currency ||
           idOf(transfer.destination) !== payment.providerAccountId || idOf(transfer.source_transaction) !== charge.id ||
-          !Number.isSafeInteger(transfer.amount_reversed) || transfer.amount_reversed < 0 || transfer.amount_reversed > payment.providerAmountCents) throw invalid();
+          !Number.isSafeInteger(transfer.amount_reversed) || transfer.amount_reversed < 0 || transfer.amount_reversed > (payment.transferAmountCents ?? payment.providerAmountCents)) throw invalid();
       reversed = transfer.amount_reversed;
       const reversals = await stripe.transfers.listReversals(transfer.id, { limit: 100 });
       if (reversals.has_more) hold ??= "incomplete_processor_history";

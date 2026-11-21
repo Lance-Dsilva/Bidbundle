@@ -22,7 +22,7 @@ export async function prepareStripeTestPayment(visitId: string) {
     const visit = await tx.serviceVisit.findUnique({ where: { id: visitId }, include: {
       occurrence: { include: { agreement: { include: { request: true, community: true, provider: { include: { providerProfile: true } } } } } },
     } });
-    if (!visit || visit.status !== "completed" || !visit.completedAt || !visit.unitId || !visit.billingPayerUserId) throw new HoaWorkflowError("No completed billable visit was found.", 409);
+    if (!visit || visit.redoOfVisitId || visit.status !== "completed" || !visit.completedAt || !visit.unitId || !visit.billingPayerUserId) throw new HoaWorkflowError("No completed billable visit was found.", 409);
     const agreement = visit.occurrence.agreement;
     if (agreement.request.kind !== "optional_group" || agreement.community.type !== "hoa" ||
         ["cancelled", "failed"].includes(agreement.request.status) || agreement.status === "cancelled" ||
@@ -113,7 +113,7 @@ export async function chargeStripeTestVisit(visitId: string) {
       JOIN "HoaServiceRequest" request ON request."id" = agreement."requestId"
       WHERE visit."id" = ${visitId} FOR SHARE OF visit, agreement, request`;
     const visit = await tx.serviceVisit.findUnique({ where: { id: visitId }, include: { occurrence: { include: { agreement: { include: { request: true } } } } } });
-    if (!visit || visit.status !== "completed" || visit.occurrence.agreement.status === "cancelled" ||
+    if (!visit || visit.redoOfVisitId || visit.status !== "completed" || visit.occurrence.agreement.status === "cancelled" ||
         ["cancelled", "failed"].includes(visit.occurrence.agreement.request.status)) throw new HoaWorkflowError("The service is no longer eligible for payment.", 409);
     await tx.$queryRaw`SELECT provider."id" FROM "User" provider JOIN "ProviderProfile" profile ON profile."userId" = provider."id"
       WHERE provider."id" = ${current.providerUserId} FOR SHARE OF provider, profile`;

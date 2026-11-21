@@ -1,0 +1,12 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const m=vi.hoisted(()=>({allowed:true,refund:vi.fn(),redo:vi.fn()}));
+vi.mock("@/lib/server/admin-api",()=>({requireAdminOwnerMutation:async()=>m.allowed?{ok:true,user:{id:"owner"}}:{ok:false,response:new Response("denied",{status:403})}}));
+vi.mock("@/lib/server/hoa-api",()=>({readHoaBody:async(request:Request)=>({ok:true,value:await request.json()}),validationErrorResponse:()=>new Response("invalid",{status:400}),hoaErrorResponse:()=>new Response("failed",{status:500})}));
+vi.mock("@/lib/server/service-quality-resolution",()=>({executeQualityRefund:m.refund,scheduleQualityRedo:m.redo}));
+import {POST} from "@/app/api/admin/quality/[claimId]/execute/route";
+const payload={action:"refund",operationId:"a48b32ca-e60f-4b35-b721-902cab981876",amountCents:400,note:"Agreed partial compensation"};
+const call=(body:unknown)=>POST(new Request("https://bundleen.test/api/admin/quality/claim/execute",{method:"POST",body:JSON.stringify(body)}),{params:Promise.resolve({claimId:"claim"})});
+beforeEach(()=>{vi.resetAllMocks();m.allowed=true;m.refund.mockResolvedValue({resolution:"refund_pending",executed:false});});
+it("denies non-owner before execution",async()=>{m.allowed=false;expect((await call(payload)).status).toBe(403);expect(m.refund).not.toHaveBeenCalled();});
+it.each([{...payload,amountCents:0},{...payload,amountCents:1.5},{...payload,payerUserId:"other"},{...payload,operationId:"bad"},{action:"redo",serviceDate:"bad",note:"Approved no-charge redo"}])("rejects untrusted execution %j",async value=>{expect((await call(value)).status).toBe(400);expect(m.refund).not.toHaveBeenCalled();expect(m.redo).not.toHaveBeenCalled();});
+it("binds actor and claim to authenticated owner and URL",async()=>{const response=await call(payload);expect(response.status).toBe(200);expect(response.headers.get("cache-control")).toBe("private, no-store");expect(m.refund).toHaveBeenCalledWith("owner","claim",payload);});

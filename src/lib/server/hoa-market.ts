@@ -2617,6 +2617,7 @@ export async function updateVisitStatus(
       status: true,
       updatedAt: true,
       requiresAfterPhoto: true,
+      redoOfVisitId: true,
       photos: { where: { purpose: "visit_after", status: "active" }, select: { id: true }, take: 1 },
       occurrenceId: true,
       unitId: true,
@@ -2655,7 +2656,7 @@ export async function updateVisitStatus(
   if (!visit || visit.occurrence.agreement.providerUserId !== providerUserId) {
     throw new HoaWorkflowError("That visit does not exist.", 404);
   }
-  if (visit.occurrence.agreement.status !== "active") {
+  if (visit.occurrence.agreement.status !== "active" && !(visit.redoOfVisitId && visit.occurrence.agreement.status === "completed")) {
     throw new HoaWorkflowError("This agreement is no longer active.");
   }
   if (visit.status === input.status) return;
@@ -2683,7 +2684,7 @@ export async function updateVisitStatus(
       : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
-  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, status: input.status,
+  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, redoOfVisitId: visit.redoOfVisitId, status: input.status,
     communityType: visit.occurrence.agreement.community.type, requestKind: visit.occurrence.agreement.request.kind }, process.env.STRIPE_TEST_PAYMENTS);
   try {
     await db.$transaction([
@@ -2691,7 +2692,7 @@ export async function updateVisitStatus(
     db.$executeRaw(Prisma.sql`SELECT bundleen_assert_visit_photo_provider(${providerUserId}, ${visit.id})`),
     db.serviceVisit.update({
       where: { id: visit.id, status: visit.status, updatedAt: visit.updatedAt,
-        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: "active" } } },
+        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: visit.redoOfVisitId ? { in: ["active", "completed"] } : "active" } } },
       data: {
         status: input.status,
         statusChangedAt: now,

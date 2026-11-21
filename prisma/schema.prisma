@@ -1090,6 +1090,7 @@ model VisitBillingConsent {
 }
 
 model ServiceVisit {
+  redoOfVisitId String? @unique
   testPayment StripeTestPayment?
   id           String            @id @default(cuid())
   occurrenceId String
@@ -1135,6 +1136,7 @@ model ServiceVisit {
   billingPayerUserId String?
 
   reviews Review[]
+  qualityClaim ServiceQualityClaim?
   photos MediaAsset[] @relation("VisitPhotos")
 
   createdAt DateTime @default(now())
@@ -1508,6 +1510,7 @@ enum SupportTicketCategory {
   bidding
   scheduling
   provider_issue
+  service_quality
   community
   technical
   other
@@ -1603,6 +1606,7 @@ model SupportTicket {
   messages SupportTicketMessage[]
   events   SupportTicketEvent[]
   aiDrafts SupportTicketAiDraft[]
+  qualityClaim ServiceQualityClaim?
 
   createdAt DateTime @default(now())
   /// Also the optimistic-concurrency token: admin mutations pass the value they
@@ -2593,6 +2597,8 @@ model StripeTestPayment {
   stripePaymentIntentId String? @unique
   stripeChargeId String? @unique
   stripeTransferId String? @unique
+  transferAmountCents Int?
+  transferRefundedBeforeCents Int?
   transferAttemptedAt DateTime?
   status String @default("pending")
   failureCode String?
@@ -2718,4 +2724,43 @@ model StripeTestFinancialObservation {
   holdReason String?
   observedAt DateTime @default(now())
   @@index([visitId, observedAt])
+}
+
+/// An intake record, not proof that a redo/refund was executed.
+model ServiceQualityClaim {
+  financialPayerUserId String?
+  refundOperationId String? @unique
+  redoVisitId String? @unique
+  resolvedAt DateTime?
+  id String @id @default(cuid())
+  visitId String @unique
+  visit ServiceVisit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  ticketId String @unique
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  requesterUserId String
+  providerUserId String
+  reason String
+  photos ServiceQualityPhoto[]
+  resolution String @default("reported")
+  resolutionNote String?
+  resolutionRequestedBy String?
+  resolutionRequestedAt DateTime?
+  providerResponse String?
+  providerRespondedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([providerUserId, createdAt])
+}
+
+/// Private claim evidence, deliberately outside public marketing MediaAsset routes.
+model ServiceQualityPhoto {
+  id String @id @default(cuid())
+  claimId String
+  claim ServiceQualityClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  uploaderUserId String
+  storagePath String @unique
+  contentType String
+  byteSize Int
+  checksum String
+  createdAt DateTime @default(now())
+  @@index([claimId, createdAt])
 }
