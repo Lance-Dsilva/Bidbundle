@@ -1,3 +1,4 @@
+import { notifyStripeTestPaymentProblem } from "@/lib/server/stripe-test-payment-notifications";
 import "server-only";
 import { db } from "@/lib/server/db";
 import { chargeStripeTestVisit } from "@/lib/server/stripe-test-payments";
@@ -24,7 +25,7 @@ export async function reconcileStripeTestPayments(limit = 3) {
       } else {
         if (event.accountId) throw new Error("Unexpected connected payment event");
         const payment = await db.stripeTestPayment.findUnique({ where: { stripePaymentIntentId: event.objectId }, select: { visitId: true } });
-        if (payment) await chargeStripeTestVisit(payment.visitId);
+        if (payment) { await chargeStripeTestVisit(payment.visitId); await notifyStripeTestPaymentProblem(payment.visitId); }
       }
       // Unowned sandbox fixtures are harmless; no arbitrary Stripe event can create a payment.
       const updated = await db.stripeTestEvent.updateMany({ where: { id: event.id, processedAt: null }, data: { processedAt: new Date() } });
@@ -34,9 +35,9 @@ export async function reconcileStripeTestPayments(limit = 3) {
   if (payments) {
     // Outbox delivery means the command was attempted, not that payment settled.
     // Recover asynchronous processing or a lost webhook from the persisted intent.
-    const pending = await db.stripeTestPayment.findMany({ where: { status: "pending", stripePaymentIntentId: { not: null } }, orderBy: { updatedAt: "asc" }, take, select: { visitId: true } });
+    const pending = await db.stripeTestPayment.findMany({ where: { status: { in: ["pending", "failed", "requires_action"] }, stripePaymentIntentId: { not: null } }, orderBy: { updatedAt: "asc" }, take, select: { visitId: true } });
     for (const row of pending) {
-      try { await chargeStripeTestVisit(row.visitId); result.refreshed += 1; }
+      try { await chargeStripeTestVisit(row.visitId); await notifyStripeTestPaymentProblem(row.visitId); result.refreshed += 1; }
       catch { result.failed += 1; }
     }
   }

@@ -2550,6 +2550,8 @@ model StripeTestCard {
 
 /// Durable sandbox-only economic identity: one charge intent per completed visit.
 model StripeTestPayment {
+  recoveryAttempts StripeTestPaymentAttempt[]
+  lastRecoveryAttemptId String?
   visitId String @id
   visit ServiceVisit @relation(fields: [visitId], references: [id], onDelete: Restrict)
   requestId String
@@ -2577,4 +2579,18 @@ model StripeTestPayment {
   updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
+}
+
+// Explicitly authorized replacement methods; original payment identity stays immutable.
+model StripeTestPaymentAttempt {
+  id String @id
+  visitId String
+  payment StripeTestPayment @relation(fields: [visitId], references: [visitId], onDelete: Restrict)
+  customerId String
+  paymentMethodId String
+  setupIntentId String @unique
+  sequence Int
+  termsVersion String
+  acceptedAt DateTime @default(now())
+  @@unique([visitId, sequence])
 }

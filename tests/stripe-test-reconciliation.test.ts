@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ events: vi.fn(), mark: vi.fn(), payment: vi.fn(), pending: vi.fn(), profile: vi.fn(), charge: vi.fn(), refresh: vi.fn() }));
+const m = vi.hoisted(() => ({ notify: vi.fn(), events: vi.fn(), mark: vi.fn(), payment: vi.fn(), pending: vi.fn(), profile: vi.fn(), charge: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/lib/server/db", () => ({ db: { stripeTestEvent: { findMany: m.events, updateMany: m.mark }, stripeTestPayment: { findUnique: m.payment, findMany: m.pending }, providerProfile: { findUnique: m.profile } } }));
 vi.mock("@/lib/server/stripe-test-payments", () => ({ chargeStripeTestVisit: m.charge }));
 vi.mock("@/lib/server/stripe-test-connect", () => ({ refreshStripeTestPayouts: m.refresh }));
+vi.mock("@/lib/server/stripe-test-payment-notifications", () => ({ notifyStripeTestPaymentProblem: m.notify }));
 import { reconcileStripeTestPayments } from "@/lib/server/stripe-test-reconciliation";
 beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("STRIPE_TEST_PAYMENTS", "1"); vi.stubEnv("STRIPE_TEST_CONNECT", "1"); m.events.mockResolvedValue([]); m.pending.mockResolvedValue([]); m.mark.mockResolvedValue({ count: 1 }); });
 afterEach(() => vi.unstubAllEnvs());
@@ -32,4 +33,11 @@ it("recovers pending intent state without requiring another webhook", async () =
   m.pending.mockResolvedValue([{ visitId: "visit" }]);
   expect((await reconcileStripeTestPayments(999)).refreshed).toBe(1);
   expect(m.pending).toHaveBeenCalledWith(expect.objectContaining({ take: 3 })); expect(m.charge).toHaveBeenCalledWith("visit");
+});
+
+it("leaves failed notification delivery retryable without losing the payment event", async () => {
+  m.events.mockResolvedValue([{ id: "evt_1", eventType: "payment_intent.payment_failed", objectId: "pi_owned", accountId: null }]);
+  m.payment.mockResolvedValue({ visitId: "visit" }); m.notify.mockRejectedValueOnce(new Error("queue unavailable"));
+  expect((await reconcileStripeTestPayments()).failed).toBe(1); expect(m.mark).not.toHaveBeenCalled();
+  expect((await reconcileStripeTestPayments()).processed).toBe(1);
 });

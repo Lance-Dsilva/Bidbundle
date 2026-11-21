@@ -77,21 +77,25 @@ export async function chargeStripeTestVisit(visitId: string) {
     await tx.$queryRaw`SELECT "visitId" FROM "StripeTestPayment" WHERE "visitId" = ${visitId} FOR UPDATE`;
     const current = await tx.stripeTestPayment.findUniqueOrThrow({ where: { visitId } });
     if (!current.stripePaymentIntentId) throw new HoaWorkflowError("Missing payment identity.", 409);
+    const attempts = await tx.stripeTestPaymentAttempt.findMany({ where: { visitId }, orderBy: { sequence: "desc" } });
+    const recovery = attempts[0];
     const intent = await stripe.paymentIntents.retrieve(current.stripePaymentIntentId);
     if (intent.livemode !== false || intent.amount !== current.amountCents || intent.currency !== current.currency ||
-        intent.customer !== current.customerId || intent.metadata.bundleenVisitId !== visitId || intent.payment_method !== current.paymentMethodId) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
+        intent.customer !== current.customerId || intent.metadata.bundleenVisitId !== visitId || (intent.payment_method !== current.paymentMethodId && !attempts.some(attempt => attempt.paymentMethodId === intent.payment_method) && !(intent.payment_method === null && intent.status === "requires_payment_method"))) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
     if (intent.status === "succeeded") {
       await tx.stripeTestPayment.update({ where: { visitId }, data: { status: "succeeded", stripeChargeId: typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge?.id ?? null, failureCode: null } });
       return;
     }
-    if (intent.status !== "requires_confirmation") {
+    const unattemptedRecovery = recovery && current.lastRecoveryAttemptId !== recovery.id;
+    if (!((intent.status === "requires_confirmation" && (!recovery || unattemptedRecovery)) ||
+        (intent.status === "requires_payment_method" && unattemptedRecovery))) {
       await tx.stripeTestPayment.update({ where: { visitId }, data: { status: intent.status === "requires_action" ? "requires_action" : intent.status === "requires_payment_method" || intent.status === "canceled" ? "failed" : "pending", failureCode: intent.last_payment_error?.code ?? null } });
       return;
     }
     const consentKey = { agreementId: current.agreementId, payerUserId: current.residentUserId, unitId: current.unitId };
     await lockConsent(tx, consentKey);
     const consent = await tx.visitBillingConsent.findUnique({ where: { agreementId_payerUserId_unitId: consentKey }, include: { testCard: true } });
-    if (consent?.termsToken !== current.termsToken || consent.testCard?.customerId !== current.customerId || consent.testCard.paymentMethodId !== current.paymentMethodId) throw new HoaWorkflowError("Payment consent or card has changed. Billing review required.", 409);
+    if (!recovery && (consent?.termsToken !== current.termsToken || consent.testCard?.customerId !== current.customerId || consent.testCard.paymentMethodId !== current.paymentMethodId)) throw new HoaWorkflowError("Payment consent or card has changed. Billing review required.", 409);
     await tx.$queryRaw`SELECT visit."id" FROM "ServiceVisit" visit
       JOIN "ServiceOccurrence" occurrence ON occurrence."id" = visit."occurrenceId"
       JOIN "ServiceAgreement" agreement ON agreement."id" = occurrence."agreementId"
@@ -109,9 +113,24 @@ export async function chargeStripeTestVisit(visitId: string) {
     }
     // Success/failure state is reconciled from Stripe's persisted intent on a later retry/event.
     // If confirmation succeeds but the DB transaction times out, it cannot charge a second intent.
-    const confirmed = await stripe.paymentIntents.confirm(current.stripePaymentIntentId, { off_session: true }, { idempotencyKey: `charge_visit_${visitId}` });
+    let confirmed: Stripe.PaymentIntent;
+    try {
+      confirmed = await stripe.paymentIntents.confirm(current.stripePaymentIntentId,
+        { off_session: true, ...(recovery ? { payment_method: recovery.paymentMethodId } : {}) },
+        { idempotencyKey: recovery ? `recover_visit_${visitId}_${recovery.id}` : `charge_visit_${visitId}` });
+    } catch (error) {
+      if (!(error instanceof Stripe.errors.StripeCardError)) throw error;
+      // Card declines/authentication-required are durable payment outcomes, not
+      // transaction failures. Re-read the same intent instead of trusting errors.
+      confirmed = await stripe.paymentIntents.retrieve(current.stripePaymentIntentId);
+      if (confirmed.livemode !== false || confirmed.id !== current.stripePaymentIntentId || confirmed.amount !== current.amountCents ||
+          confirmed.currency !== current.currency || confirmed.customer !== current.customerId || confirmed.metadata.bundleenVisitId !== visitId ||
+          (confirmed.payment_method !== (recovery?.paymentMethodId ?? current.paymentMethodId) && !(confirmed.payment_method === null && confirmed.status === "requires_payment_method"))) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
+    }
     await tx.stripeTestPayment.update({ where: { visitId }, data: {
-      status: confirmed.status === "succeeded" ? "succeeded" : confirmed.status === "requires_action" ? "requires_action" : "pending",
+      status: confirmed.status === "succeeded" ? "succeeded" : confirmed.status === "requires_action" ? "requires_action" : confirmed.status === "requires_payment_method" || confirmed.status === "canceled" ? "failed" : "pending",
+      failureCode: confirmed.last_payment_error?.code ?? null,
+      ...(recovery ? { lastRecoveryAttemptId: recovery.id } : {}),
       stripeChargeId: typeof confirmed.latest_charge === "string" ? confirmed.latest_charge : confirmed.latest_charge?.id ?? null,
     } });
   }, { timeout: 25000 });

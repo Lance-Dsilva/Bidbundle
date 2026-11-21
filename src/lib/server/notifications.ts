@@ -1,3 +1,4 @@
+import { notifyStripeTestPaymentProblem } from "@/lib/server/stripe-test-payment-notifications";
 import "server-only";
 import { STRIPE_TEST_VISIT_CHARGE } from "@/lib/stripe-test-charge-intent";
 import { chargeStripeTestVisit } from "@/lib/server/stripe-test-payments";
@@ -37,6 +38,8 @@ export type NotificationIntent = {
   /** Security/transactional mail can bypass a homeowner's general mail opt-out. */
   emailPolicy?: "respect_preference" | "required";
   kind: NotificationKind;
+  /** Select the configured sandbox origin, never a caller-provided URL. */
+  emailLinkOrigin?: "stripe_test";
   title: string;
   body: string;
   linkPath?: string | null;
@@ -56,7 +59,14 @@ const MAX_OUTBOX_ATTEMPTS = 8;
 
 type BatchOp = Prisma.PrismaPromise<unknown>;
 
-function absoluteAppUrl(linkPath: string | null | undefined): string {
+function absoluteAppUrl(linkPath: string | null | undefined, origin?: "stripe_test"): string {
+  if (origin === "stripe_test") {
+    const configured = process.env.STRIPE_TEST_APP_URL;
+    if (!configured) throw new Error("Sandbox notification origin is not configured");
+    const url = new URL(configured);
+    if (url.username || url.password || url.search || url.hash || (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)))) throw new Error("Invalid sandbox notification origin");
+    return new URL(linkPath?.startsWith("/") && !linkPath.startsWith("//") ? linkPath : "/", url.origin).toString();
+  }
   const path = linkPath?.startsWith("/") ? linkPath : "/";
   const configuredBase =
     process.env.APP_URL ??
@@ -122,7 +132,7 @@ export function buildNotificationOps(intents: readonly NotificationIntent[]): Ba
       payload: {
         to: intent.email as string,
         subject: intent.title.slice(0, 200),
-        text: `${intent.body.slice(0, 1_000)}\n\nOpen Bundleen: ${absoluteAppUrl(intent.linkPath)}`,
+        text: `${intent.body.slice(0, 1_000)}\n\nOpen Bundleen: ${absoluteAppUrl(intent.linkPath, intent.emailLinkOrigin)}`,
       },
       updatedAt: new Date(),
     }));
@@ -359,6 +369,7 @@ export async function deliverPendingOutbox(limit = 25): Promise<OutboxDrainResul
         const payload = event.payload as { visitId?: unknown };
         if (typeof payload.visitId !== "string" || !payload.visitId) throw new Error("Invalid sandbox payment job");
         await chargeStripeTestVisit(payload.visitId);
+        await notifyStripeTestPaymentProblem(payload.visitId);
       } else if (event.kind === "notification_email") {
         const payload = event.payload as { to?: string; subject?: string; text?: string };
         if (!payload.to || !payload.subject || !payload.text) {

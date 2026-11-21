@@ -488,3 +488,17 @@ describe("notifications", () => {
     ]);
   });
 });
+
+describe("sandbox payment notification links", () => {
+  it("uses only the explicit sandbox origin, not the production fallback", () => {
+    vi.stubEnv("STRIPE_TEST_APP_URL", "https://sandbox.example.invalid/ignored-path");
+    vi.stubEnv("APP_URL", "https://production.example.invalid");
+    const ops = buildNotificationOps([{ userId: "payer", email: "payer@example.invalid", kind: "account", emailLinkOrigin: "stripe_test", title: "Payment", body: "Sign in", linkPath: "/app/homeowner/billing/payments/visit", dedupeKey: "payment-notice" }]) as unknown as Op[];
+    expect(JSON.stringify(ops)).toContain("https://sandbox.example.invalid/app/homeowner/billing/payments/visit");
+    expect(JSON.stringify(ops)).not.toContain("https://production.example.invalid");
+  });
+  it.each(["", "http://public.example.invalid", "https://user:pass@example.invalid", "https://example.invalid?token=secret"])("rejects missing or unsafe configured origin %s", origin => {
+    vi.stubEnv("STRIPE_TEST_APP_URL", origin);
+    expect(() => buildNotificationOps([{ userId: "payer", email: "payer@example.invalid", kind: "account", emailLinkOrigin: "stripe_test", title: "Payment", body: "Sign in", linkPath: "/app/homeowner/billing", dedupeKey: "payment-notice" }])).toThrow();
+  });
+});

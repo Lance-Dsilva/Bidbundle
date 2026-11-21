@@ -500,7 +500,9 @@ describe("actual pool bids, history, snapshots and calendar terms", () => {
     expect(a.providerAmountCents + a.platformFeeCents).toBe(a.amountCents);
     expect(await first.stripeTestPayment.count({ where: { visitId: visit.id } })).toBe(1);
     await expect(first.stripeTestPayment.delete({ where: { visitId: visit.id } })).rejects.toThrow(/cannot be deleted/i);
-    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment"`).rejects.toThrow(/cannot be deleted|truncated/i);
+    // Include its dependent recovery ledger so PostgreSQL reaches our explicit
+    // no-truncate guards rather than stopping at the foreign-key precheck.
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPayment", "StripeTestPaymentAttempt"`).rejects.toThrow(/cannot be deleted|truncated|immutable/i);
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { amountCents: a.amountCents + 1 } })).rejects.toThrow(/immutable|constraint/i);
     await first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: `pi_${visit.id}` } });
     await expect(first.stripeTestPayment.update({ where: { visitId: visit.id }, data: { stripePaymentIntentId: "pi_other" } })).rejects.toThrow(/immutable/i);
@@ -577,5 +579,62 @@ describe("sandbox award payout transaction guard", () => {
     await mutation;
     await expect(attempt).rejects.toThrow();
     expect((await first.user.findUniqueOrThrow({ where: { id: p.id } })).fullName).toBe("PRIVATE_PROVIDER_NAME");
+  });
+});
+
+describe("sandbox recovery consent ledger", () => {
+  async function payments() {
+    const f = await seed(); await open(f);
+    const agreementId = await award(f, await submit(f));
+    const visits = await first.serviceVisit.findMany({ where: { occurrence: { agreementId } }, take: 2 });
+    const rows = [];
+    for (const visit of visits) rows.push(await first.stripeTestPayment.create({ data: {
+      visitId: visit.id, requestId: f.requestId, agreementId, communityId: f.community.id,
+      residentUserId: visit.billingPayerUserId!, providerUserId: f.provider.id, unitId: visit.unitId!,
+      customerId: `cus_${visit.billingPayerUserId}`, paymentMethodId: `pm_${visit.id}`, providerAccountId: `acct_${f.provider.id}`,
+      termsToken: `terms_${visit.id}`, amountCents: 1000, platformFeeCents: 100, hoaShareCents: 0, providerAmountCents: 900,
+      currency: "usd", stripePaymentIntentId: `pi_${visit.id}`, status: "failed",
+    } }));
+    return rows;
+  }
+  async function append(db: PrismaClient, payment: { visitId: string; customerId: string }, sequence: number, change: { customerId?: string; termsVersion?: string } = {}) {
+    const id = randomUUID();
+    await db.$executeRaw`INSERT INTO "StripeTestPaymentAttempt" ("id", "visitId", "customerId", "paymentMethodId", "setupIntentId", "sequence", "termsVersion", "acceptedAt")
+      VALUES (${id}, ${payment.visitId}, ${change.customerId ?? payment.customerId}, ${`pm_${id}`}, ${`seti_${id}`}, ${sequence}, ${change.termsVersion ?? "completed-visit-retry-v1"}, TIMESTAMP '2000-01-01')`;
+    return id;
+  }
+
+  it("records ordered explicit retry consent and prevents mutation, deletion and truncation", async () => {
+    const [payment] = await payments();
+    const attempt = await append(first, payment, 1);
+    const rows = await first.$queryRaw<Array<{ sequence: number; termsVersion: string }>>`SELECT "sequence", "termsVersion" FROM "StripeTestPaymentAttempt" WHERE "id" = ${attempt}`;
+    expect(rows).toEqual([{ sequence: 1, termsVersion: "completed-visit-retry-v1" }]);
+    const clock = await first.$queryRaw<Array<{ recent: boolean }>>`SELECT "acceptedAt" BETWEEN clock_timestamp() - INTERVAL '10 seconds' AND clock_timestamp() AS recent FROM "StripeTestPaymentAttempt" WHERE "id" = ${attempt}`;
+    expect(clock[0].recent, "database stamps current consent time instead of trusting a supplied historical timestamp").toBe(true);
+    await expect(first.$executeRaw`UPDATE "StripeTestPaymentAttempt" SET "paymentMethodId" = 'pm_changed' WHERE "id" = ${attempt}`).rejects.toThrow(/immutable/i);
+    await expect(first.$executeRaw`DELETE FROM "StripeTestPaymentAttempt" WHERE "id" = ${attempt}`).rejects.toThrow(/immutable/i);
+    await expect(first.$executeRaw`TRUNCATE "StripeTestPaymentAttempt"`).rejects.toThrow(/immutable/i);
+  });
+
+  it("rejects incorrect customer, terms, sequence and a recovery pointer from another visit", async () => {
+    const [payment, other] = await payments();
+    await expect(append(first, payment, 1, { customerId: "cus_unowned" })).rejects.toThrow();
+    await expect(append(first, payment, 1, { termsVersion: "unknown-terms" })).rejects.toThrow();
+    await expect(append(first, payment, 2)).rejects.toThrow();
+    const attempt = await append(first, payment, 1);
+    await first.stripeTestPayment.update({ where: { visitId: payment.visitId }, data: { lastRecoveryAttemptId: attempt } });
+    await expect(first.stripeTestPayment.update({ where: { visitId: other.visitId }, data: { lastRecoveryAttemptId: attempt } })).rejects.toThrow();
+    await expect(first.stripeTestPayment.update({ where: { visitId: payment.visitId }, data: { lastRecoveryAttemptId: "missing-attempt" } })).rejects.toThrow();
+    expect((await first.stripeTestPayment.findUniqueOrThrow({ where: { visitId: other.visitId } })).lastRecoveryAttemptId).toBeNull();
+  });
+
+  it("permits only one concurrent next sequence and then accepts the next explicit retry", async () => {
+    const [payment] = await payments();
+    const results = await Promise.allSettled([append(first, payment, 1), append(second, payment, 1)]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    await append(first, payment, 2);
+    const rows = await first.$queryRaw<Array<{ sequence: number }>>`SELECT "sequence" FROM "StripeTestPaymentAttempt" WHERE "visitId" = ${payment.visitId} ORDER BY "sequence"`;
+    expect(rows).toEqual([{ sequence: 1 }, { sequence: 2 }]);
   });
 });
