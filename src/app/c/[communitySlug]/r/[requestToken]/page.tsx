@@ -1,3 +1,4 @@
+import { StartSharedEnrollment } from "@/components/sharing/StartSharedEnrollment";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PriceLadder } from "@/components/ui/PriceLadder";
@@ -17,7 +18,7 @@ export default async function RequestSharePage({ params }: Props) {
   return <main className="mx-auto max-w-2xl px-5 py-12"><Link href={`/c/${communitySlug}`} className="text-sm font-semibold text-teal-700">← Community services</Link><p className="mt-8 text-sm font-semibold uppercase tracking-wide text-teal-700">Better together</p><h1 className="mt-3 text-4xl font-bold">{request.service} for your community</h1><p className="mt-5 text-lg">{request.joinedHomes} homes joined{request.minimumHomes ? ` · ${request.minimumHomes} homes needed` : ""}</p>{request.enrollmentClosesAt && <p className="mt-3">Enrollment deadline: {new Date(request.enrollmentClosesAt).toLocaleDateString("en-US", { dateStyle: "long", timeZone: "America/Chicago" })}</p>}
     <p className="mt-4 text-slate-600">{request.providerName ? `Awarded provider: ${request.providerName}` : `${request.verifiedBidders} verified ${request.verifiedBidders === 1 ? "provider" : "providers"} bidding`}</p>
     {request.priceLadder && <div className="mt-6"><PriceLadder tiers={request.priceLadder.tiers} joinedHomes={request.joinedHomes} guaranteedPerHomeCents={request.priceLadder.guaranteedPerHomeCents} /></div>}
-    <section className="mt-8 rounded-2xl bg-teal-50 p-6"><h2 className="text-lg font-semibold">Review the details before joining</h2><p className="mt-2">Your home must be on the community roster. Pricing and enrollment details are available in your resident workspace.</p><Link className="mt-5 inline-block rounded-xl bg-teal-700 px-5 py-3 font-semibold text-white" href={`${request.path}/join`}>Continue to enrollment</Link></section>
+    <section className="mt-8 rounded-2xl bg-teal-50 p-6"><h2 className="text-lg font-semibold">Review the details before joining</h2><p className="mt-2">Your home must be on the community roster. Pricing and enrollment details are available in your resident workspace.</p><StartSharedEnrollment communityToken={communitySlug} requestToken={requestToken} /></section>
     <p className="mt-6 text-sm text-slate-600">This page shows totals only. It does not list residents, home addresses or private service instructions.</p>
   </main>;
 }

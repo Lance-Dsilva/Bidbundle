@@ -1,3 +1,6 @@
+import { cookies } from "next/headers";
+import { getSharedEnrollmentReturnPath } from "@/lib/server/shared-enrollment";
+import { SHARED_ENROLLMENT_COOKIE } from "@/lib/server/shared-enrollment-http";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -293,10 +296,16 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
+    let sharedReturn: string | null = null;
+    const sharedToken = (await cookies()).get(SHARED_ENROLLMENT_COOKIE)?.value;
+    if (user.role === "homeowner" && sharedToken) {
+      try { sharedReturn = await getSharedEnrollmentReturnPath(sharedToken); }
+      catch { /* Profile is committed; a failed optional return must not undo it. */ }
+    }
     return NextResponse.json({
       profileReady: true,
       role: user.role,
-      redirectTo: DASHBOARD_BY_ROLE[user.role],
+      redirectTo: sharedReturn ?? DASHBOARD_BY_ROLE[user.role],
     });
   } catch (error) {
     if (error instanceof SuspendedProviderError) {
