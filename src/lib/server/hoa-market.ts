@@ -1593,7 +1593,7 @@ export async function getProviderHoaWorkspace(userId: string): Promise<ProviderH
     const occurrences = await db.serviceOccurrence.findMany({
       where: { agreementId: { in: agreements.map((agreement) => agreement.id) } },
       orderBy: { sequence: "asc" },
-      include: { visits: { include: visitInclude } },
+      include: { visits: { where: { OR: [{ recurringSubscriptionId: null }, { status: { not: "cancelled" } }] }, include: visitInclude } },
     });
     for (const occurrence of occurrences) {
       // These are the provider's *own* agreements, so they won the work and
@@ -2439,7 +2439,7 @@ export async function saveDayPlan(
   }
 
   const visits = await db.serviceVisit.findMany({
-    where: { occurrenceId },
+    where: { occurrenceId, OR: [{ recurringSubscriptionId: null }, { status: { not: "cancelled" } }] },
     select: {
       id: true,
       status: true,
@@ -2618,6 +2618,7 @@ export async function updateVisitStatus(
       updatedAt: true,
       requiresAfterPhoto: true,
       redoOfVisitId: true,
+      recurringSubscriptionId: true,
       photos: { where: { purpose: "visit_after", status: "active" }, select: { id: true }, take: 1 },
       occurrenceId: true,
       unitId: true,
@@ -2684,7 +2685,7 @@ export async function updateVisitStatus(
       : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
-  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, redoOfVisitId: visit.redoOfVisitId, status: input.status,
+  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, recurringSubscriptionId: visit.recurringSubscriptionId, redoOfVisitId: visit.redoOfVisitId, status: input.status,
     communityType: visit.occurrence.agreement.community.type, requestKind: visit.occurrence.agreement.request.kind }, process.env.STRIPE_TEST_PAYMENTS);
   try {
     await db.$transaction([
@@ -2750,6 +2751,8 @@ export async function closeOccurrence(userId: string, occurrenceId: string): Pro
     select: {
       id: true,
       status: true,
+      recurringPlanId: true,
+      recurringLocalDate: true,
       agreement: { select: { id: true, communityId: true, requestId: true } },
       visits: { select: { status: true } },
     },
@@ -2763,6 +2766,11 @@ export async function closeOccurrence(userId: string, occurrenceId: string): Pro
     throw new HoaWorkflowError("A cancelled service day stays cancelled.");
   }
 
+  if (occurrence.recurringPlanId && occurrence.recurringLocalDate) {
+    const recurringPlan = await db.recurringPlan.findUnique({ where: { id: occurrence.recurringPlanId }, select: { timezone: true } });
+    const { zonedDateKey } = await import("@/lib/server/timezone");
+    if (recurringPlan && occurrence.recurringLocalDate > zonedDateKey(new Date(), recurringPlan.timezone)) throw new HoaWorkflowError("A future recurring service day cannot be closed.", 409);
+  }
   const unresolved = occurrence.visits.filter(
     (visit) => !["completed", "skipped", "blocked", "cancelled"].includes(visit.status),
   ).length;
