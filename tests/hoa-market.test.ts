@@ -252,6 +252,25 @@ describe("awardBid", () => {
     expect(payouts.verify).not.toHaveBeenCalled();
   });
 
+  it("allocates the committed full-term per-home price across visits without multiplying the term", async () => {
+    state.request!.kind = "optional_group";
+    state.request!.priceCommitment = { id: "commitment-1", providerUserId: "provider-1", acceptedAt: new Date(), guaranteedPerHomeCents: 10001 };
+    state.bid = { ...state.bid!, id: "ladder:commitment-1", pricingBasis: "per_home", perHomeCents: 10001, amountCents: 20002 };
+    await awardBid("manager-1", "request-1", { bidId: "ladder:commitment-1" });
+    const visits = state.batches[0].find(row => row.model === "serviceVisit" && row.action === "createMany")!.args.data as Array<{unitId:string; allocatedVisitCents:number}>;
+    for (const unitId of ["unit-1", "unit-2"]) {
+      expect(visits.filter(v => v.unitId === unitId).map(v => v.allocatedVisitCents)).toEqual([3334, 3334, 3333]);
+    }
+  });
+
+  it("rejects a committed bid whose total does not match the frozen household count", async () => {
+    state.request!.kind = "optional_group";
+    state.request!.priceCommitment = { id: "commitment-1", providerUserId: "provider-1", acceptedAt: new Date(), guaranteedPerHomeCents: 10001 };
+    state.bid = { ...state.bid!, id: "ladder:commitment-1", pricingBasis: "per_home", perHomeCents: 10001, amountCents: 60006 };
+    await expect(awardBid("manager-1", "request-1", { bidId: "ladder:commitment-1" })).rejects.toMatchObject({ status: 409 });
+    expect(state.batches).toEqual([]);
+  });
+
   it.each(["per_home", "per_visit"])("refuses a new legacy %s award before all writes", async (pricingBasis) => {
     state.bid = { ...state.bid!, pricingBasis, amountCents: 45000 };
     await expect(awardBid("manager-1", "request-1", { bidId: "bid-1" })).rejects.toMatchObject({ status: 409 });

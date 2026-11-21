@@ -286,6 +286,14 @@ describe("createHomeownerRequest", () => {
     expect(created.communityName).toBe("Oakwood Heights");
   });
 
+  it("does not auto-enroll a creator who requested provider-backed pricing", async () => {
+    const { createHomeownerRequest } = await import("@/lib/server/homeowner-requests");
+    await createHomeownerRequest(homeowner, { ...validInput, providerBackedPricing: true });
+    const batch = state.batches[0]!;
+    expect(batch.some((entry) => entry.model === "hoaRequestParticipation")).toBe(false);
+    expect((batch[0]!.args as { data: Record<string, unknown> }).data.requiresPriceCommitment).toBe(true);
+  });
+
   it("joins the requester automatically, in the same commit as the request", async () => {
     const { createHomeownerRequest } = await import("@/lib/server/homeowner-requests");
     await createHomeownerRequest(homeowner, validInput);

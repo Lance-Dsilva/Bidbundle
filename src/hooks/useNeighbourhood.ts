@@ -30,6 +30,7 @@ export function useNeighbourhood() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
+  const dataVersion = useRef(0);
   const [ownerError, setOwnerError] = useState<{ requestId: string; message: string; fields?: Record<string, string> } | null>(null);
   const [ownerSuccess, setOwnerSuccess] = useState<{ requestId: string; action: "edit" | "cancel" } | null>(null);
   const [addressRequiredRequestId, setAddressRequiredRequestId] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export function useNeighbourhood() {
   const clearOwnerFeedback = useCallback(() => { setOwnerError(null); setOwnerSuccess(null); }, []);
 
   const refresh = useCallback(async () => {
+    dataVersion.current++;
     setLoading(true);
     setError(null);
     try {
@@ -61,10 +63,29 @@ export function useNeighbourhood() {
     void refresh();
   }, [refresh]);
 
+  const hasLiveLadder = Boolean(hub?.requests.some(request => request.status === "collecting_interest" && (request.priceLadder || request.priceLadderPending)));
+  useEffect(() => {
+    if (!hasLiveLadder) return;
+    let stopped = false;
+    let polling = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden || inFlight.current || polling) return;
+      polling = true;
+      const version = dataVersion.current;
+      try {
+        const payload = await apiFetch<{ hub: NeighborhoodHub | null }>("/homeowner/neighbourhood");
+        if (!stopped && !inFlight.current && version === dataVersion.current) setHub(payload.hub);
+      } catch { /* Retain the last confirmed view; mutations still fetch current authority. */ }
+      finally { polling = false; }
+    }, 15000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [hasLiveLadder]);
+
   const performAction = useCallback(
     async (action: NeighbourhoodAction, reportError = true): Promise<boolean> => {
       if (inFlight.current) return false;
       inFlight.current = true;
+      dataVersion.current++;
       setBusy(true);
       setOwnerError(null);
       setOwnerSuccess(null);
