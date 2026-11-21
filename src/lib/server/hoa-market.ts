@@ -1,3 +1,6 @@
+import { requireStripeTestAwardPayouts } from "@/lib/server/stripe-test-connect";
+import { buildStripeTestChargeIntent } from "@/lib/stripe-test-charge-intent";
+import { allocateVisitCents } from "@/lib/visit-billing";
 import "server-only";
 import { notifyPriceLadderUnlock } from "@/lib/server/price-ladder";
 
@@ -102,6 +105,8 @@ function preparedWorkflowConflict(error: unknown): HoaWorkflowError | null {
   if (codes.includes("P1703")) return new HoaWorkflowError("Your management access changed before this action was saved. Refresh and try again.", 409);
   if (codes.includes("P1710")) return new HoaWorkflowError("This visit or its required after photo changed. Refresh and add the required proof before completing it.", 409);
   if (codes.includes("P1711")) return new HoaWorkflowError("This visit's photo or provider access changed. Refresh before trying again.", 409);
+  if (codes.includes("P1744")) return new HoaWorkflowError("Enrollment authorization changed. Each home must complete card setup and accept its maximum price before award.", 409);
+  if (codes.includes("P1743")) return new HoaWorkflowError("The provider’s sandbox payout account changed or is not active. Refresh payout setup before awarding.", 409);
   if (codes.includes("P1712")) return new HoaWorkflowError("Photo consent or household access changed. Refresh before trying again.", 409);
   return null;
 }
@@ -124,6 +129,7 @@ type RequestRow = {
   totalOccurrences: number;
   poolTemplate?: unknown;
   requiresAfterPhoto?: boolean;
+  stripeTestEnrollmentRequired?: boolean;
   status: HoaRequestSummary["status"];
   opensAt: Date | null;
   enrollmentClosesAt: Date | null;
@@ -176,6 +182,7 @@ function serializeRequest(row: RequestRow, viewerUserId?: string, reviews?: Revi
     maxHomes: row.maxHomes,
     participantsLockedAt: row.participantsLockedAt?.toISOString() ?? null,
     awardedAt: row.awardedAt?.toISOString() ?? null,
+    stripeTestEnrollmentRequired: Boolean(row.stripeTestEnrollmentRequired || (process.env.STRIPE_TEST_PAYMENTS === "1" && row.priceCommitment?.acceptedAt)),
     priceLadderPending: Boolean(row.priceCommitment && !row.priceCommitment.acceptedAt),
     priceLadder: row.priceCommitment?.acceptedAt ? { tiers: row.priceCommitment.tiers.map(({ minHomes, perHomeCents }) => ({ minHomes, perHomeCents })), guaranteedPerHomeCents: row.priceCommitment.guaranteedPerHomeCents } : null,
     joinedCount: joined.length,
@@ -729,6 +736,7 @@ export async function transitionHoaRequest(
     where: { id: requestId },
     include: {
       community: { select: { type: true } },
+      priceCommitment: { select: { acceptedAt: true } },
       participations: { select: { unitId: true, userId: true, response: true, poolTier: true } },
       agreement: { select: { id: true, status: true, providerUserId: true } },
     },
@@ -816,6 +824,7 @@ export async function transitionHoaRequest(
             },
             data: {
               status: isCompulsory ? "open_for_bids" : "collecting_interest",
+              ...(!isCompulsory && !isNeighborhood && process.env.STRIPE_TEST_PAYMENTS === "1" && request.priceCommitment?.acceptedAt ? { stripeTestEnrollmentRequired: true } : {}),
               opensAt: request.opensAt ?? now,
               participantsLockedAt: isCompulsory ? now : null,
               ...(input.biddingClosesAt ? { biddingClosesAt: new Date(input.biddingClosesAt) } : {}),
@@ -1010,6 +1019,7 @@ export async function respondToOptionalRequest(
     where: { id: requestId },
     select: {
       id: true,
+      stripeTestEnrollmentRequired: true,
       priceCommitment: { select: { id: true } },
       communityId: true,
       kind: true,
@@ -1022,6 +1032,7 @@ export async function respondToOptionalRequest(
     },
   });
   if (!request) throw new HoaWorkflowError("That HOA request does not exist.", 404);
+  if (input.response === "joined" && (request.stripeTestEnrollmentRequired || (process.env.STRIPE_TEST_PAYMENTS === "1" && request.priceCommitment))) throw new HoaWorkflowError("Save a test card and accept the maximum price before joining.", 409);
   const membership = await requireActiveResident(userId, request.communityId);
   if (!membership.unitId) {
     throw new HoaWorkflowError("Your membership is not linked to a home. Contact your HOA manager.");
@@ -2109,6 +2120,10 @@ export async function awardBid(
     throw new HoaWorkflowError("That provider does not meet this HOA’s insurance coverage and additional-insured requirements.", 409);
   }
 
+  const verifiedPayoutAccountId = (process.env.STRIPE_TEST_PAYMENTS === "1" || request.stripeTestEnrollmentRequired) &&
+    request.community.type === "hoa" && request.kind === "optional_group"
+    ? await requireStripeTestAwardPayouts(bid.providerUserId) : null;
+
   // Resolve the service targets *before* anything is written. A neighbourhood
   // participant with no verified address aborts the whole award here, with a
   // list the manager can act on, rather than producing an agreement whose
@@ -2166,14 +2181,42 @@ export async function awardBid(
   // One valid visit per locked home per occurrence. `visitDataForTarget`
   // produces either `{ unitId }` or the homeowner id plus the frozen address —
   // exactly one target, which is what the database CHECK requires.
-  const visitRows = occurrenceRows.flatMap((occurrence) =>
-    targets.map((target) => ({
-      id: randomUUID(),
-      occurrenceId: occurrence.id,
-      requiresAfterPhoto: request.requiresAfterPhoto,
-      updatedAt: now,
-      ...visitDataForTarget(target),
-    })),
+  const snapshotBilling = request.community.type === "hoa" &&
+    request.kind === "optional_group" && (bid.pricingBasis === "total" || Boolean(isLadderBid));
+  if (snapshotBilling && isLadderBid && (!ladderCommitment.acceptedAt ||
+      bid.pricingBasis !== "per_home" || bid.providerUserId !== ladderCommitment.providerUserId ||
+      bid.currency !== "usd" || bid.perHomeCents !== ladderCommitment.guaranteedPerHomeCents ||
+      bid.amountCents !== ladderCommitment.guaranteedPerHomeCents * targets.length)) {
+    throw new HoaWorkflowError("The committed price no longer matches the locked homes. Refresh before awarding.", 409);
+  }
+  const billingIndexByUnit = new Map(
+    targets.flatMap((target) => target.kind === "unit" ? [target.unitId] : [])
+      .sort()
+      .map((unitId, index) => [unitId, index] as const),
+  );
+  const poolTermByUnit = new Map(poolSnapshot?.homes.map((home) => [home.unitId, home.termCents]));
+  const visitRows = occurrenceRows.flatMap((occurrence, roundIndex) =>
+    targets.map((target) => {
+      let allocatedVisitCents: number | null = null;
+      if (snapshotBilling && target.kind === "unit") {
+        const poolTerm = poolTermByUnit.get(target.unitId);
+        if (poolSnapshot && poolTerm === undefined) {
+          throw new HoaWorkflowError("The pool quote does not cover every locked home.", 409);
+        }
+        allocatedVisitCents = poolTerm === undefined
+          ? allocateVisitCents(bid.amountCents, targets.length, occurrenceRows.length, billingIndexByUnit.get(target.unitId)!, roundIndex)
+          : allocateVisitCents(poolTerm, 1, occurrenceRows.length, 0, roundIndex);
+      }
+      return {
+        id: randomUUID(),
+        occurrenceId: occurrence.id,
+        requiresAfterPhoto: request.requiresAfterPhoto,
+        updatedAt: now,
+        ...visitDataForTarget(target),
+        allocatedVisitCents,
+        billingPayerUserId: snapshotBilling && target.kind === "unit" ? target.userId : null,
+      };
+    }),
   );
 
   const losingBids = await db.serviceBid.findMany({
@@ -2221,6 +2264,9 @@ export async function awardBid(
         },
       }),
       assertPreparedManager(userId, request.id, authority.via),
+      // Held through all award writes; fail closed if suspension, webhook status
+      // changes or account replacement occurred after the authoritative read.
+      ...(verifiedPayoutAccountId ? [db.$executeRaw(Prisma.sql`SELECT "bundleen_assert_stripe_test_award_payouts"(${bid.providerUserId}, ${verifiedPayoutAccountId})`)] : []),
       db.serviceBid.update({
         where: { id: bid.id, version: bid.version, status: "submitted" },
         data: { status: "accepted", decidedAt: now },
@@ -2571,6 +2617,7 @@ export async function updateVisitStatus(
       status: true,
       updatedAt: true,
       requiresAfterPhoto: true,
+      redoOfVisitId: true,
       photos: { where: { purpose: "visit_after", status: "active" }, select: { id: true }, take: 1 },
       occurrenceId: true,
       unitId: true,
@@ -2599,7 +2646,7 @@ export async function updateVisitStatus(
               status: true,
               requestId: true,
               community: { select: { name: true, type: true } },
-              request: { select: { title: true } },
+              request: { select: { title: true, kind: true } },
             },
           },
         },
@@ -2609,7 +2656,7 @@ export async function updateVisitStatus(
   if (!visit || visit.occurrence.agreement.providerUserId !== providerUserId) {
     throw new HoaWorkflowError("That visit does not exist.", 404);
   }
-  if (visit.occurrence.agreement.status !== "active") {
+  if (visit.occurrence.agreement.status !== "active" && !(visit.redoOfVisitId && visit.occurrence.agreement.status === "completed")) {
     throw new HoaWorkflowError("This agreement is no longer active.");
   }
   if (visit.status === input.status) return;
@@ -2637,12 +2684,15 @@ export async function updateVisitStatus(
       : "/app/homeowner/community";
   const terminal = ["completed", "skipped", "blocked"].includes(input.status);
 
+  const chargeIntent = buildStripeTestChargeIntent({ visitId: visit.id, redoOfVisitId: visit.redoOfVisitId, status: input.status,
+    communityType: visit.occurrence.agreement.community.type, requestKind: visit.occurrence.agreement.request.kind }, process.env.STRIPE_TEST_PAYMENTS);
   try {
     await db.$transaction([
+    ...(chargeIntent ? [db.outboxEvent.createMany({ data: [chargeIntent], skipDuplicates: true })] : []),
     db.$executeRaw(Prisma.sql`SELECT bundleen_assert_visit_photo_provider(${providerUserId}, ${visit.id})`),
     db.serviceVisit.update({
       where: { id: visit.id, status: visit.status, updatedAt: visit.updatedAt,
-        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: "active" } } },
+        occurrence: { status: { notIn: ["completed", "cancelled"] }, agreement: { providerUserId, status: visit.redoOfVisitId ? { in: ["active", "completed"] } : "active" } } },
       data: {
         status: input.status,
         statusChangedAt: now,

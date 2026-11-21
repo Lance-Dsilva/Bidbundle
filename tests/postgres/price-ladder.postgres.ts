@@ -47,6 +47,14 @@ describe("real price commitment persistence",()=>{
   const id=await awardBid(f.manager.id,f.request.id,{bidId:`ladder:${f.commitment.id}`,expectedBidVersion:1});
   const agreement=await db.serviceAgreement.findUniqueOrThrow({where:{id}});expect(agreement).toMatchObject({amountCents:20000,perHomeCents:10000,lockedHomeCount:2,pricingBasis:"per_home"});
   expect(await db.serviceOccurrence.count({where:{agreementId:id}})).toBe(2);
+  const visits=await db.serviceVisit.findMany({where:{occurrence:{agreementId:id}}});
+  expect(visits).toHaveLength(4);
+  expect(visits.reduce((sum,v)=>sum+(v.allocatedVisitCents??0),0)).toBe(20000);
+  for(const home of f.homes){
+    const householdVisits=visits.filter(v=>v.unitId===home.unit.id);
+    expect(householdVisits.map(v=>v.allocatedVisitCents)).toEqual([5000,5000]);
+    expect(householdVisits.every(v=>v.billingPayerUserId===home.user.id)).toBe(true);
+  }
  });
  it("holds neighborhood enrollment until provider acceptance, including the creator",async()=>{
   const f=await seed();const tag=randomUUID();

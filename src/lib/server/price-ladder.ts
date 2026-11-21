@@ -48,6 +48,13 @@ export async function notifyPriceLadderUnlock(tx: Prisma.TransactionClient, requ
   }
 }
 
+async function enableNewSandboxEnrollment(tx: Prisma.TransactionClient, request: { id: string; communityId: string; status: string; stripeTestEnrollmentRequired: boolean }) {
+ if (process.env.STRIPE_TEST_PAYMENTS !== "1" || request.status !== "collecting_interest" || request.stripeTestEnrollmentRequired) return;
+ const community = await tx.community.findUnique({ where: { id: request.communityId }, select: { type: true } });
+ if (community?.type !== "hoa" || await tx.hoaRequestParticipation.count({ where: { requestId: request.id } })) return;
+ await tx.hoaServiceRequest.update({ where: { id: request.id }, data: { stripeTestEnrollmentRequired: true } });
+}
+
 export async function acceptPriceLadder(providerUserId: string, commitmentId: string, proposedTiers?: unknown) {
  let authoredTiers: ReturnType<typeof validatePriceLadder> | null = null;
  try { authoredTiers = proposedTiers === undefined ? null : validatePriceLadder(proposedTiers); } catch(error) { throw new HoaWorkflowError(error instanceof Error ? error.message : "Invalid price tiers.",400); }
@@ -62,6 +69,7 @@ export async function acceptPriceLadder(providerUserId: string, commitmentId: st
   const current=await tx.priceLadderCommitment.findUniqueOrThrow({where:{id:commitmentId},include:{request:true,tiers:{orderBy:{minHomes:"asc"}}}});
   if(current.acceptedAt) {
    if(authoredTiers && JSON.stringify(authoredTiers)!==JSON.stringify(current.tiers.map(({minHomes,perHomeCents})=>({minHomes,perHomeCents})))) throw new HoaWorkflowError("Accepted provider prices cannot change.",409);
+   await enableNewSandboxEnrollment(tx, current.request);
    return {acceptedAt:current.acceptedAt.toISOString(),tiers:current.tiers.map(({minHomes,perHomeCents})=>({minHomes,perHomeCents}))};
   }
   if(!["draft","collecting_interest"].includes(current.request.status) || current.request.participantsLockedAt || (current.request.enrollmentClosesAt && current.request.enrollmentClosesAt<=new Date())) throw new HoaWorkflowError("Enrollment window has closed.",409);
@@ -70,6 +78,7 @@ export async function acceptPriceLadder(providerUserId: string, commitmentId: st
    await tx.serviceBidPriceTier.createMany({data:authoredTiers.map(t=>({id:randomUUID(),commitmentId,...t}))});
   }
   const accepted=await tx.priceLadderCommitment.update({where:{id:commitmentId},data:{acceptedAt:new Date(),...(authoredTiers?{guaranteedPerHomeCents:authoredTiers[0].perHomeCents}:{})}});
+  await enableNewSandboxEnrollment(tx, current.request);
   return {acceptedAt:accepted.acceptedAt!.toISOString(),tiers:authoredTiers??current.tiers.map(({minHomes,perHomeCents})=>({minHomes,perHomeCents}))};
  });
 }

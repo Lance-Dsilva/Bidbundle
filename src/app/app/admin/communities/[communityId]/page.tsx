@@ -20,7 +20,7 @@ type PageProps = { params: Promise<{ communityId: string }> };
  * payload each endpoint returns, which avoids a re-fetch after every action.
  */
 export default async function AdminCommunityDetailPage({ params }: PageProps) {
-  await requireRole(["admin"], "/app/admin/communities");
+  const admin = await requireRole(["admin"], "/app/admin/communities");
 
   const { communityId } = await params;
   const detail = await getCommunityDetail(communityId);
@@ -69,6 +69,7 @@ export default async function AdminCommunityDetailPage({ params }: PageProps) {
       />
 
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 xl:px-8">
+        {process.env.STRIPE_TEST_REFUNDS === "1" && admin.adminAccessLevel === "owner" && <Link className="bb-btn bb-btn-secondary mb-5" href={`/app/admin/communities/${encodeURIComponent(communityId)}/payments`}>Test payments and refunds</Link>}
         {crmSnapshot && (
           <section className="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center">

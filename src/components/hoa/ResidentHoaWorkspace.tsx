@@ -1,6 +1,7 @@
 "use client";
 
 import { PriceLadder } from "@/components/ui/PriceLadder";
+import { ServiceQualityReport } from "@/components/hoa/ServiceQualityReport";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -41,7 +42,7 @@ const REQUEST_STATUS_LABEL: Record<string, string> = {
   failed: "Failed",
 };
 
-export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
+export function ResidentHoaWorkspace({ hub, qualityReportingEnabled = false }: { hub: ResidentHoaHub; qualityReportingEnabled?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +111,7 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                   <ResidentVisitCard
                     key={visit.id}
                     visit={visit}
+                    qualityReportingEnabled={qualityReportingEnabled}
                     busy={busy}
                     onRefresh={() => router.refresh()}
                     onReview={(rating, comment) =>
@@ -174,13 +176,13 @@ export function ResidentHoaWorkspace({ hub }: { hub: ResidentHoaHub }) {
                               className="h-9 rounded-xl bg-[var(--teal-800)] px-4 text-xs font-semibold text-white disabled:opacity-60"
                               disabled={busy !== null || request.viewerResponse === "joined" || request.priceLadderPending}
                               onClick={() =>
-                                void run(`join-${request.id}`, () =>
-                                  post(`/api/hoa/requests/${request.id}/join`, { response: "joined" }),
-                                )
+                                request.stripeTestEnrollmentRequired
+                                  ? router.push(`/app/homeowner/enrollment/${encodeURIComponent(request.id)}`)
+                                  : void run(`join-${request.id}`, () => post(`/api/hoa/requests/${request.id}/join`, { response: "joined" }))
                               }
                               type="button"
                             >
-                              {request.viewerResponse === "joined" ? "Joined" : "Join"}
+                              {request.viewerResponse === "joined" ? "Joined" : request.stripeTestEnrollmentRequired ? "Review price and save card" : "Join"}
                             </button>
                             <button
                               className="h-9 rounded-xl border px-4 text-xs font-semibold text-[var(--muted)] disabled:opacity-60"
@@ -326,9 +328,11 @@ export function ResidentVisitCard({
   visit,
   busy,
   onReview,
+  qualityReportingEnabled = false,
   onRefresh,
 }: {
   visit: VisitSummary;
+  qualityReportingEnabled?: boolean;
   busy: string | null;
   onReview: (rating: number, comment: string) => void;
   onRefresh?: () => void | Promise<unknown>;
@@ -350,6 +354,7 @@ export function ResidentVisitCard({
         {visit.windowStart ? ` · window ${visit.windowStart}–${visit.windowEnd ?? ""}` : ""}
       </p>
       <VisitPhotoPanel visitId={visit.id} photos={visit.photos ?? []} canConsent onUpdated={onRefresh} disabled={busy !== null} />
+      {qualityReportingEnabled && visit.status === "completed" && <ServiceQualityReport visitId={visit.id} />}
       {visit.viewerReview ? <div className="mt-3 rounded-lg bg-[var(--teal-50)] p-3 text-xs text-[var(--teal-800)]"><p className="font-semibold">Your rating: {visit.viewerReview.rating}/5</p>{visit.viewerReview.comment && <p className="mt-1 break-words">{visit.viewerReview.comment}</p>}<p className="mt-1">Thank you — your review is saved.</p></div> : visit.status === "completed" && visit.canReview === true ? (
         showReview ? (
           <form
