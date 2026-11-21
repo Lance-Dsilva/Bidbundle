@@ -10,6 +10,7 @@ export type RecurringPaymentSummary = {
   providerNetCents: number | null;
   holdReason: string | null;
   canRecover?: boolean;
+  receiptAvailable?: boolean;
   lines: {visitId: string; localDate: string; grossCents: number; refundedCents: number}[];
 };
 
@@ -44,6 +45,7 @@ export function RecurringPaymentHistory({payments}: {payments: RecurringPaymentS
       </dl>
       {payment.providerNetCents !== null && <p className="text-sm">Provider share is not confirmation that a payout has been sent.</p>}
       {payment.holdReason && <p>This payment needs review before processing can continue.</p>}
+      {payment.receiptAvailable === true && <a className="underline inline-flex min-h-11 items-center" href={`/api/recurring-payments/${encodeURIComponent(payment.id)}/receipt`} target="_blank" rel="noopener noreferrer">View receipt</a>}
       {payment.canRecover === true && <RecurringPaymentRecovery chargeId={payment.id}/>}
       <details><summary className="cursor-pointer min-h-11">Included service visits ({payment.lines.length})</summary>
         <ul className="space-y-2">{payment.lines.map(line => <li key={line.visitId}>

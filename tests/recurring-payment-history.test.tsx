@@ -50,3 +50,11 @@ it('shows recovery only when the server explicitly grants the capability',()=>{
  rerender(<RecurringPaymentHistory payments={[{...payment,canRecover:true}]}/>);
  expect(screen.getByText('Authorized recovery')).toBeTruthy();
 });
+it('links receipts only with server-granted availability and isolates the new tab',()=>{
+ const {rerender}=render(<RecurringPaymentHistory payments={[payment]}/>);
+ expect(screen.queryByRole('link',{name:'View receipt'})).toBeNull();
+ rerender(<RecurringPaymentHistory payments={[{...payment,receiptAvailable:true}]}/>);
+ const link=screen.getByRole('link',{name:'View receipt'});
+ expect(link.getAttribute('href')).toBe('/api/recurring-payments/private-charge-id/receipt');
+ expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+});
