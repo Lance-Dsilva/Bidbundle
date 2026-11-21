@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 export default async function HoaDashboardPage() {
   const user = await requireHoaManager();
   const dashboard = await getHoaManagerDashboard(user.id);
-  return <HoaManagerWorkspace dashboard={dashboard} revenueShareEnabled={process.env.HOA_REVENUE_SHARE === "1"} />;
+  return <HoaManagerWorkspace dashboard={dashboard} revenueShareEnabled={process.env.HOA_REVENUE_SHARE === "1"} recurringPlansEnabled={process.env.RECURRING_PLANS === "1"} />;
 }

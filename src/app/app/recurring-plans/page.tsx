@@ -1,0 +1,5 @@
+import Link from 'next/link';
+import {notFound} from 'next/navigation';
+import {requireUser} from '@/lib/server/auth';
+import {listRecurringPlans} from '@/lib/server/recurring-plans';
+export default async function RecurringPlansPage(){const user=await requireUser('/app/recurring-plans');if(process.env.RECURRING_PLANS!=='1')notFound();const plans=await listRecurringPlans(user.id);return <main className="mx-auto max-w-4xl p-4 sm:p-8 space-y-6"><h1 className="text-3xl font-semibold">Recurring services</h1><p>Review ongoing service, monthly limits and pause or cancellation dates.</p>{plans.length===0?<p>No recurring plans are available for your account yet.</p>:<ul className="space-y-4">{plans.map(plan=><li key={plan.id} className="bb-card bb-card-pad"><Link className="text-lg font-semibold underline" href={`/app/recurring-plans/${encodeURIComponent(plan.id)}`}>{plan.scope}</Link><p>{new Intl.NumberFormat('en-US',{style:'currency',currency:plan.currency}).format(plan.monthlyPriceCents/100)} monthly maximum · {plan.status}</p></li>)}</ul>}</main>;}
