@@ -101,3 +101,35 @@ it("persists a card decline from the same intent rather than rolling it back", a
   expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "failed", failureCode: "card_declined" }) }));
   expect(m.create).not.toHaveBeenCalled();
 });
+
+it("uses the immutable receipt snapshot for a new intent without reading current profile email", async () => {
+ const saved={...payment,receiptEmail:"original@example.invalid"};
+ m.read.mockResolvedValueOnce({...saved,stripePaymentIntentId:null}).mockResolvedValue(saved);
+ m.create.mockResolvedValue({...intent,receipt_email:saved.receiptEmail});m.retrieve.mockResolvedValue({...intent,receipt_email:saved.receiptEmail});m.confirm.mockResolvedValue({...intent,receipt_email:saved.receiptEmail,status:"succeeded"});
+ await chargeStripeTestVisit("visit");
+ expect(m.create.mock.calls[0][0].receipt_email).toBe(saved.receiptEmail);
+ expect(m.create.mock.calls[0][1]).toEqual({idempotencyKey:"create_visit_visit"});
+});
+it("retries creation with identical recipient after lost response, never refreshing it from occupancy or profile",async()=>{
+ const saved={...payment,receiptEmail:"original@example.invalid",stripePaymentIntentId:null};
+ m.read.mockResolvedValue(saved);m.create.mockRejectedValue(new Error("lost response"));
+ await expect(chargeStripeTestVisit("visit")).rejects.toThrow("lost response");
+ m.provider.mockResolvedValue({email:"replacement@example.invalid"});
+ await expect(chargeStripeTestVisit("visit")).rejects.toThrow("lost response");
+ expect(m.create.mock.calls[0]).toEqual(m.create.mock.calls[1]);expect(m.create.mock.calls[1][0].receipt_email).toBe(saved.receiptEmail);
+});
+it("does not retroactively add an email to legacy null-snapshot creation",async()=>{
+ m.read.mockResolvedValueOnce({...payment,receiptEmail:null,stripePaymentIntentId:null});m.create.mockResolvedValue(intent);
+ await chargeStripeTestVisit("visit");expect(m.create.mock.calls[0][0]).not.toHaveProperty("receipt_email");
+});
+it("refuses confirmation if the remote receipt recipient changed",async()=>{
+ m.read.mockResolvedValue({...payment,receiptEmail:"original@example.invalid"});m.retrieve.mockResolvedValue({...intent,receipt_email:"other@example.invalid"});
+ await expect(chargeStripeTestVisit("visit")).rejects.toMatchObject({status:409});expect(m.confirm).not.toHaveBeenCalled();
+});
+it.each([false,true])("rejects changed receipt on final confirmation result (card error %s)",async cardError=>{
+ const saved={...payment,receiptEmail:"original@example.invalid"};m.read.mockResolvedValue(saved);
+ m.retrieve.mockResolvedValueOnce({...intent,receipt_email:saved.receiptEmail}).mockResolvedValue({...intent,receipt_email:"changed@example.invalid"});
+ if(cardError)m.confirm.mockRejectedValue(new Stripe.errors.StripeCardError({message:"Declined"}));
+ else m.confirm.mockResolvedValue({...intent,status:"succeeded",receipt_email:"changed@example.invalid"});
+ await expect(chargeStripeTestVisit("visit")).rejects.toMatchObject({status:409});expect(m.update).not.toHaveBeenCalled();
+});

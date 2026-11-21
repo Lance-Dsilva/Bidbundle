@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { readEnrollmentAuthorization } from "@/lib/server/enrollment-authorization";
 import "server-only";
 import Stripe from "stripe";
@@ -39,13 +40,16 @@ export async function prepareStripeTestPayment(visitId: string) {
     const consent = enrollment ? { termsToken: enrollment.termsToken, acceptedAt: enrollment.acceptedAt, testCard: enrollment.card } : exactConsent;
     if (!consent?.testCard || (!enrollment && exactConsent?.termsVersion !== "completed-visit-charge-v1") || consent.acceptedAt > visit.completedAt || consent.testCard.verifiedAt > visit.completedAt ||
         (agreement.request.stripeTestEnrollmentRequired && !enrollment)) throw new HoaWorkflowError("The resident must accept prices and save a card before service completion.", 409);
-    const payer = await tx.user.findUnique({ where: { id: visit.billingPayerUserId }, select: { stripeTestCustomerId: true } });
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id"=${visit.billingPayerUserId} FOR SHARE`;
+    const payer = await tx.user.findUnique({ where: { id: visit.billingPayerUserId }, select: { stripeTestCustomerId: true, email: true, isVerified: true } });
     if (payer?.stripeTestCustomerId !== consent.testCard.customerId) throw new HoaWorkflowError("The saved card customer has changed.", 409);
+    const receiptEmail = payer?.email.trim().toLowerCase();
+    if (!payer?.isVerified || !z.string().email().max(254).safeParse(receiptEmail).success) throw new HoaWorkflowError("The original payer must verify their account email before payment.", 409);
     const configuredFee = process.env.PLATFORM_FEE_BPS ?? "1000";
     if (!/^\d+$/.test(configuredFee) || Number(configuredFee) > 1000) throw new HoaWorkflowError("Platform fee must preserve the provider's 90% share.", 503);
     const split = calculateStripePaymentAmounts(visit.allocatedVisitCents, Number(configuredFee));
     return tx.stripeTestPayment.create({ data: {
-      visitId, enrollmentAuthorizationId: enrollment?.id ?? null, requestId: agreement.requestId, agreementId: agreement.id, communityId: agreement.communityId,
+      visitId, receiptEmail, enrollmentAuthorizationId: enrollment?.id ?? null, requestId: agreement.requestId, agreementId: agreement.id, communityId: agreement.communityId,
       residentUserId: visit.billingPayerUserId, providerUserId: agreement.providerUserId, unitId: visit.unitId,
       customerId: consent.testCard.customerId, paymentMethodId: consent.testCard.paymentMethodId,
       providerAccountId: provider.providerProfile.stripeTestAccountId, termsToken: consent.termsToken,
@@ -66,6 +70,7 @@ export async function chargeStripeTestVisit(visitId: string) {
   if (["succeeded", "refunded", "partially_refunded", "disputed"].includes(payment.status)) return;
   if (!payment.stripePaymentIntentId) {
     const intent = await stripe.paymentIntents.create({
+      ...(payment.receiptEmail ? { receipt_email: payment.receiptEmail } : {}),
       amount: payment.amountCents, currency: payment.currency, customer: payment.customerId,
       payment_method: payment.paymentMethodId, allowed_payment_method_types: ["card"],
       transfer_group: `request_${payment.requestId}`,
@@ -89,7 +94,7 @@ export async function chargeStripeTestVisit(visitId: string) {
     const recovery = attempts[0];
     const intent = await stripe.paymentIntents.retrieve(current.stripePaymentIntentId);
     if (intent.livemode !== false || intent.amount !== current.amountCents || intent.currency !== current.currency ||
-        intent.customer !== current.customerId || intent.metadata.bundleenVisitId !== visitId || (intent.payment_method !== current.paymentMethodId && !attempts.some(attempt => attempt.paymentMethodId === intent.payment_method) && !(intent.payment_method === null && intent.status === "requires_payment_method"))) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
+        (current.receiptEmail && intent.receipt_email !== current.receiptEmail) || intent.customer !== current.customerId || intent.metadata.bundleenVisitId !== visitId || (intent.payment_method !== current.paymentMethodId && !attempts.some(attempt => attempt.paymentMethodId === intent.payment_method) && !(intent.payment_method === null && intent.status === "requires_payment_method"))) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
     if (intent.status === "succeeded") {
       await tx.stripeTestPayment.update({ where: { visitId }, data: { status: "succeeded", stripeChargeId: typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge?.id ?? null, failureCode: null } });
       return;
@@ -134,10 +139,10 @@ export async function chargeStripeTestVisit(visitId: string) {
       // Card declines/authentication-required are durable payment outcomes, not
       // transaction failures. Re-read the same intent instead of trusting errors.
       confirmed = await stripe.paymentIntents.retrieve(current.stripePaymentIntentId);
-      if (confirmed.livemode !== false || confirmed.id !== current.stripePaymentIntentId || confirmed.amount !== current.amountCents ||
-          confirmed.currency !== current.currency || confirmed.customer !== current.customerId || confirmed.metadata.bundleenVisitId !== visitId ||
-          (confirmed.payment_method !== (recovery?.paymentMethodId ?? current.paymentMethodId) && !(confirmed.payment_method === null && confirmed.status === "requires_payment_method"))) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
     }
+      if (confirmed.livemode !== false || confirmed.id !== current.stripePaymentIntentId || confirmed.amount !== current.amountCents ||
+          confirmed.currency !== current.currency || (current.receiptEmail && confirmed.receipt_email !== current.receiptEmail) || confirmed.customer !== current.customerId || confirmed.metadata.bundleenVisitId !== visitId ||
+          (confirmed.payment_method !== (recovery?.paymentMethodId ?? current.paymentMethodId) && !(confirmed.payment_method === null && confirmed.status === "requires_payment_method"))) throw new HoaWorkflowError("Sandbox payment identity does not match.", 409);
     await tx.stripeTestPayment.update({ where: { visitId }, data: {
       status: confirmed.status === "succeeded" ? "succeeded" : confirmed.status === "requires_action" ? "requires_action" : confirmed.status === "requires_payment_method" || confirmed.status === "canceled" ? "failed" : "pending",
       failureCode: confirmed.last_payment_error?.code ?? null,

@@ -140,3 +140,8 @@ it.each([{ feature: "0", key: "sk_test_fixture" }, { feature: "1", key: "sk_live
   await expect(getStripeTestPaymentRecovery("payer", "visit")).rejects.toMatchObject({ status: 503 });
   expect(m.payment).not.toHaveBeenCalled(); expect(m.retrieve).not.toHaveBeenCalled();
 });
+it("withholds recovery secret when receipt recipient differs from original snapshot",async()=>{
+ m.payment.mockResolvedValue({...payment,receiptEmail:"original@example.invalid"});m.retrieve.mockResolvedValue({...intent,status:"requires_action",receipt_email:"other@example.invalid"});
+ await expect(getStripeTestPaymentRecovery("payer","visit")).rejects.toMatchObject({status:409});
+ expect(m.charge).not.toHaveBeenCalled();expect(m.createSetup).not.toHaveBeenCalled();
+});
