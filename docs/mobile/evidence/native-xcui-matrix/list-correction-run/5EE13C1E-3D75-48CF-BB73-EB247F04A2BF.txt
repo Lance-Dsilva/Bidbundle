@@ -1,0 +1,1 @@
+{"event":"N04_XCUI_DRAG_DELIVERED","fromNormalized":[0.01,0.5],"pressSeconds":0.10000000000000001,"readyMarker":"N04|1793977431714843|16037|isolates\/227204681218603|200|6|inbox-detail|ready|0","scale":200,"sequenceBaseline":0,"step":6,"timestamp":"2026-11-06T15:05:37Z","toNormalized":[0.84999999999999998,0.5]}

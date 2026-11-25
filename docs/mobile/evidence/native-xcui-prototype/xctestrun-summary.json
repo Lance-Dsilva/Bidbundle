@@ -1,0 +1,14 @@
+{
+  "BlueprintName": "N04NavigationUITests",
+  "IsUITestBundle": true,
+  "IsXCTRunnerHostedTestBundle": true,
+  "TestHostBundleIdentifier": "com.bundleen.bundleen.n04uitests.xctrunner",
+  "TestHostPath": "__TESTROOT__/Debug-development-iphonesimulator/N04NavigationUITests-Runner.app",
+  "TestBundlePath": "__TESTHOST__/PlugIns/N04NavigationUITests.xctest",
+  "UITargetAppPath": "__TESTROOT__/Debug-development-iphonesimulator/Runner.app",
+  "DependentProductPaths": [
+    "__TESTROOT__/Debug-development-iphonesimulator/N04NavigationUITests-Runner.app",
+    "__TESTROOT__/Debug-development-iphonesimulator/N04NavigationUITests-Runner.app/PlugIns/N04NavigationUITests.xctest",
+    "__TESTROOT__/Debug-development-iphonesimulator/Runner.app"
+  ]
+}

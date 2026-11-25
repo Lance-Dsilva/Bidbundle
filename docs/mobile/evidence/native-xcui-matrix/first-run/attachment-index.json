@@ -1,0 +1,179 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "58F9B38E-A814-46AB-B296-79DB27B657D8.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "synthetic-n04-failure-3-observed_0_EE8AB914-43D9-486C-A385-D0006C3C7DD0.png",
+        "timestamp" : 1793920178.829
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "694F7E48-9836-48D8-BD62-9F298B878FF8.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "N04_FAILURE_3_observed_0_19BD1C87-5686-40C0-910B-607319191382.txt",
+        "timestamp" : 1793920178.742
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "BAF97DFD-EF29-4AA7-AA7B-42A008989BE7.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "N04_XCUI_DRAG_DELIVERED_3_0_3B0810B4-B165-48E5-A464-E8BECEC598D2.txt",
+        "timestamp" : 1793920177.648
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "2F128919-CE21-4208-A539-E875DDF953E6",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "UI Snapshot 2026-11-05 at 05.09.36 PM",
+        "timestamp" : 1793920176.584
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "9979A6FA-4142-484D-9B35-E9D04FF3D5B7",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-11-05 at 05.09.37 PM",
+        "timestamp" : 1793920177.645
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "1083D23C-2F8B-487D-BA6B-13CC7C772E0F.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "synthetic-n04-100-3-ready_0_4A14D345-64AD-48EF-88DC-9FC9120E6C3B.png",
+        "timestamp" : 1793920176.558
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "29FB4CAF-6902-470A-907D-A3EF816E620B.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "synthetic-n04-100-2-observed_0_FC4B713E-B717-4346-BD28-990F3A74DE75.png",
+        "timestamp" : 1793920161.361
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "96E14E5A-4E82-4973-B8DA-D59251CD3194.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "N04_DEVICE_FACTS_2_0_829F288E-66B6-4C0B-8E26-C932AA87FD8E.txt",
+        "timestamp" : 1793920161.281
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "EBE58E54-981D-4812-A21C-FD6EB28A5106.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "N04_XCUI_DRAG_DELIVERED_2_0_607241D2-8603-43F6-8557-54DF230A20A0.txt",
+        "timestamp" : 1793920160.18
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "A45ECAA8-CA6E-400E-AF1D-6E3E1E2E325F",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "UI Snapshot 2026-11-05 at 05.09.19 PM",
+        "timestamp" : 1793920159.13
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "7D0107FF-D815-4181-935A-A3EAA074D539",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-11-05 at 05.09.20 PM",
+        "timestamp" : 1793920160.177
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "6040F458-54F6-4532-9825-0BDC02D7E4E4.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "synthetic-n04-100-2-ready_0_B5E5A5AC-D941-4189-B107-44DA81204223.png",
+        "timestamp" : 1793920159.102
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "5973FF34-A4E0-4A8A-A898-6851F0A53A83.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "synthetic-n04-100-1-observed_0_21462DAD-9521-4866-BA84-59405287F2D0.png",
+        "timestamp" : 1793920140.974
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "5F0B1918-1532-4B9A-A6AA-4BCCB3675FD5.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "N04_DEVICE_FACTS_1_0_5B11836F-6A6A-44F9-B9B1-92724215FC92.txt",
+        "timestamp" : 1793920140.891
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "B7372250-5C1E-4161-9BA2-096712A84984.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "N04_XCUI_DRAG_DELIVERED_1_0_97E9FE5B-82D8-46D9-99D6-016CFE25A9EC.txt",
+        "timestamp" : 1793920139.786
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "86B0DA00-F452-4A5D-93EF-B17E64C5B09E",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "UI Snapshot 2026-11-05 at 05.08.58 PM",
+        "timestamp" : 1793920138.622
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "09D25BDD-5FB7-482F-9DD3-F93779D35A50",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-11-05 at 05.08.59 PM",
+        "timestamp" : 1793920139.782
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "9F866204-AB6A-43C6-B946-E797E3334A81.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "synthetic-n04-100-1-ready_0_E0E0F246-A29A-43C3-BF0A-EA9FD4EA7934.png",
+        "timestamp" : 1793920138.587
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "6283FABD-C0C6-44C1-98C2-A279DF16A9D4",
+        "deviceName" : "Bundleen-N04-Full-Matrix",
+        "exportedFileName" : "3D441C83-7E30-459D-9957-34313CC0E6BF.mp4",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Screen Recording 2026-11-05 at 05.08.53 PM.mp4",
+        "timestamp" : 1793920133.028
+      }
+    ],
+    "testIdentifier" : "N04NavigationUITests/testNativeNavigationMatrix()",
+    "testIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests/testNativeNavigationMatrix"
+  }
+]

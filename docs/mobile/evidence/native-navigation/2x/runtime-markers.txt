@@ -1,0 +1,13 @@
+Running Gradle task 'assembleDevelopmentDebug'...                   7.5s
+✓ Built build/app/outputs/flutter-apk/app-development-debug.apk
+I/flutter ( 7455): N04_READY homeowner 2x request-detail-back ANDROID_KEYCODE_BACK
+I/flutter ( 7455): N04_OBSERVED homeowner 2x request-detail-back
+I/flutter ( 7455): N04_READY homeowner 2x inbox-detail-back ANDROID_KEYCODE_BACK
+I/flutter ( 7455): N04_OBSERVED homeowner 2x inbox-detail-back
+I/flutter ( 7455): N04_READY homeowner 2x inbox-list-back ANDROID_KEYCODE_BACK
+I/flutter ( 7455): N04_OBSERVED homeowner 2x inbox-list-back
+I/flutter ( 7455): N04_READY homeowner 2x account-top-back ANDROID_KEYCODE_BACK
+I/flutter ( 7455): N04_OBSERVED homeowner 2x account-top-back
+I/flutter ( 7455): N04_ASSERTIONS_COMPLETE homeowner 2x routes-scale-semantics-guards-logout-cleared
+I/flutter ( 7455): N04_TERMINAL_READY homeowner 2x signed-out-back ANDROID_KEYCODE_BACK; OS outcome recorded independently
+D/VRI[MainActivity]( 7455): visibilityChanged oldVisibility=true newVisibility=false

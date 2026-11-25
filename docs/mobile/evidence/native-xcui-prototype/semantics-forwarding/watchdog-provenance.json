@@ -1,0 +1,9 @@
+{
+  "timeoutApi": "subprocess.Popen.wait(timeout=seconds)",
+  "pythonSubprocessTimeIsMonotonic": true,
+  "reportingClock": "time.time() wall clock",
+  "buildReportedWallElapsedSeconds": 3579.48,
+  "buildConfiguredTimeoutSeconds": 600,
+  "buildTimedOutReported": false,
+  "interpretation": "Compilation succeeded; wall-duration anomaly is preserved. Cause not established; do not claim bounded wall-duration proof."
+}

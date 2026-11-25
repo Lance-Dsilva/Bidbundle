@@ -1,0 +1,17 @@
+# N04 one-route native prototype — passed
+
+Exact checkpoint `933a1532ea5ccae25938cf897e31c587a5c99d20`; mobile source identical to independently reviewed `447783746f809d4b1363ee78a57e5b97d6488da6`. The single unchanged configuration action received normal automatic approval and completed successfully before any simulator was created. Previous service-blocked and failed/partial runs remain separate and unchanged.
+
+One fresh task-owned iPhone 17, iOS 26.4.1 (23E254a), arm64 simulator `7346B9BE-510B-440B-8142-1309F0D973BF`; sole XCTest initial launch, no retries/recovery/relaunch. The inspected xctestrun contains only N04NavigationUITests with its intended fixture Runner.app. Local simulator compilation required no account or signing credentials.
+
+**One 100% homeowner Requests detail → list native gesture passed.** XCTest found the genuine Flutter native semantics marker, validated ready identity, delivered the public coordinate press/drag, then accepted the same identity with observed. Identity: nonce `1793892858912970`, fixture process `36787`, isolate `isolates/5144479952354159`. Native delivery attachment timestamp: `2026-11-05T15:34:23Z`; normalized start (0.01, 0.5), end (0.85, 0.5), press 0.1 seconds. Setup taps used Flutter tester; the tested edge drag used XCTest device input.
+
+Dart publishes observed only after independently asserting selectedId/detail cleared, Requests tab retained, list visible/detail title absent, unchanged isolate, empty unexpected-channel/network violations, no Flutter exception, and continuous resumed foreground. XCTest requires the exact unchanged nonce/PID/isolate marker. Both screenshots were independently inspected: ready shows detail, observed shows list with no detail back control. No synthetic UIKit marker, command receipt, alternate navigation action or restart was used.
+
+Standalone Dart console milestones were unavailable: xcresult reported no console log and the extracted app system log contained no matching milestones. The accepted native observed marker is evidence that the preceding Dart assertions executed; no independent console transcript or completed Dart teardown is claimed. This is simulator synthetic auth/API evidence, not live Clerk/API proof, screen-reader validation, 200% evidence, Inbox/logout coverage or full N04 acceptance.
+
+XCTest case passed in 17.271 seconds. Command watchdog results (monotonic / wall seconds): config 8.17 / 8.17; boot 65.31 / 1067.27; build 213.57 / 776.15; test 37.48 / 314.17. Each command exited 0 without timeout. The owned wrapper uses subprocess's monotonic timeout and records both clocks. Wall-clock divergence is preserved without explaining its cause or claiming a bounded wall duration.
+
+Cleanup: exact task simulator shutdown/deleted and absence verified; no booted simulator or owned native process remained. Normal development config-only build succeeded (9.51 monotonic seconds), then staging succeeded (6.69 monotonic seconds; wall 996.14); config/export targets verified lib/main.dart after each. No normal app artifact rebuild is claimed. Prior exact-source analyzer/29 Requests regression checks were accepted by root; no unchanged full matrix was rerun.
+
+Raw artifacts remain at `/private/tmp/bundleen-n04-xcui-pointer/Result.xcresult`; selected structured results, native attachments, screenshots, watchdog and command records are preserved here. No VM service URI is included. Future scope requires manager approval; this run closes only the one-route prototype criterion.

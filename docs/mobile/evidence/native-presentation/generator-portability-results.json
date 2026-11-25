@@ -1,0 +1,35 @@
+[
+  {
+    "case": "outside repository cwd; PATH-only tools in directory with spaces",
+    "result": "22 PNGs and manifest byte-identical"
+  },
+  {
+    "case": "outside cwd; explicit executable overrides; empty PATH",
+    "result": "22 PNGs and manifest byte-identical"
+  },
+  {
+    "case": "missing renderer",
+    "result": "passed rejection",
+    "message": "generate_brand_assets.py: error: Missing executable 'rsvg-convert'. Put pinned rsvg-convert on PATH or set BUNDLEEN_BRAND_RSVG to its executable path. These tools are offline asset-maintenance prerequisites, not app build/runtime dependencies."
+  },
+  {
+    "case": "missing magick",
+    "result": "passed rejection",
+    "message": "generate_brand_assets.py: error: Missing executable 'missing-imagemagick'. Put pinned magick on PATH or set BUNDLEEN_BRAND_MAGICK to its executable path. These tools are offline asset-maintenance prerequisites, not app build/runtime dependencies."
+  },
+  {
+    "case": "wrong renderer version",
+    "result": "passed rejection",
+    "message": "generate_brand_assets.py: error: Pinned rsvg-convert 2.61.3 and ImageMagick 7.1.2-13 required; use matching local maintenance executables. No installation is performed."
+  },
+  {
+    "case": "nonempty output root",
+    "result": "passed rejection",
+    "message": "generate_brand_assets.py: error: --output-root must be a new or empty directory; existing contents are never overwritten"
+  },
+  {
+    "case": "direct symlink output root",
+    "result": "passed rejection",
+    "message": "generate_brand_assets.py: error: --output-root must not be a symlink"
+  }
+]

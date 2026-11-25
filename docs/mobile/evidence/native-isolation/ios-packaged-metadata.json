@@ -1,0 +1,14 @@
+{
+  "development": {
+    "CFBundleIdentifier": "com.bundleen.bundleen.development",
+    "CFBundleDisplayName": "Bundleen Dev",
+    "CFBundleURLTypes": null,
+    "MinimumOSVersion": "17.0"
+  },
+  "staging": {
+    "CFBundleIdentifier": "com.bundleen.bundleen.staging",
+    "CFBundleDisplayName": "Bundleen Staging",
+    "CFBundleURLTypes": null,
+    "MinimumOSVersion": "17.0"
+  }
+}

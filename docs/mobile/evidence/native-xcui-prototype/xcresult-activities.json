@@ -1,0 +1,395 @@
+{
+  "testIdentifier" : "N04NavigationUITests/testRequestsNativeEdgeDrag()",
+  "testIdentifierURL" : "test://com.apple.xcode/Runner/N04NavigationUITests/N04NavigationUITests/testRequestsNativeEdgeDrag",
+  "testName" : "testRequestsNativeEdgeDrag()",
+  "testRuns" : [
+    {
+      "activities" : [
+        {
+          "attachments" : [
+            {
+              "lifetime" : "deleteOnSuccess",
+              "name" : "Screen Recording 2026-11-02 at 12.10.31 AM.mp4",
+              "payloadId" : "0~wGOC8U4ZP2W6I3aF7_CFYlY_EjrDa8u3kTU5Wetgfx3oyQcjlQnH9w5eUdFsoV79Wf_shCNZfaPASZoYnaYGsQ==",
+              "timestamp" : 1793596231.988,
+              "uuid" : "33C5381D-2655-475E-94FC-5344B8C10F7C"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793596231.988,
+              "title" : "kXCTAttachmentScreenRecording"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596231.776,
+          "title" : "Start Test at 2026-11-02 00:10:31.776"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596231.989,
+          "title" : "Set Up"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793596233.093,
+                  "title" : "Setting up automation session"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1793596234.151,
+                  "title" : "Wait for com.bundleen.bundleen.development to idle"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1793596231.991,
+              "title" : "Launch com.bundleen.bundleen.development"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596231.991,
+          "title" : "Open com.bundleen.bundleen.development"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596236.097,
+          "title" : "Wait for com.bundleen.bundleen.development to become Running Foreground"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596237.206,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596238.132,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596239.131,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596240.22,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596241.195,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596242.195,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596243.178,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596244.162,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596245.153,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596246.137,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596247.13,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596248.212,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596249.195,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596250.179,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596251.162,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596252.153,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596253.145,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596254.132,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596255.13,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596256.212,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596257.195,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596258.17,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596259.165,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596260.145,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596261.132,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596262.204,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596263.178,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596264.154,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596265.132,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596266.132,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596267.22,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596268.195,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596269.161,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596270.137,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596271.129,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596272.211,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596273.187,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596274.167,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596275.153,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596276.132,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596277.22,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596278.195,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596279.178,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596280.153,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596281.131,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596282.203,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596283.178,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596284.153,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596285.137,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596286.131,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596287.13,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596288.211,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596289.183,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596290.17,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596291.164,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596292.136,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596293.203,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596294.17,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596295.144,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596296.13,
+          "title" : "Checking existence of `\"N04Marker\" Any`"
+        },
+        {
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "title" : "N04NavigationUITests.testRequestsNativeEdgeDrag()"
+            }
+          ],
+          "isAssociatedWithFailure" : true,
+          "startTime" : 1793596296.191,
+          "title" : "XCTAssertEqual failed: (\"XCTWaiterResult(rawValue: 2)\") is not equal to (\"XCTWaiterResult(rawValue: 1)\")"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1793596296.475,
+          "title" : "Tear Down"
+        }
+      ],
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9F8DAAB4-E4CA-426E-9EC1-6931AEA7B882",
+        "deviceName" : "Bundleen-N04-XCUI-Isolated",
+        "modelName" : "iPhone 17",
+        "osBuildNumber" : "23E254a",
+        "osVersion" : "26.4.1",
+        "platform" : "iOS Simulator"
+      },
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ]
+}

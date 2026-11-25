@@ -1,0 +1,4 @@
+2026-11-02 14:38:22.517 Df Runner[24204:43fd5e] (Flutter) flutter: {"event":"N04_DART_SETUP","phase":"setup","identity":"1793648302473383|24204|isolates/2527935443000647","lifecycle":"resumed"}
+2026-11-02 14:38:23.081 Df Runner[24204:43fd5e] (Flutter) flutter: {"event":"N04_DART_SETUP_SEMANTICS","phase":"setup","identity":"1793648302473383|24204|isolates/2527935443000647","lifecycle":"resumed"}
+2026-11-02 14:38:24.449 Df Runner[24204:43fd5e] (Flutter) flutter: {"event":"N04_DART_DETAIL_SETUP","phase":"detail-setup","identity":"1793648302473383|24204|isolates/2527935443000647","lifecycle":"resumed"}
+2026-11-02 14:38:24.464 Df Runner[24204:43fd5e] (Flutter) flutter: {"event":"N04_DART_READY","phase":"ready","identity":"1793648302473383|24204|isolates/2527935443000647","lifecycle":"resumed"}
