@@ -335,6 +335,7 @@ enum PayoutStatus {
 }
 
 model User {
+  productAnalyticsConsent ProductAnalyticsConsent?
   id          String   @id @default(cuid())
   clerkUserId String   @unique
   email       String   @unique
@@ -2493,4 +2494,27 @@ model CommunityInterest {
 
   @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
   @@index([createdAt, id])
+}
+
+/// Optional product measurement. Separate from operational/payment records.
+model ProductAnalyticsConsent {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allowed Boolean @default(false)
+  version String
+  updatedAt DateTime @updatedAt
+  events ProductAnalyticsEvent[]
+}
+
+model ProductAnalyticsEvent {
+  id String @id
+  userId String
+  consent ProductAnalyticsConsent @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  event String
+  properties Json
+  occurredAt DateTime @default(now())
+  deliveredAt DateTime?
+  nextAttemptAt DateTime @default(now())
+  attempts Int @default(0)
+  @@index([deliveredAt, nextAttemptAt])
 }

@@ -1,3 +1,4 @@
+import { captureRequestProductEvent } from "@/lib/server/product-analytics";
 import { NextResponse } from "next/server";
 
 import {
@@ -26,6 +27,7 @@ export async function PUT(request: Request, context: RouteContext): Promise<Next
 
   try {
     const bid = await submitBid(gate.user.id, requestId, parsed.data);
+    await captureRequestProductEvent(gate.user.id, "bid_submitted", requestId, bid.id, "provider");
     return NextResponse.json({ bid }, { status: 201 });
   } catch (error) {
     return hoaErrorResponse("bid submission", error);
