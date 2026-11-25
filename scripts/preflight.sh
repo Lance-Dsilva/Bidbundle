@@ -25,7 +25,7 @@ step "2. No secrets or env files staged in the diff"
 CHANGED=$(git diff --name-only origin/main...HEAD)
 if echo "$CHANGED" | grep -E '(^|/)\.env|^\.vercel/|^\.clerk/|settings\.local\.json' ; then
   red "Secret-looking files are in your diff. Remove them."; FAIL=1
-elif git diff origin/main...HEAD | grep -E '^\+.*(sk_live_|sk_test_|whsec_|-----BEGIN [A-Z ]*PRIVATE KEY)' ; then
+elif git diff origin/main...HEAD -- . ':(exclude)scripts/preflight.sh' | grep -E '^\+.*(sk_live_|sk_test_|whsec_|-----BEGIN [A-Z ]*PRIVATE KEY)' ; then
   red "A key-looking string was added. Remove it."; FAIL=1
 else green "OK"; fi
 
@@ -43,7 +43,9 @@ else green "OK — no schema changes"; fi
 
 step "4. Overlap with other open PRs"
 if command -v gh >/dev/null 2>&1; then
+  SELF=$(gh pr view --json number -q .number 2>/dev/null || true)
   for n in $(gh pr list --state open --json number -q '.[].number' 2>/dev/null); do
+    [ "$n" = "$SELF" ] && continue
     OTHER=$(gh pr diff "$n" --name-only 2>/dev/null || true)
     BOTH=$(comm -12 <(echo "$CHANGED" | sort) <(echo "$OTHER" | sort) | grep -v '^$' || true)
     [ -n "$BOTH" ] && { printf '\033[33mPR #%s also changes:\033[0m\n%s\n' "$n" "$BOTH"; }
