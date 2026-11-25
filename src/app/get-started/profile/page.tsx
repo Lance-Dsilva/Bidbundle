@@ -24,7 +24,12 @@ import {
 } from "@/lib/onboarding-draft";
 import { SERVICE_RADIUS_DEFAULT_MILES } from "@/lib/provider-coverage";
 import type { PublicRole } from "@/lib/validation/auth";
+import { vendorBidReturnPath, vendorOnboardingPath } from "@/lib/vendor-bid-return";
 import { saveRole } from "@/utils/onboardingState";
+
+function invitationReturnPath() {
+  return typeof window === "undefined" ? null : vendorBidReturnPath(new URLSearchParams(window.location.search).get("returnTo"));
+}
 
 type OnboardingStep = 1 | 2 | 3 | 4;
 
@@ -225,7 +230,7 @@ export default function CompleteProfilePage() {
       saveRole(result.role);
       clearSignUpName();
       clearOnboardingDraft();
-      router.replace(result.redirectTo);
+      router.replace(invitationReturnPath() ?? result.redirectTo);
       router.refresh();
     } catch {
       setApiError("We could not reach the profile service. Check your connection and try again.");
@@ -243,7 +248,7 @@ export default function CompleteProfilePage() {
       // A verified Clerk account whose Bundleen profile is incomplete resumes
       // at the first visible signup step. `/get-started` detects the existing
       // session and skips only Clerk's already-completed verification screen.
-      router.replace("/get-started");
+      router.replace(vendorOnboardingPath("/get-started", invitationReturnPath()));
       return;
     }
 
@@ -251,7 +256,7 @@ export default function CompleteProfilePage() {
       // Drafts created before the account-confirmation step was introduced
       // must not silently submit under whatever Clerk session is in the
       // browser. `/get-started` now asks the user to confirm or switch it.
-      router.replace("/get-started");
+      router.replace(vendorOnboardingPath("/get-started", invitationReturnPath()));
       return;
     }
 
@@ -264,7 +269,7 @@ export default function CompleteProfilePage() {
   }, [isLoaded, user]);
 
   if (!isLoaded) return <OnboardingHandoff />;
-  if (!user) return <RedirectToSignIn />;
+  if (!user) return <RedirectToSignIn redirectUrl={vendorOnboardingPath("/get-started/profile", invitationReturnPath())} />;
   if (!draftChecked) return <OnboardingHandoff />;
   if (!pendingDraft) return <OnboardingHandoff />;
   if (pendingDraft) {
@@ -276,7 +281,7 @@ export default function CompleteProfilePage() {
         onEdit={() => {
           clearOnboardingDraft();
           setPendingDraft(null);
-          router.replace("/get-started");
+          router.replace(vendorOnboardingPath("/get-started", invitationReturnPath()));
         }}
       />
     );

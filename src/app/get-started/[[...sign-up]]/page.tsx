@@ -5,12 +5,14 @@ import { AuthShowcase } from "@/components/auth/AuthShowcase";
 import { NamedSignUp } from "@/components/auth/NamedSignUp";
 import { db } from "@/lib/server/db";
 import { isHoaManager } from "@/lib/server/hoa";
+import { vendorBidReturnPath } from "@/lib/vendor-bid-return";
 import { DASHBOARD_BY_ROLE, isAppRole, PUBLIC_ROLES } from "@/lib/validation/auth";
 
 export default async function SignUpPage({ searchParams }: {
-  searchParams?: Promise<{ role?: string | string[]; intent?: string | string[] }>;
+  searchParams?: Promise<{ role?: string | string[]; intent?: string | string[]; returnTo?: string | string[] }>;
 }) {
   const params = await searchParams;
+  const returnTo = vendorBidReturnPath(params?.returnTo);
   // This is staff-led interest, not public role selection. Redirect before
   // Clerk/session/profile reads for both visitors and existing accounts.
   if (params?.intent === "community-manager") redirect("/community-onboarding");
@@ -28,6 +30,7 @@ export default async function SignUpPage({ searchParams }: {
       select: { id: true, role: true },
     });
     if (profile && isAppRole(profile.role)) {
+      if (returnTo) redirect(returnTo);
       if (profile.role === "homeowner" && (await isHoaManager(profile.id))) {
         redirect("/app/hoa/dashboard");
       }
@@ -38,6 +41,8 @@ export default async function SignUpPage({ searchParams }: {
 
   const requestedRole = params?.role;
   const initialRole = PUBLIC_ROLES.find((role) => role === requestedRole) ?? "homeowner";
+
+  const invitation = returnTo ? await (await import("@/lib/server/vendor-sourcing")).getPublicBidSummary(returnTo.slice("/bid/".length)).catch(() => null) : null;
 
   return (
     <div className="signup-layout bg-white">
@@ -54,7 +59,7 @@ export default async function SignUpPage({ searchParams }: {
       <main
         className="relative flex flex-1 items-center justify-center overflow-y-auto bg-white px-5 py-8 lg:px-12"
       >
-        <NamedSignUp alreadyVerified={alreadyVerified} initialRole={initialRole} />
+        <NamedSignUp alreadyVerified={alreadyVerified} initialRole={initialRole} returnTo={returnTo} initialBusiness={invitation?.prefill} />
       </main>
     </div>
   );

@@ -26,6 +26,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/server/db", () => ({
   db: {
     user: { findUnique: async () => state.provider },
+    providerCommunityApproval: { findMany: async () => [], findUnique: async () => null },
     providerServiceArea: { findMany: async () => state.areas },
     hoaServiceRequest: { findMany: async () => state.requests },
     serviceBid: { findMany: async () => state.bids },

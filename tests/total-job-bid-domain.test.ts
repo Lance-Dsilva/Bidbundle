@@ -8,6 +8,7 @@ vi.mock("@/lib/server/db", () => ({ db: {
   user: { findUnique: async () => state.provider },
   hoaServiceRequest: { findUnique: async () => state.request },
   community: { findUnique: async () => ({ type: "neighborhood", centerLatitude: 30.4, centerLongitude: -97.7 }) },
+  providerCommunityApproval: { findMany: async () => [], findUnique: async () => null },
   providerServiceArea: { findMany: async () => state.areas },
   communityStaffAssignment: { findFirst: async () => null, findMany: async () => [] },
   hoaRequestParticipation: { findMany: async () => [] },
