@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx next build)",
+      "Bash(bash scripts/preflight.sh)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git fetch:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh pr comment:*)"
+    ],
+    "deny": [
+      "Bash(git push origin main:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(npx prisma migrate deploy:*)",
+      "Bash(npx prisma migrate reset:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npm run build)",
+      "Bash(npm run seed:*)",
+      "Bash(npm run test:integration:*)",
+      "Bash(vercel --prod:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./.vercel/**)",
+      "Read(./.clerk/**)"
+    ]
+  }
+}
