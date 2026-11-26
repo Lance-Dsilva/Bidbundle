@@ -24,6 +24,7 @@ export const SUPPORT_TICKET_CATEGORIES = [
   "bidding",
   "scheduling",
   "provider_issue",
+  "service_quality",
   "community",
   "technical",
   "other",

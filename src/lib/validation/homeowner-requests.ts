@@ -64,6 +64,7 @@ const budgetCents = z
 
 export const createHomeownerRequestSchema = z
   .object({
+    providerBackedPricing: z.boolean().optional(),
     title: boundedText(MAX_REQUEST_TITLE_LENGTH, "Give your request a short title."),
     category: z
       .string()

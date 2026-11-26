@@ -1,5 +1,6 @@
 "use client";
 
+import { ProviderPriceCommitments } from "@/components/provider/ProviderPriceCommitments";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties } from "react";
 
@@ -113,6 +114,7 @@ export default function ProviderBidsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6">
+      <ProviderPriceCommitments />
       <header className="mb-4">
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink-900)" }}>
           My bids
@@ -177,7 +179,7 @@ export default function ProviderBidsPage() {
                 </span>
               </div>
               <div className="mt-2"><BidPrice bid={bid} /></div>
-              {bid.pricingBasis !== "total" && bid.status === "submitted" ? <LegacyBidNotice /> : null}
+              {bid.pricingBasis !== "total" && !bid.priceLadder?.length && bid.status === "submitted" ? <LegacyBidNotice /> : null}
               <p className="mt-2 text-xs" style={{ color: "var(--ink-700)" }}>
                 {bid.scope}
               </p>

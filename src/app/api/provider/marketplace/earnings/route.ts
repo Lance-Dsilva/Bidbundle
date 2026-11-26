@@ -18,7 +18,7 @@ export async function GET(): Promise<NextResponse> {
   if (!gate.ok) return gate.response;
 
   try {
-    return NextResponse.json({ earnings: await getProviderEarnings(gate.user.id) });
+    return NextResponse.json({ earnings: await getProviderEarnings(gate.user.id) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return hoaErrorResponse("provider earnings", error);
   }

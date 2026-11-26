@@ -335,6 +335,9 @@ enum PayoutStatus {
 }
 
 model User {
+  /// Stripe sandbox customer, scoped to the original payer.
+  stripeTestCustomerId String? @unique
+
   id          String   @id @default(cuid())
   clerkUserId String   @unique
   email       String   @unique
@@ -813,6 +816,9 @@ model HoaServiceRequest {
   participantsLockedAt DateTime?
   awardedAt            DateTime?
 
+  stripeTestEnrollmentRequired Boolean @default(false)
+  requiresPriceCommitment Boolean @default(false)
+  priceCommitment PriceLadderCommitment?
   participations HoaRequestParticipation[]
   bids           ServiceBid[]
   agreement      ServiceAgreement?
@@ -841,6 +847,8 @@ model HoaRequestParticipation {
   unitId    String?
   unit      CommunityUnit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
+  enrollmentConsentId String?
+  maximumPriceCents Int?
   response  ParticipationResponse @default(joined)
   /// Resident-selected applicable pool size, frozen with the audience.
   poolTier  String?
@@ -930,6 +938,7 @@ model ServiceBid {
   withdrawnAt DateTime?
   decidedAt   DateTime?
 
+  priceTiers ServiceBidPriceTier[]
   agreement ServiceAgreement?
   revisions ServiceBidRevision[]
 
@@ -1009,6 +1018,7 @@ model ServiceAgreement {
   status ServiceAgreementStatus @default(active)
 
   occurrences ServiceOccurrence[]
+  billingConsents VisitBillingConsent[]
   reviews     Review[]
 
   createdAt DateTime @default(now())
@@ -1065,7 +1075,23 @@ model ServiceOccurrence {
 /// The snapshot is the reason a later profile edit cannot rewrite historical
 /// work. The homeowner relation is retained for authorization — "is this my
 /// stop?" — never re-read to resolve where the crew should go.
+/// Final-price acceptance is separate from saving a Stripe payment method.
+model VisitBillingConsent {
+  agreementId String
+  agreement   ServiceAgreement @relation(fields: [agreementId], references: [id], onDelete: Restrict)
+  payerUserId String
+  unitId      String
+  termsToken  String
+  termsVersion String
+  acceptedAt  DateTime @default(now())
+  testCard StripeTestCard?
+
+  @@id([agreementId, payerUserId, unitId])
+}
+
 model ServiceVisit {
+  redoOfVisitId String? @unique
+  testPayment StripeTestPayment?
   id           String            @id @default(cuid())
   occurrenceId String
   occurrence   ServiceOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
@@ -1104,8 +1130,13 @@ model ServiceVisit {
   completedAt     DateTime?
   /// Copied from the awarded request; later category policy edits do not rewrite work.
   requiresAfterPhoto Boolean @default(false)
+  /// Frozen quote allocation for eligible visits. A price alone does not authorize a charge.
+  allocatedVisitCents Int?
+  /// The resident who enrolled this unit. Occupancy changes never reassign payment.
+  billingPayerUserId String?
 
   reviews Review[]
+  qualityClaim ServiceQualityClaim?
   photos MediaAsset[] @relation("VisitPhotos")
 
   createdAt DateTime @default(now())
@@ -1373,6 +1404,8 @@ model HomeownerProfile {
 
 /// Provider-only profile data. Exactly one row per provider `User`.
 model ProviderProfile {
+  stripeTestAccountId String? @unique
+  stripeTestPayoutStatus String @default("not_connected")
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1477,6 +1510,7 @@ enum SupportTicketCategory {
   bidding
   scheduling
   provider_issue
+  service_quality
   community
   technical
   other
@@ -1572,6 +1606,7 @@ model SupportTicket {
   messages SupportTicketMessage[]
   events   SupportTicketEvent[]
   aiDrafts SupportTicketAiDraft[]
+  qualityClaim ServiceQualityClaim?
 
   createdAt DateTime @default(now())
   /// Also the optimistic-concurrency token: admin mutations pass the value they
@@ -2493,4 +2528,241 @@ model CommunityInterest {
 
   @@unique([email, communityKey], map: "CommunityInterest_email_communityKey_key")
   @@index([createdAt, id])
+}
+
+model StripeTestEvent {
+  financialObservation StripeTestFinancialObservation?
+  nextAttemptAt DateTime?
+  attempts Int @default(0)
+  id          String    @id
+  eventType   String
+  objectId    String
+  accountId   String?
+  occurredAt  DateTime
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([processedAt, receivedAt])
+  @@index([processedAt, nextAttemptAt, receivedAt], map: "StripeTestEvent_retry_queue")
+}
+
+/// Sandbox-only verified card reference. Never stores card numbers or client secrets.
+model StripeTestCard {
+  agreementId String
+  payerUserId String
+  unitId String
+  consent VisitBillingConsent @relation(fields: [agreementId, payerUserId, unitId], references: [agreementId, payerUserId, unitId], onDelete: Cascade)
+  customerId String
+  paymentMethodId String
+  setupIntentId String @unique
+  brand String
+  last4 String
+  verifiedAt DateTime @default(now())
+
+  @@id([agreementId, payerUserId, unitId])
+}
+
+/// Durable sandbox-only economic identity: one charge intent per completed visit.
+model StripeTestPayment {
+  /// Verified original-payer address frozen before creating the payment intent. Historical rows remain null.
+  receiptEmail String?
+  reconciliationHoldReason String?
+  observedChargeRefundedCents Int @default(0)
+  observedProviderReversedCents Int @default(0)
+  observedDisputeId String?
+  observedDisputeStatus String?
+  financialObservations StripeTestFinancialObservation[]
+  enrollmentAuthorizationId String?
+  refunds StripeTestRefund[]
+  amountRefundedCents Int @default(0)
+  providerReversedCents Int @default(0)
+  refundedAt DateTime?
+  recoveryAttempts StripeTestPaymentAttempt[]
+  lastRecoveryAttemptId String?
+  visitId String @id
+  visit ServiceVisit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  requestId String
+  agreementId String
+  communityId String
+  residentUserId String
+  providerUserId String
+  unitId String
+  customerId String
+  paymentMethodId String
+  providerAccountId String
+  termsToken String
+  amountCents Int
+  platformFeeCents Int
+  hoaShareCents Int @default(0)
+  providerAmountCents Int
+  currency String
+  stripePaymentIntentId String? @unique
+  stripeChargeId String? @unique
+  stripeTransferId String? @unique
+  transferAmountCents Int?
+  transferRefundedBeforeCents Int?
+  transferAttemptedAt DateTime?
+  status String @default("pending")
+  failureCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+// Explicitly authorized replacement methods; original payment identity stays immutable.
+model StripeTestPaymentAttempt {
+  id String @id
+  visitId String
+  payment StripeTestPayment @relation(fields: [visitId], references: [visitId], onDelete: Restrict)
+  customerId String
+  paymentMethodId String
+  setupIntentId String @unique
+  sequence Int
+  termsVersion String
+  acceptedAt DateTime @default(now())
+  @@unique([visitId, sequence])
+}
+
+/// Immutable pilot provider commitment entered by an authorized admin before enrollment.
+model PriceLadderCommitment {
+  id String @id
+  requestId String @unique
+  request HoaServiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  providerUserId String
+  actorUserId String
+  scope String
+  guaranteedPerHomeCents Int
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  tiers ServiceBidPriceTier[]
+}
+
+/// Full-term cents per home. Linked to the materialized ServiceBid when enrollment closes.
+model ServiceBidPriceTier {
+  id String @id
+  commitmentId String
+  commitment PriceLadderCommitment @relation(fields: [commitmentId], references: [id], onDelete: Restrict)
+  bidId String?
+  bid ServiceBid? @relation(fields: [bidId], references: [id], onDelete: Restrict)
+  minHomes Int
+  perHomeCents Int
+  @@unique([commitmentId, minHomes])
+  @@index([bidId])
+}
+
+model EnrollmentBillingConsent {
+  id String @id
+  requestId String
+  payerUserId String
+  unitId String
+  membershipId String
+  commitmentId String
+  providerUserId String
+  maximumCents Int
+  currency String
+  termsToken String
+  termsVersion String
+  acceptedAt DateTime @default(now())
+  revokedAt DateTime?
+  card EnrollmentBillingCard?
+  @@index([requestId, payerUserId])
+}
+model EnrollmentBillingCard {
+  consentId String @id
+  consent EnrollmentBillingConsent @relation(fields: [consentId], references: [id], onDelete: Restrict)
+  customerId String
+  paymentMethodId String
+  setupIntentId String @unique
+  brand String
+  last4 String
+  verifiedAt DateTime @default(now())
+}
+model AgreementBillingAuthorization {
+  id String @id
+  agreementId String
+  enrollmentConsentId String @unique
+  payerUserId String
+  unitId String
+  authorizedTotalCents Int
+  createdAt DateTime @default(now())
+  @@unique([agreementId, unitId])
+}
+
+model StripeTestRefund {
+  id String @id
+  visitId String
+  payment StripeTestPayment @relation(fields: [visitId], references: [visitId], onDelete: Restrict)
+  actorUserId String
+  reason String
+  amountCents Int
+  refundedBeforeCents Int
+  cumulativeRefundCents Int
+  reversedBeforeCents Int
+  reversalCents Int
+  chargeId String
+  transferId String?
+  state String @default("pending")
+  stripeRefundId String? @unique
+  stripeReversalId String? @unique
+  refundAttemptedAt DateTime?
+  reversalAttemptedAt DateTime?
+  failureCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([state, updatedAt])
+  @@index([visitId, createdAt])
+}
+
+model StripeTestFinancialObservation {
+  eventId String @id
+  event StripeTestEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  visitId String
+  payment StripeTestPayment @relation(fields: [visitId], references: [visitId], onDelete: Restrict)
+  refundedCents Int
+  reversedCents Int
+  disputeId String?
+  disputeStatus String?
+  holdReason String?
+  observedAt DateTime @default(now())
+  @@index([visitId, observedAt])
+}
+
+/// An intake record, not proof that a redo/refund was executed.
+model ServiceQualityClaim {
+  financialPayerUserId String?
+  refundOperationId String? @unique
+  redoVisitId String? @unique
+  resolvedAt DateTime?
+  id String @id @default(cuid())
+  visitId String @unique
+  visit ServiceVisit @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  ticketId String @unique
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  requesterUserId String
+  providerUserId String
+  reason String
+  photos ServiceQualityPhoto[]
+  resolution String @default("reported")
+  resolutionNote String?
+  resolutionRequestedBy String?
+  resolutionRequestedAt DateTime?
+  providerResponse String?
+  providerRespondedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([providerUserId, createdAt])
+}
+
+/// Private claim evidence, deliberately outside public marketing MediaAsset routes.
+model ServiceQualityPhoto {
+  id String @id @default(cuid())
+  claimId String
+  claim ServiceQualityClaim @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  uploaderUserId String
+  storagePath String @unique
+  contentType String
+  byteSize Int
+  checksum String
+  createdAt DateTime @default(now())
+  @@index([claimId, createdAt])
 }
