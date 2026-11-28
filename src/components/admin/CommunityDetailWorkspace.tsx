@@ -34,6 +34,7 @@ import {
 import { HoaManagerInvitationPanel } from "@/components/admin/HoaManagerInvitationPanel";
 import { HoaOnboardingPanel } from "@/components/admin/HoaOnboardingPanel";
 import { ProviderPolicyEditor } from "@/components/hoa/ProviderPolicyEditor";
+import { PriceLadderPilotPanel } from "@/components/admin/PriceLadderPilotPanel";
 import { ProviderBidInvitationPanel } from "@/components/admin/ProviderBidInvitationPanel";
 import { CategoryVisitProofPolicyPanel } from "@/components/admin/CategoryVisitProofPolicyPanel";
 
@@ -170,6 +171,7 @@ export function CommunityDetailWorkspace({ initialDetail }: { initialDetail: Com
       )}
 
       {community.type === "hoa" && <ProviderPolicyEditor key={community.id} communityId={community.id} />}
+      <PriceLadderPilotPanel communityId={community.id} />
       {community.type === "hoa" && <ProviderBidInvitationPanel key={`bids-${community.id}`} communityId={community.id} />}
 
       <CategoryVisitProofPolicyPanel />

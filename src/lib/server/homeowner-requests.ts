@@ -384,6 +384,7 @@ export async function createHomeownerRequest(
         id: requestId,
         communityId: eligibility.communityId,
         createdByUserId: user.id,
+        requiresPriceCommitment: input.providerBackedPricing ?? false,
         title: input.title,
         category: input.category,
         description: input.description,
@@ -408,7 +409,7 @@ export async function createHomeownerRequest(
     // The requester is joined automatically. Opening a request *is* saying you
     // want the work; making them click "join" afterwards would be a way to
     // end up with a request whose own author is not in it.
-    db.hoaRequestParticipation.create({
+    ...(input.providerBackedPricing ? [] : [db.hoaRequestParticipation.create({
       data: {
         id: randomUUID(),
         requestId,
@@ -418,7 +419,7 @@ export async function createHomeownerRequest(
         unitId: null,
         response: "joined",
       },
-    }),
+    })]),
     db.adminAuditLog.create({
       data: buildAuditEntry({
         actorUserId: user.id,
