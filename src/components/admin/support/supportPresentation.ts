@@ -61,6 +61,7 @@ export const CATEGORY_LABELS: Record<SupportTicketCategoryValue, string> = {
   bidding: "Bids & awards",
   scheduling: "Scheduling & visits",
   provider_issue: "Provider issue",
+  service_quality: "Service quality",
   community: "Community & HOA",
   technical: "Something is broken",
   other: "Something else",
